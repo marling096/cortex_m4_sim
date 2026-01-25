@@ -1,0 +1,10 @@
+[package]
+name = "cortex_m4_sim"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+capstone = "0.14.0"
+hex = "0.4.3"
+ihex = "3.0.0"
+once_cell = "1.21.3"
