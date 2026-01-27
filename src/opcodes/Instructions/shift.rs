@@ -1,20 +1,20 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmInstruction, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
+    ArmOpcode, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
     check_condition,
 };
-use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Shiift_builder;
 impl InstrBuilder for Shiift_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         addd_shift_def()
     }
 }
 
-pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_ASR as u32,
             name: "ASR".to_string(),
             length: 32,
@@ -26,7 +26,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Asr,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LSL as u32,
             name: "LSL".to_string(),
             length: 32,
@@ -38,7 +38,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Lsl,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LSR as u32,
             name: "LSR".to_string(),
             length: 32,
@@ -50,7 +50,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Lsr,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_ROR as u32,
             name: "ROR".to_string(),
             length: 32,
@@ -62,7 +62,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Ror,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_RRX as u32,
             name: "RRX".to_string(),
             length: 32,
@@ -84,13 +84,13 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Instruction> {
 
 pub struct Op_Asr;
 impl Executable for Op_Asr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
-        let (rd, rm, rs) = Operand2_resolver(cpu, data);
+        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
         let rm_val = cpu.read_reg(rm);
-        let rs_val = cpu.read_reg(rs) & 0xFF; // Only bottom byte used
+        rs_val = rs_val & 0xFF; // Only bottom byte used
 
         let result = if rs_val == 0 {
             rm_val
@@ -123,13 +123,13 @@ impl Executable for Op_Asr {
 
 pub struct Op_Lsl;
 impl Executable for Op_Lsl {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
-        let (rd, rm, rs) = Operand2_resolver(cpu, data);
+        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
         let rm_val = cpu.read_reg(rm);
-        let rs_val = cpu.read_reg(rs) & 0xFF;
+        rs_val = rs_val & 0xFF;
 
         let result = if rs_val >= 32 {
             0
@@ -157,13 +157,13 @@ impl Executable for Op_Lsl {
 
 pub struct Op_Lsr;
 impl Executable for Op_Lsr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
-        let (rd, rm, rs) = Operand2_resolver(cpu, data);
+        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
         let rm_val = cpu.read_reg(rm);
-        let rs_val = cpu.read_reg(rs) & 0xFF;
+        rs_val = rs_val & 0xFF;
 
         let result = if rs_val >= 32 { 0 } else { rm_val >> rs_val };
 
@@ -188,13 +188,13 @@ impl Executable for Op_Lsr {
 
 pub struct Op_Ror;
 impl Executable for Op_Ror {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
-        let (rd, rm, rs) = Operand2_resolver(cpu, data);
+        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
         let rm_val = cpu.read_reg(rm);
-        let rs_val = cpu.read_reg(rs) & 0xFF;
+        rs_val = rs_val & 0xFF;
 
         let shift = rs_val & 31;
         let result = if rs_val == 0 {
@@ -218,7 +218,7 @@ impl Executable for Op_Ror {
 
 pub struct Op_Rrx;
 impl Executable for Op_Rrx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -265,12 +265,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Asr_Imm;
 
 // impl Executable for Shift_Asr_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_asr_imm(cpu, data);
 //     }
 // }
 
-// fn shift_asr_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_asr_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -308,12 +308,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Asr_Reg;
 
 // impl Executable for Shift_Asr_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_asr_reg(cpu, data);
 //     }
 // }
 
-// fn shift_asr_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_asr_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -352,12 +352,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Lsl_Imm;
 
 // impl Executable for Shift_Lsl_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_lsl_imm(cpu, data);
 //     }
 // }
 
-// fn shift_lsl_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_lsl_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -389,12 +389,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Lsl_Reg;
 
 // impl Executable for Shift_Lsl_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_lsl_reg(cpu, data);
 //     }
 // }
 
-// fn shift_lsl_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_lsl_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -428,12 +428,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Lsr_Imm;
 
 // impl Executable for Shift_Lsr_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_lsr_imm(cpu, data);
 //     }
 // }
 
-// fn shift_lsr_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_lsr_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -463,12 +463,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Lsr_Reg;
 
 // impl Executable for Shift_Lsr_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_lsr_reg(cpu, data);
 //     }
 // }
 
-// fn shift_lsr_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_lsr_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -499,12 +499,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Ror_Imm;
 
 // impl Executable for Shift_Ror_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_ror_imm(cpu, data);
 //     }
 // }
 
-// fn shift_ror_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_ror_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -531,12 +531,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Ror_Reg;
 
 // impl Executable for Shift_Ror_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_ror_reg(cpu, data);
 //     }
 // }
 
-// fn shift_ror_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_ror_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -566,12 +566,12 @@ impl Executable for Op_Rrx {
 // pub struct Shift_Rrx;
 
 // impl Executable for Shift_Rrx {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         shift_rrx(cpu, data);
 //     }
 // }
 
-// fn shift_rrx(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn shift_rrx(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }

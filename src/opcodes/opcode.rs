@@ -1,6 +1,7 @@
 use crate::context::CpuContext;
 use capstone::prelude::*;
-pub struct Instruction {
+#[derive(Clone)]
+pub struct Opcode {
     pub insnid: u32,
     pub name: String,
     pub length: u32,
@@ -8,11 +9,11 @@ pub struct Instruction {
     pub cycles: CycleInfo,
 
     pub exec: &'static dyn Executable,
-    // pub operands: ArmInstruction<'a>,
+    // pub operands: ArmOpcode<'a>,
     pub adjust_cycles: Option<CycleAdjustFn>,
 }
 
-impl Instruction {
+impl Opcode {
     pub fn new(
         insnid: u32,
         name: String,
@@ -20,10 +21,10 @@ impl Instruction {
         cycles: CycleInfo,
 
         exec: &'static dyn Executable,
-        // operands: ArmInstruction<'a>,
+        // operands: ArmOpcode<'a>,
         adjust_cycles: Option<CycleAdjustFn>,
-    ) -> Instruction {
-        Instruction {
+    ) -> Opcode {
+        Opcode {
             insnid,
             name,
             length,
@@ -38,9 +39,10 @@ impl Instruction {
 }
 
 pub trait Executable {
-    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmInstruction);
+    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode);
 }
 
+#[derive(Clone, Copy)]
 pub struct CycleInfo {
     pub fetch_cycles: u32,
     pub decode_cycles: u32,
@@ -58,7 +60,7 @@ impl CycleInfo {
 }
 
 pub trait MatchFn {
-    fn op_match(&self, ops: &ArmInstruction) -> bool;
+    fn op_match(&self, ops: &ArmOpcode) -> bool;
 }
 pub type CycleAdjustFn = fn(&mut CycleInfo, &[ArmOperand]);
 
@@ -66,7 +68,7 @@ use capstone::arch::arm::{ArmInsnDetail, ArmOperand, ArmOperandType, ArmShift};
 use capstone::{Insn, InsnDetail};
 
 /// 封装了 ARM 指令及其详细信息的结构体
-pub struct ArmInstruction<'a> {
+pub struct ArmOpcode<'a> {
     /// 原始指令对象
     pub insn: &'a Insn<'a>,
 
@@ -77,7 +79,7 @@ pub struct ArmInstruction<'a> {
     cs: &'a Capstone,
 }
 
-impl<'a> ArmInstruction<'a> {
+impl<'a> ArmOpcode<'a> {
     /// Helper to resolve register to u32
     pub fn resolve_reg(&self, reg: capstone::RegId) -> u32 {
         if let Some(reg_name) = self.cs.reg_name(reg) {
@@ -104,12 +106,12 @@ impl<'a> ArmInstruction<'a> {
         0 // Default or panic?
     }
 
-    /// 从原始 Insn 创建 ArmInstruction
+    /// 从原始 Insn 创建 ArmOpcode
     pub fn new(cs: &'a Capstone, insn: &'a Insn<'a>) -> Option<Self> {
         let detail = cs.insn_detail(insn).ok()?;
 
         if let arch::ArchDetail::ArmDetail(_) = detail.arch_detail() {
-            Some(ArmInstruction {
+            Some(ArmOpcode {
                 insn,
                 operands: Vec::new(),
                 detail,
@@ -128,7 +130,7 @@ impl<'a> ArmInstruction<'a> {
         let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = detail.arch_detail() {
             arm
         } else {
-            panic!("ArmInstruction has invalid detail");
+            panic!("ArmOpcode has invalid detail");
         };
 
         // Helper closure to resolve register to u32
@@ -177,11 +179,18 @@ impl<'a> ArmInstruction<'a> {
         }
     }
 
+    pub fn op_writer(&self) {
+        println!("op_str: {}", self.insn.op_str().unwrap_or(""));
+    }
+
     /// 获取指令 ID (u32)
     pub fn id(&self) -> u32 {
         self.insn.id().0
     }
 
+    pub fn address(&self) -> u32 {
+        self.insn.address() as u32
+    }
     /// 获取助记符 (如 "ldr")
     pub fn mnemonic(&self) -> &str {
         self.insn.mnemonic().unwrap_or("")
@@ -196,7 +205,7 @@ impl<'a> ArmInstruction<'a> {
         if let arch::ArchDetail::ArmDetail(arm) = self.detail.arch_detail() {
             arm
         } else {
-            panic!("ArmInstruction has invalid detail");
+            panic!("ArmOpcode has invalid detail");
         }
     }
 
@@ -298,19 +307,19 @@ pub fn check_condition(cpu: &dyn CpuContext, cc: ArmCC) -> bool {
     }
 }
 
-pub fn get_ops_op2(_data: &ArmInstruction) {}
+pub fn get_ops_op2(_data: &ArmOpcode) {}
 
 // op{S}{cond} {Rd,} Rn, Operand2 / op{S}{cond} {Rd,} Rn, imm
 // Operand2 -- rm ,{ shiift #n}
 pub fn Operand2_resolver(
     cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmInstruction,
+    data: &ArmOpcode,
 ) -> (u32, u32, u32) //rd, rn ,value of Operand2  //carry直接更新
 {
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
-        panic!("ArmInstruction has invalid detail");
+        panic!("ArmOpcode has invalid detail");
     };
     let ops: Vec<_> = arch_detail.operands().collect();
 
@@ -424,11 +433,11 @@ pub fn Operand2_resolver(
 
 // op{cond} label/rm
 //return value of Operand
-pub fn Operand_resolver(cpu: &mut dyn crate::context::CpuContext, data: &ArmInstruction) -> u32 {
+pub fn Operand_resolver(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> u32 {
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
-        panic!("ArmInstruction has invalid detail");
+        panic!("ArmOpcode has invalid detail");
     };
     let ops: Vec<_> = arch_detail.operands().collect();
 
@@ -453,12 +462,12 @@ pub fn Operand_resolver(cpu: &mut dyn crate::context::CpuContext, data: &ArmInst
 //return (rn , value of Operand)
 pub fn Operand_resolver_two(
     cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmInstruction,
+    data: &ArmOpcode,
 ) -> (u32, u32) {
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
-        panic!("ArmInstruction has invalid detail");
+        panic!("ArmOpcode has invalid detail");
     };
     let ops: Vec<_> = arch_detail.operands().collect();
 
@@ -490,12 +499,12 @@ pub fn Operand_resolver_two(
 //return (rt , value of [Rn {, #offset}](address))
 pub fn Operand_resolver_multi(
     cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmInstruction,
+    data: &ArmOpcode,
 ) -> (u32, u32) {
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
-        panic!("ArmInstruction has invalid detail");
+        panic!("ArmOpcode has invalid detail");
     };
     let ops: Vec<_> = arch_detail.operands().collect();
 
@@ -504,18 +513,18 @@ pub fn Operand_resolver_multi(
         _ => panic!("first operand is not a register"),
     };
     let op2 = &ops[1];
-    let op3 = &ops[2];
     let writeback = data.writeback();
     let post_index = data.post_index();
 
     if !writeback {
         let addr = match &op2.op_type {
             ArmOperandType::Mem(mem) => {
-                let base = data.resolve_reg(mem.base());
-                let index = data.resolve_reg(mem.index());
+                let base = cpu.read_reg(data.resolve_reg(mem.base()));
+
                 let disp = mem.disp();
-                if index == 0 {
+                if mem.index() != capstone::RegId::INVALID_REG {
                     // ldr.w    r0, [r1, r2, lsl #2]
+                    let index = data.resolve_reg(mem.index());
                     let val = cpu.read_reg(data.resolve_reg(mem.index()));
                     let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
                     let (r2_val, carry) = op_shift_match(op2.clone(), val, current_c);
@@ -525,6 +534,7 @@ pub fn Operand_resolver_multi(
                     base.wrapping_add(r2_val)
                 } else {
                     //偏移寻址  ldr.w    r1, [r2, #4]
+                    // println!("base: {} disp: {}", base, disp);
                     base.wrapping_add_signed(disp)
                 }
             }
@@ -537,6 +547,7 @@ pub fn Operand_resolver_multi(
                 let base = data.resolve_reg(mem.base());
                 let disp = mem.disp();
                 if post_index {
+                    let op3 = &ops[2];
                     let op3_offset = match &op3.op_type {
                         ArmOperandType::Imm(imm) => *imm,
                         _ => panic!("third operand is not an immediate"),
@@ -553,7 +564,7 @@ pub fn Operand_resolver_multi(
     }
 }
 
-pub fn op2_imm_match(data: &ArmInstruction) -> bool {
+pub fn op2_imm_match(data: &ArmOpcode) -> bool {
     let len = data.operands.len();
 
     // AND: 只允许 2 或 3 个 operand
@@ -576,7 +587,7 @@ pub fn op2_imm_match(data: &ArmInstruction) -> bool {
     }
 }
 
-pub fn op2_reg_match(data: &ArmInstruction) -> bool {
+pub fn op2_reg_match(data: &ArmOpcode) -> bool {
     let len = data.operands.len();
 
     // AND: 只允许 2 或 3 个 operand
@@ -602,7 +613,7 @@ pub fn op2_reg_match(data: &ArmInstruction) -> bool {
 pub fn op_shift(
     cpu: &mut dyn crate::context::CpuContext,
     op2: ArmOperand,
-    data: &ArmInstruction,
+    data: &ArmOpcode,
 ) -> (u32, u8) {
     //
 

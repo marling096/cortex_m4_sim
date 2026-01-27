@@ -5,9 +5,6 @@ pub trait CpuContext {
     fn read_mem(&self, addr: u32) -> u32;
     fn write_mem(&mut self, addr: u32, v: u32);
 
-    // returns (value, carry_flag)
-    fn read_operand_value(&mut self, imm: bool, addr: u32) -> (u32, u8);
-
     fn read_gpr(&self, r: u32) -> u32;
     fn write_gpr(&mut self, r: u32, v: u32);
 
@@ -25,4 +22,7 @@ pub trait CpuContext {
 
     fn read_apsr(&self) -> u32;
     fn write_apsr(&mut self, v: u32);
+
+    fn read_pc_counter(&self) -> u32;
+    fn write_pc_counter(&mut self, v: u32);
 }

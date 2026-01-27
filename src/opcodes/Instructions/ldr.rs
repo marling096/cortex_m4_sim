@@ -1,18 +1,18 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{ArmInstruction, Executable, Operand_resolver_multi, check_condition};
-use crate::opcodes::instruction::{InstrBuilder};
+use crate::opcodes::instruction::InstrBuilder;
+use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, check_condition};
 use capstone::arch::arm::ArmOperandType;
 
 pub struct Ldr_builder;
 impl InstrBuilder for Ldr_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_ldr_def()
     }
 }
 
-pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDR as u32,
             name: "LDR".to_string(),
             length: 32,
@@ -24,7 +24,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Ldr,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRB as u32,
             name: "LDRB".to_string(),
             length: 32,
@@ -36,8 +36,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Ldrb,
             adjust_cycles: None,
         },
-
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRSB as u32,
             name: "LDRSB".to_string(),
             length: 32,
@@ -49,7 +48,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Ldrsb,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRH as u32,
             name: "LDRH".to_string(),
             length: 32,
@@ -61,7 +60,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Ldrh,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRSH as u32,
             name: "LDRSH".to_string(),
             length: 32,
@@ -128,11 +127,12 @@ fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
 // --- LDR ---
 pub struct Op_Ldr;
 impl Executable for Op_Ldr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
         let (rt, addr) = Operand_resolver_multi(cpu, data);
+        // data.op_writer();
         let val = cpu.read_mem(addr);
         cpu.write_reg(rt, val);
     }
@@ -140,7 +140,7 @@ impl Executable for Op_Ldr {
 
 pub struct Op_Ldrb;
 impl Executable for Op_Ldrb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -152,7 +152,7 @@ impl Executable for Op_Ldrb {
 
 pub struct Op_Ldrsb;
 impl Executable for Op_Ldrsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -165,7 +165,7 @@ impl Executable for Op_Ldrsb {
 
 pub struct Op_Ldrh;
 impl Executable for Op_Ldrh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -177,7 +177,7 @@ impl Executable for Op_Ldrh {
 
 pub struct Op_Ldrsh;
 impl Executable for Op_Ldrsh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -192,7 +192,7 @@ impl Executable for Op_Ldrsh {
 
 pub struct Op_Ldrd;
 impl Executable for Op_Ldrd {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -205,7 +205,7 @@ impl Executable for Op_Ldrd {
 }
 
 // fn resolve_addr_imm(
-//     data: &ArmInstruction,
+//     data: &ArmOpcode,
 //     ops: &Vec<capstone::arch::arm::ArmOperand>,
 //     mem_idx: usize,
 //     cpu: &dyn CpuContext,
@@ -249,7 +249,7 @@ impl Executable for Op_Ldrd {
 // }
 
 // fn resolve_addr_reg(
-//     data: &ArmInstruction,
+//     data: &ArmOpcode,
 //     ops: &Vec<capstone::arch::arm::ArmOperand>,
 //     mem_idx: usize,
 //     cpu: &dyn CpuContext,
@@ -289,7 +289,7 @@ impl Executable for Op_Ldrd {
 // }
 
 // fn resolve_addr_lit(
-//     data: &ArmInstruction,
+//     data: &ArmOpcode,
 //     ops: &Vec<capstone::arch::arm::ArmOperand>,
 //     mem_idx: usize,
 //     cpu: &dyn CpuContext,
@@ -315,7 +315,7 @@ impl Executable for Op_Ldrd {
 
 // // --- Common Logic Implementations ---
 
-// fn load_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction, size: u32, signed: bool) {
+// fn load_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode, size: u32, signed: bool) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -345,7 +345,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn load_dual_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn load_dual_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -372,7 +372,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn store_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction, size: u32) {
+// fn store_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode, size: u32) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -396,7 +396,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn store_dual_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn store_dual_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -423,7 +423,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn load_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction, size: u32, signed: bool) {
+// fn load_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode, size: u32, signed: bool) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -453,7 +453,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn load_dual_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn load_dual_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -480,7 +480,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn store_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction, size: u32) {
+// fn store_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode, size: u32) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -504,7 +504,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn store_dual_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn store_dual_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -531,7 +531,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn load_lit(cpu: &mut dyn CpuContext, data: &ArmInstruction, size: u32, signed: bool) {
+// fn load_lit(cpu: &mut dyn CpuContext, data: &ArmOpcode, size: u32, signed: bool) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -558,7 +558,7 @@ impl Executable for Op_Ldrd {
 //     }
 // }
 
-// fn load_dual_lit(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn load_dual_lit(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -587,37 +587,37 @@ impl Executable for Op_Ldrd {
 // // Immediate Load
 // pub struct LoadImm;
 // impl Executable for LoadImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_imm(cpu, data, 4, false);
 //     }
 // }
 // pub struct LoadByteImm;
 // impl Executable for LoadByteImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_imm(cpu, data, 1, false);
 //     }
 // }
 // pub struct LoadHalfImm;
 // impl Executable for LoadHalfImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_imm(cpu, data, 2, false);
 //     }
 // }
 // pub struct LoadSignedByteImm;
 // impl Executable for LoadSignedByteImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_imm(cpu, data, 1, true);
 //     }
 // }
 // pub struct LoadSignedHalfImm;
 // impl Executable for LoadSignedHalfImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_imm(cpu, data, 2, true);
 //     }
 // }
 // pub struct LoadDoubleImm;
 // impl Executable for LoadDoubleImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_dual_imm(cpu, data);
 //     }
 // }
@@ -625,25 +625,25 @@ impl Executable for Op_Ldrd {
 // // Immediate Store
 // pub struct StoreImm;
 // impl Executable for StoreImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_imm(cpu, data, 4);
 //     }
 // }
 // pub struct StoreByteImm;
 // impl Executable for StoreByteImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_imm(cpu, data, 1);
 //     }
 // }
 // pub struct StoreHalfImm;
 // impl Executable for StoreHalfImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_imm(cpu, data, 2);
 //     }
 // }
 // pub struct StoreDoubleImm;
 // impl Executable for StoreDoubleImm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_dual_imm(cpu, data);
 //     }
 // }
@@ -651,37 +651,37 @@ impl Executable for Op_Ldrd {
 // // Register Load
 // pub struct LoadReg;
 // impl Executable for LoadReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_reg(cpu, data, 4, false);
 //     }
 // }
 // pub struct LoadByteReg;
 // impl Executable for LoadByteReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_reg(cpu, data, 1, false);
 //     }
 // }
 // pub struct LoadHalfReg;
 // impl Executable for LoadHalfReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_reg(cpu, data, 2, false);
 //     }
 // }
 // pub struct LoadSignedByteReg;
 // impl Executable for LoadSignedByteReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_reg(cpu, data, 1, true);
 //     }
 // }
 // pub struct LoadSignedHalfReg;
 // impl Executable for LoadSignedHalfReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_reg(cpu, data, 2, true);
 //     }
 // }
 // pub struct LoadDoubleReg;
 // impl Executable for LoadDoubleReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_dual_reg(cpu, data);
 //     }
 // }
@@ -689,25 +689,25 @@ impl Executable for Op_Ldrd {
 // // Register Store
 // pub struct StoreReg;
 // impl Executable for StoreReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_reg(cpu, data, 4);
 //     }
 // }
 // pub struct StoreByteReg;
 // impl Executable for StoreByteReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_reg(cpu, data, 1);
 //     }
 // }
 // pub struct StoreHalfReg;
 // impl Executable for StoreHalfReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_reg(cpu, data, 2);
 //     }
 // }
 // pub struct StoreDoubleReg;
 // impl Executable for StoreDoubleReg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         store_dual_reg(cpu, data);
 //     }
 // }
@@ -715,37 +715,37 @@ impl Executable for Op_Ldrd {
 // // Literal Load
 // pub struct LoadLiteral;
 // impl Executable for LoadLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_lit(cpu, data, 4, false);
 //     }
 // }
 // pub struct LoadByteLiteral;
 // impl Executable for LoadByteLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_lit(cpu, data, 1, false);
 //     }
 // }
 // pub struct LoadHalfLiteral;
 // impl Executable for LoadHalfLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_lit(cpu, data, 2, false);
 //     }
 // }
 // pub struct LoadSignedByteLiteral;
 // impl Executable for LoadSignedByteLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_lit(cpu, data, 1, true);
 //     }
 // }
 // pub struct LoadSignedHalfLiteral;
 // impl Executable for LoadSignedHalfLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_lit(cpu, data, 2, true);
 //     }
 // }
 // pub struct LoadDoubleLiteral;
 // impl Executable for LoadDoubleLiteral {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         load_dual_lit(cpu, data);
 //     }
 // }

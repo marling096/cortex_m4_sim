@@ -1,17 +1,17 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{ArmInstruction, Executable, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Executable, check_condition};
 use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Stack_builder;
 impl InstrBuilder for Stack_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_stack_def()
     }
 }
 
-pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_PUSH as u32,
             name: "PUSH".to_string(),
             length: 32,
@@ -23,7 +23,7 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Push,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_POP as u32,
             name: "POP".to_string(),
             length: 32,
@@ -42,19 +42,19 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Instruction> {
 // POP{cond} reglist
 pub struct Op_Push;
 impl Executable for Op_Push {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         stack_push(cpu, data);
     }
 }
 
 pub struct Op_Pop;
 impl Executable for Op_Pop {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         stack_pop(cpu, data);
     }
 }
 
-fn stack_push(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
     if !check_condition(cpu, data.condition()) {
         return;
     }
@@ -69,7 +69,7 @@ fn stack_push(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
     cpu.write_reg(13, sp);
 }
 
-fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
     if !check_condition(cpu, data.condition()) {
         return;
     }
@@ -87,14 +87,14 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
 // pub struct Stack_Push;
 
 // impl Executable for Stack_Push {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         stack_push(cpu, data);
 //     }
 // }
 // pub struct Stack_Pop;
 
 // impl Executable for Stack_Pop {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         stack_pop(cpu, data);
 //     }
 // }

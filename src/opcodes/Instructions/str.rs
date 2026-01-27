@@ -1,18 +1,18 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{ArmInstruction, Executable, Operand_resolver_multi, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, check_condition};
 use capstone::arch::arm::ArmOperandType;
 
 pub struct Str_builder;
 impl InstrBuilder for Str_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_str_def()
     }
 }
 
-pub fn add_str_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STR as u32,
             name: "STR".to_string(),
             length: 32,
@@ -24,7 +24,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Str,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRB as u32,
             name: "STRB".to_string(),
             length: 32,
@@ -36,7 +36,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Strb,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRH as u32,
             name: "STRH".to_string(),
             length: 32,
@@ -102,7 +102,7 @@ fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
 // --- STR ---
 pub struct Op_Str;
 impl Executable for Op_Str {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -114,7 +114,7 @@ impl Executable for Op_Str {
 
 pub struct Op_Strb;
 impl Executable for Op_Strb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -126,7 +126,7 @@ impl Executable for Op_Strb {
 
 pub struct Op_Strsb;
 impl Executable for Op_Strsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -138,7 +138,7 @@ impl Executable for Op_Strsb {
 
 pub struct Op_Strh;
 impl Executable for Op_Strh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -150,7 +150,7 @@ impl Executable for Op_Strh {
 
 pub struct Op_Strsh;
 impl Executable for Op_Strsh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }

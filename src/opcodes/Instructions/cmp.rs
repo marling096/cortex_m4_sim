@@ -1,20 +1,20 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmInstruction, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N,
+    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N,
     UpdateApsr_V, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
 };
-use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Cmp_builder;
 impl InstrBuilder for Cmp_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_cmp_def()
     }
 }
 
-pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_CMP as u32,
             name: "CMP".to_string(),
             length: 32,
@@ -26,7 +26,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Cmp,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_CMN as u32,
             name: "CMN".to_string(),
             length: 32,
@@ -46,7 +46,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Instruction> {
 
 pub struct Op_Cmp;
 impl Executable for Op_Cmp {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -57,7 +57,7 @@ impl Executable for Op_Cmp {
 
 pub struct Op_Cmn;
 impl Executable for Op_Cmn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -66,14 +66,14 @@ impl Executable for Op_Cmn {
     }
 }
 
-fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmInstruction) -> (u32, u32) {
+fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> (u32, u32) {
     let (rn, rd, op2) = Operand2_resolver(cpu, data);
     (rn, op2)
 }
 
 // === CMP ===
-// CMP is effectively a SUBS instruction with the result discarded.
-fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: u32) {
+// CMP is effectively a SUBS Opcode with the result discarded.
+fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
     // Rn - Op2
     let result = rn_val.wrapping_sub(op2_val);
@@ -99,7 +99,7 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 
 // pub struct Cmp_Imm;
 // impl Executable for Cmp_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -109,14 +109,14 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 // }
 // pub struct Cmp_Imm_match;
 // impl MatchFn for Cmp_Imm_match {
-//     fn op_match(&self, data: &ArmInstruction) -> bool {
+//     fn op_match(&self, data: &ArmOpcode) -> bool {
 //         op2_imm_match(data)
 //     }
 // }
 
 // pub struct Cmp_Reg;
 // impl Executable for Cmp_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -127,14 +127,14 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 // }
 // pub struct Cmp_Reg_match;
 // impl MatchFn for Cmp_Reg_match {
-//     fn op_match(&self, data: &ArmInstruction) -> bool {
+//     fn op_match(&self, data: &ArmOpcode) -> bool {
 //         op2_reg_match(data)
 //     }
 // }
 
 // === CMN ===
-// CMN is effectively an ADDS instruction with the result discarded.
-fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: u32) {
+// CMN is effectively an ADDS Opcode with the result discarded.
+fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
     // Rn + Op2
     let result = rn_val.wrapping_add(op2_val);
@@ -164,7 +164,7 @@ fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 
 // pub struct Cmn_Imm;
 // impl Executable for Cmn_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -174,14 +174,14 @@ fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 // }
 // pub struct Cmn_Imm_match;
 // impl MatchFn for Cmn_Imm_match {
-//     fn op_match(&self, data: &ArmInstruction) -> bool {
+//     fn op_match(&self, data: &ArmOpcode) -> bool {
 //         op2_imm_match(data)
 //     }
 // }
 
 // pub struct Cmn_Reg;
 // impl Executable for Cmn_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -192,7 +192,7 @@ fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmInstruction, rn: u32, op2_val: 
 // }
 // pub struct Cmn_Reg_match;
 // impl MatchFn for Cmn_Reg_match {
-//     fn op_match(&self, data: &ArmInstruction) -> bool {
+//     fn op_match(&self, data: &ArmOpcode) -> bool {
 //         op2_reg_match(data)
 //     }
 // }

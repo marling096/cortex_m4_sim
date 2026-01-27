@@ -1,17 +1,17 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{ArmInstruction, Executable, Operand_resolver_two, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_two, check_condition};
 use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Compare_branch_builder;
 impl InstrBuilder for Compare_branch_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_compare_branch_def()
     }
 }
 
-pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_CBZ as u32,
             name: "CBZ".to_string(),
             length: 16,
@@ -23,7 +23,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Cbz,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_CBNZ as u32,
             name: "CBNZ".to_string(),
             length: 16,
@@ -43,7 +43,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Instruction> {
 
 pub struct Op_Cbz;
 impl Executable for Op_Cbz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -60,7 +60,7 @@ impl Executable for Op_Cbz {
 
 pub struct Op_Cbnz;
 impl Executable for Op_Cbnz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -78,12 +78,12 @@ impl Executable for Op_Cbnz {
 // pub struct Compare_Branch_Zero;
 
 // impl Executable for Compare_Branch_Zero {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         compare_branch_zero(cpu, data);
 //     }
 // }
 
-// fn compare_branch_zero(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn compare_branch_zero(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -100,12 +100,12 @@ impl Executable for Op_Cbnz {
 // pub struct Compare_Branch_NotZero;
 
 // impl Executable for Compare_Branch_NotZero {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         compare_branch_not_zero(cpu, data);
 //     }
 // }
 
-// fn compare_branch_not_zero(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn compare_branch_not_zero(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }

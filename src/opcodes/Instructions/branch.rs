@@ -1,18 +1,20 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{Instruction,CycleInfo,ArmInstruction, Executable, Operand_resolver, check_condition};
-use crate::opcodes::instruction::{InstrBuilder};
+use crate::opcodes::instruction::InstrBuilder;
+use crate::opcodes::opcode::{
+    ArmOpcode, CycleInfo, Executable, Opcode, Operand_resolver, check_condition,
+};
 use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
 
 pub struct Branch_builder;
 impl InstrBuilder for Branch_builder {
-    fn build(&self) -> Vec<Instruction> {
+    fn build(&self) -> Vec<Opcode> {
         add_branch_def()
     }
 }
 
-pub fn add_branch_def() -> Vec<Instruction> {
+pub fn add_branch_def() -> Vec<Opcode> {
     vec![
-        Instruction {
+        Opcode {
             insnid: ArmInsn::ARM_INS_B as u32,
             name: "B".to_string(),
             length: 32,
@@ -24,7 +26,7 @@ pub fn add_branch_def() -> Vec<Instruction> {
             exec: &Op_B,
             adjust_cycles: None,
         },
-        Instruction {
+        Opcode {
             insnid: ArmInsn::ARM_INS_BL as u32,
             name: "BL".to_string(),
             length: 32,
@@ -36,7 +38,7 @@ pub fn add_branch_def() -> Vec<Instruction> {
             exec: &Op_Bl,
             adjust_cycles: None,
         },
-        Instruction {
+        Opcode {
             insnid: ArmInsn::ARM_INS_BX as u32,
             name: "BX".to_string(),
             length: 32,
@@ -48,7 +50,7 @@ pub fn add_branch_def() -> Vec<Instruction> {
             exec: &Op_Bx,
             adjust_cycles: None,
         },
-        Instruction {
+        Opcode {
             insnid: ArmInsn::ARM_INS_BLX as u32,
             name: "BLX".to_string(),
             length: 32,
@@ -60,10 +62,8 @@ pub fn add_branch_def() -> Vec<Instruction> {
             exec: &Op_Blx,
             adjust_cycles: None,
         },
-            
     ]
 }
-
 
 // B{cond} label
 // BL{cond} label
@@ -72,7 +72,7 @@ pub fn add_branch_def() -> Vec<Instruction> {
 
 pub struct Op_B;
 impl Executable for Op_B {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -86,7 +86,7 @@ impl Executable for Op_B {
 
 pub struct Op_Bl;
 impl Executable for Op_Bl {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -105,7 +105,7 @@ impl Executable for Op_Bl {
 
 pub struct Op_Bx;
 impl Executable for Op_Bx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -120,7 +120,7 @@ impl Executable for Op_Bx {
 
 pub struct Op_Blx;
 impl Executable for Op_Blx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -142,7 +142,7 @@ impl Executable for Op_Blx {
 // pub struct Branch_B;
 
 // impl Executable for Branch_B {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -157,7 +157,7 @@ impl Executable for Op_Blx {
 // pub struct Branch_Bl;
 
 // impl Executable for Branch_Bl {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -178,7 +178,7 @@ impl Executable for Op_Blx {
 // pub struct Branch_Bx;
 
 // impl Executable for Branch_Bx {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }
@@ -196,7 +196,7 @@ impl Executable for Op_Blx {
 // pub struct Branch_Blx;
 
 // impl Executable for Branch_Blx {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         if !check_condition(cpu, data.condition()) {
 //             return;
 //         }

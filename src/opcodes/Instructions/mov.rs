@@ -1,20 +1,20 @@
 use crate::context::CpuContext;
 use crate::opcodes::opcode::{
-    ArmInstruction, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
+    ArmOpcode, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
     check_condition,
 };
 use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Mov_builder;
 impl InstrBuilder for Mov_builder {
-    fn build(&self) -> Vec<crate::opcodes::opcode::Instruction> {
+    fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_mov_def()
     }
 }
 
-pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Instruction> {
+pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_MOV as u32,
             name: "MOV".to_string(),
             length: 32,
@@ -26,7 +26,7 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Instruction> {
             exec: &Op_Mov,
             adjust_cycles: None,
         },
-        crate::opcodes::opcode::Instruction {
+        crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_MVN as u32,
             name: "MVN".to_string(),
             length: 32,
@@ -45,14 +45,14 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Instruction> {
 // MOV{cond} Rd, #imm16
 // MVN{S}{cond} Rd, Operand2
 
-fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmInstruction) -> (u32, u32) {
+fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> (u32, u32) {
     let (rn, rd, op2) = Operand2_resolver(cpu, data);
     (rn, op2)
 }
 
 pub struct Op_Mov;
 impl Executable for Op_Mov {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -70,7 +70,7 @@ impl Executable for Op_Mov {
 
 pub struct Op_Mvn;
 impl Executable for Op_Mvn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
         if !check_condition(cpu, data.condition()) {
             return;
         }
@@ -90,12 +90,12 @@ impl Executable for Op_Mvn {
 // pub struct Mov_Imm;
 
 // impl Executable for Mov_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         mov_imm(cpu, data);
 //     }
 // }
 
-// fn mov_imm(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn mov_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -113,11 +113,11 @@ impl Executable for Op_Mvn {
 // pub struct Mov_Reg;
 
 // impl Executable for Mov_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         mov_reg(cpu, data);
 //     }
 // }
-// fn mov_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn mov_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }
@@ -135,12 +135,12 @@ impl Executable for Op_Mvn {
 // pub struct Mvn_Reg;
 
 // impl Executable for Mvn_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //         mvn_reg(cpu, data);
 //     }
 // }
 
-// fn mvn_reg(cpu: &mut dyn CpuContext, data: &ArmInstruction) {
+// fn mvn_reg(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 //     if !check_condition(cpu, data.condition()) {
 //         return;
 //     }

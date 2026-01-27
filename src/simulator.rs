@@ -1,5 +1,8 @@
-mod cpu;
+// mod cpu;
+use crate::context::CpuContext;
 use crate::cpu::Cpu;
+use crate::opcodes::instruction::{Cpu_InstrTable, Cpu_Instruction};
+use std::thread;
 use std::time::{Duration, Instant};
 
 pub struct Simulator {
@@ -12,22 +15,29 @@ impl Simulator {
         Self { cpu, now_ns: 0 }
     }
 
-    fn tick(&mut self) {
-        let nanos_per_tick = 1_000_000_000 / (self.cpu.frequency * self.cpu.machine_cycle);
+    fn tick<'a>(&mut self, ins: &Cpu_Instruction<'a>) {
+        let nanos_per_tick = 1_000_000_000 / (self.cpu.frequency * self.cpu.machine_cycle as u32);
 
-        (self.cpu.step)(&mut self.cpu);
-        self.now_ns += nanos_per_tick;
+        self.cpu.step(&ins);
+        self.now_ns += nanos_per_tick as u64;
     }
 
-    pub fn sim_loop(&mut self) {
+    pub fn sim_loop<'a>(&mut self, ins_table: Cpu_InstrTable<'a>) {
         let start_time = Instant::now();
-        let nanos_per_tick = 1_000_000_000 / (self.cpu.frequency * self.cpu.machine_cycle);
-        let tick_duration = Duration::from_nanos(nanos_per_tick);
+        let nanos_per_tick = 1_000_000_000 / (self.cpu.frequency * self.cpu.machine_cycle as u32);
+        let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
 
         loop {
             let loop_start = Instant::now();
 
-            self.tick();
+            let pc = self.cpu.read_pc_counter() as usize;
+            match ins_table.table.get(pc) {
+                Some(ins) => self.tick(ins),
+                None => {
+                    eprintln!("Error: PC {} is out of bounds. Simulation stopped.", pc);
+                    break;
+                }
+            }
 
             let elapsed = loop_start.elapsed();
             if elapsed < tick_duration {
