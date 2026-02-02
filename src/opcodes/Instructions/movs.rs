@@ -10,9 +10,9 @@ use crate::opcodes::opcode::{
 // MVN{S}{cond} Rd, Operand2
 pub struct Op_Movs;
 impl Executable for Op_Movs {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         let (rd, imm) = get_ops(cpu, data);
@@ -24,14 +24,15 @@ impl Executable for Op_Movs {
             UpdateApsr_Z(cpu, imm);
             // Note: C flag update logic should be added here based on Operand2 specifics
         }
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
 pub struct Op_Mvns;
 impl Executable for Op_Mvns {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         let (rd, val) = get_ops(cpu, data);
@@ -44,6 +45,7 @@ impl Executable for Op_Mvns {
             UpdateApsr_Z(cpu, result);
             // Note: C flag update logic should be added here based on Operand2 specifics
         }
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 

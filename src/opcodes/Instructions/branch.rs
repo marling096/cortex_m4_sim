@@ -72,23 +72,24 @@ pub fn add_branch_def() -> Vec<Opcode> {
 
 pub struct Op_B;
 impl Executable for Op_B {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // B label
         let label = Operand_resolver(cpu, data);
 
         cpu.write_pc(label);
+        0
     }
 }
 
 pub struct Op_Bl;
 impl Executable for Op_Bl {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // BL label
@@ -100,14 +101,16 @@ impl Executable for Op_Bl {
         // Set LSB of return address for Thumb mode
         cpu.write_lr(return_addr | 1);
         cpu.write_pc(label);
+        print!("BL to 0x{:08X}, return addr 0x{:08X}\n", label, return_addr | 1);
+        0
     }
 }
 
 pub struct Op_Bx;
 impl Executable for Op_Bx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // BX Rm
@@ -115,14 +118,15 @@ impl Executable for Op_Bx {
         // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
         let target = val & !1;
         cpu.write_pc(target);
+        0
     }
 }
 
 pub struct Op_Blx;
 impl Executable for Op_Blx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // BLX Rm
@@ -136,83 +140,6 @@ impl Executable for Op_Blx {
         // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
         let target = val & !1;
         cpu.write_pc(target);
+        0
     }
 }
-
-// pub struct Branch_B;
-
-// impl Executable for Branch_B {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-
-//         // B label
-//         if let Some(&label) = data.operands.get(0) {
-//             cpu.write_pc(label);
-//         }
-//     }
-// }
-
-// pub struct Branch_Bl;
-
-// impl Executable for Branch_Bl {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-
-//         // BL label
-//         if let Some(&label) = data.operands.get(0) {
-//             let pc = cpu.read_pc();
-//             let insn_len = data.insn.len() as u32;
-//             let return_addr = pc.wrapping_add(insn_len);
-
-//             // Set LSB of return address for Thumb mode
-//             cpu.write_lr(return_addr | 1);
-//             cpu.write_pc(label);
-//         }
-//     }
-// }
-
-// pub struct Branch_Bx;
-
-// impl Executable for Branch_Bx {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-
-//         // BX Rm
-//         if let Some(&rm) = data.operands.get(0) {
-//             let val = cpu.read_reg(rm);
-//             // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
-//             let target = val & !1;
-//             cpu.write_pc(target);
-//         }
-//     }
-// }
-
-// pub struct Branch_Blx;
-
-// impl Executable for Branch_Blx {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-
-//         // BLX Rm
-//         if let Some(&rm) = data.operands.get(0) {
-//             let pc = cpu.read_pc();
-//             let insn_len = data.insn.len() as u32;
-//             let return_addr = pc.wrapping_add(insn_len);
-
-//             cpu.write_lr(return_addr | 1);
-
-//             let val = cpu.read_reg(rm);
-//             // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
-//             let target = val & !1;
-//             cpu.write_pc(target);
-//         }
-//     }
-// }

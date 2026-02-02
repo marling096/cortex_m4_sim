@@ -1,3 +1,5 @@
+use std::option;
+
 use crate::context::CpuContext;
 use capstone::prelude::*;
 #[derive(Clone)]
@@ -39,7 +41,7 @@ impl Opcode {
 }
 
 pub trait Executable {
-    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode);
+    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode)->u32;
 }
 
 #[derive(Clone, Copy)]
@@ -72,7 +74,7 @@ pub struct ArmOpcode<'a> {
     /// 原始指令对象
     pub insn: &'a Insn<'a>,
 
-    pub operands: Vec<u32>,
+    pub transed_operands: Vec<u32>,
     /// 指令详细信息 (含操作数、CC、Writeback 等)
     pub detail: InsnDetail<'a>,
     /// Capstone 句柄引用，用于解析寄存器名
@@ -113,7 +115,7 @@ impl<'a> ArmOpcode<'a> {
         if let arch::ArchDetail::ArmDetail(_) = detail.arch_detail() {
             Some(ArmOpcode {
                 insn,
-                operands: Vec::new(),
+                transed_operands: Vec::new(),
                 detail,
                 cs,
             })
@@ -151,28 +153,28 @@ impl<'a> ArmOpcode<'a> {
             None
         };
 
-        self.operands.clear();
+        self.transed_operands.clear();
         for op in arch_detail.operands() {
             match op.op_type {
                 ArmOperandType::Reg(reg) => {
                     if let Some(reg_num) = get_reg_val(reg) {
-                        self.operands.push(reg_num);
+                        self.transed_operands.push(reg_num);
                     }
                 }
                 ArmOperandType::Imm(val) => {
-                    self.operands.push(val as u32);
+                    self.transed_operands.push(val as u32);
                 }
                 ArmOperandType::Mem(mem) => {
                     if let Some(reg_num) = get_reg_val(mem.base()) {
-                        self.operands.push(reg_num);
+                        self.transed_operands.push(reg_num);
                     }
                     if let Some(reg_num) = get_reg_val(mem.index()) {
-                        self.operands.push(reg_num);
+                        self.transed_operands.push(reg_num);
                     }
-                    self.operands.push(mem.disp() as u32);
+                    self.transed_operands.push(mem.disp() as u32);
                 }
                 ArmOperandType::Pimm(val) | ArmOperandType::Cimm(val) => {
-                    self.operands.push(val as u32);
+                    self.transed_operands.push(val as u32);
                 }
                 _ => {}
             }
@@ -191,6 +193,11 @@ impl<'a> ArmOpcode<'a> {
     pub fn address(&self) -> u32 {
         self.insn.address() as u32
     }
+
+    pub fn size(&self) -> u32 {
+        self.insn.len() as u32
+    }
+
     /// 获取助记符 (如 "ldr")
     pub fn mnemonic(&self) -> &str {
         self.insn.mnemonic().unwrap_or("")
@@ -233,6 +240,11 @@ impl<'a> ArmOpcode<'a> {
 
     pub fn condition(&self) -> capstone::arch::arm::ArmCC {
         self.arm_detail().cc()
+    }
+
+    pub fn it_mask(&self) -> u8 {
+        // self.arm_detail().it_mask()
+        0
     }
 }
 
@@ -565,7 +577,7 @@ pub fn Operand_resolver_multi(
 }
 
 pub fn op2_imm_match(data: &ArmOpcode) -> bool {
-    let len = data.operands.len();
+    let len = data.transed_operands.len();
 
     // AND: 只允许 2 或 3 个 operand
     if len != 2 || len != 3 {
@@ -588,7 +600,7 @@ pub fn op2_imm_match(data: &ArmOpcode) -> bool {
 }
 
 pub fn op2_reg_match(data: &ArmOpcode) -> bool {
-    let len = data.operands.len();
+    let len = data.transed_operands.len();
 
     // AND: 只允许 2 或 3 个 operand
     if len != 2 || len != 3 {

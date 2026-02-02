@@ -11,9 +11,9 @@ use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
 pub struct Op_Tst;
 impl Executable for Op_Tst {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         let (rd ,rn, op2) = Operand2_resolver(cpu, data);
@@ -22,14 +22,15 @@ impl Executable for Op_Tst {
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
         // Note: C flag update logic should be added here based on Operand2 specifics
+        data.size()
     }
 }
 
 pub struct Op_Teq;
 impl Executable for Op_Teq {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         let (rd ,rn, op2) = Operand2_resolver(cpu, data);
@@ -38,6 +39,7 @@ impl Executable for Op_Teq {
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
         // Note: C flag update logic should be added here based on Operand2 specifics
+        data.size()
     }
 }
 

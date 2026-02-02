@@ -1,6 +1,6 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, check_condition};
-use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Stack_builder;
 impl InstrBuilder for Stack_builder {
@@ -42,59 +42,69 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // POP{cond} reglist
 pub struct Op_Push;
 impl Executable for Op_Push {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-        stack_push(cpu, data);
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+        stack_push(cpu, data)
     }
 }
 
 pub struct Op_Pop;
 impl Executable for Op_Pop {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-        stack_pop(cpu, data);
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+        stack_pop(cpu, data)
     }
 }
 
-fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
-        return;
+        return data.size();
     }
-
+    data.op_writer();
     let mut sp = cpu.read_reg(13);
+    print!("SP before PUSH:0x{:08X}\n", sp);
     // PUSH: full-descending (pre-decrement)
-    for &r in data.operands.iter().rev() {
-        sp = sp.wrapping_sub(4);
-        let val = cpu.read_reg(r);
-        cpu.write_mem(sp, val);
+    let mut regs: Vec<u32> = Vec::new();
+    for op in data.operands() {
+        if let capstone::arch::arm::ArmOperandType::Reg(reg_id) = op.op_type {
+            regs.push(data.resolve_reg(reg_id));
+        }
     }
+    regs.sort();
+    let count = regs.len() as u32;
+    let mut addr = sp.wrapping_sub(4 * count);
+    for &r in &regs {
+        let val = cpu.read_reg(r);
+        print!("PUSH R{}:0x{:08X} to 0x{:08X}\n", r, val, addr);
+        cpu.write_mem(addr, val);
+        addr = addr.wrapping_add(4);
+    }
+    sp = sp.wrapping_sub(4 * count);
+    print!("SP:0x{:08X}\n", sp);
     cpu.write_reg(13, sp);
+    data.size()
 }
 
-fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
-        return;
+        return data.size();
     }
-
+    data.op_writer();
+    let lr = cpu.read_lr(0);
+    print!("LR before POP:0x{:08X}\n", lr);
     let mut sp = cpu.read_reg(13);
     // POP: full-descending stack, so pop is post-increment
-    for &r in data.operands.iter() {
+    let mut regs: Vec<u32> = Vec::new();
+    for op in data.operands() {
+        if let capstone::arch::arm::ArmOperandType::Reg(reg_id) = op.op_type {
+            regs.push(data.resolve_reg(reg_id));
+        }
+    }
+    regs.sort();
+    for &r in &regs {
         let val = cpu.read_mem(sp);
         cpu.write_reg(r, val);
         sp = sp.wrapping_add(4);
     }
+    print!("SP:0x{:08X}\n", sp);
     cpu.write_reg(13, sp);
+    if regs.contains(&15) { 0 } else { data.size() }
 }
-
-// pub struct Stack_Push;
-
-// impl Executable for Stack_Push {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         stack_push(cpu, data);
-//     }
-// }
-// pub struct Stack_Pop;
-
-// impl Executable for Stack_Pop {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         stack_pop(cpu, data);
-//     }
-// }

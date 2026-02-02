@@ -1,5 +1,10 @@
+use std::cell::RefCell;
+use std::vec;
+
 use crate::context::CpuContext;
 use crate::opcodes::instruction::Cpu_Instruction;
+use crate::peripheral::bus::Bus;
+
 pub struct Cpu {
     pub frequency: u32,
     pub machine_cycle: u8,
@@ -11,7 +16,13 @@ pub struct Cpu {
     pub ram: Vec<u8>,   // 模拟 SRAM (例如 128KB)
     pub registers: Registers,
 
-    pub pc_coutnter: u32, // 用于跟踪程序计数器的变化,计数，并非地址
+    pub current_pc: u32, // 当前 指令地址
+
+    pub next_pc: u32, // 预取的下一条指令地址
+
+    pub peripheral_bus: RefCell<Bus>,
+
+    pub ppb: RefCell<Bus>,
 }
 struct Registers {
     reg: [u32; 16], // R0 - R15    // 应用程序状态寄存器 (xPSR 的一部分)
@@ -106,6 +117,14 @@ impl CpuContext for Cpu {
         }
     }
 
+    fn read_sp(&self) -> u32 {
+        self.registers.reg[13]
+    }
+
+    fn write_sp(&mut self, v: u32) {
+        self.registers.reg[13] = v;
+    }
+
     fn read_lr(&self, _r: u32) -> u32 {
         self.registers.reg[14]
     }
@@ -120,7 +139,6 @@ impl CpuContext for Cpu {
 
     fn write_pc(&mut self, pc: u32) {
         self.registers.reg[15] = pc;
-        self.write_pc_counter(self.read_pc_counter() + 1); // 同步更新外部pc计数器
     }
 
     fn read_apsr(&self) -> u32 {
@@ -129,33 +147,39 @@ impl CpuContext for Cpu {
     fn write_apsr(&mut self, v: u32) {
         self.registers.apsr = v;
     }
-
-    fn read_pc_counter(&self) -> u32 {
-        self.pc_coutnter
-    }
-
-    fn write_pc_counter(&mut self, v: u32) {
-        self.pc_coutnter = v; //更新外部pc值
-    }
 }
 
 impl Cpu {
-    pub fn new(frequency: u32, machine_cycle: u8) -> Cpu {
+    pub fn new(frequency: u32, machine_cycle: u8, peripheral_bus: Bus, ppb: Bus) -> Cpu {
         Cpu {
             frequency,
             machine_cycle,
             Cycles: 0,
             Cpu_pipeline: Cpu_pipeline::new(),
             flash: vec![0; 512 * 1024], // 512KB Flash
-            ram: vec![0; 128 * 1024],   // 128
+            ram: vec![0; 128 * 1024],   // 128KB RAM
             registers: Registers {
                 reg: [0; 16],
                 apsr: 0,
                 is_msp: true,
             },
-            pc_coutnter: 0,
+            current_pc: 0,
+            next_pc: 0,
+            peripheral_bus: RefCell::new(peripheral_bus),
+            ppb: RefCell::new(ppb),
         }
     }
+
+    pub fn reset_handler(&mut self, reset_vector: u32) {
+        // 复位时，PC 设置为复位向量地址
+        self.write_pc(reset_vector);
+        self.next_pc = reset_vector;
+        // 其他寄存器初始化
+        self.registers.reg = [0; 16];
+        self.registers.apsr = 0;
+        self.registers.is_msp = true;
+    }
+
     fn read_byte(&self, addr: u32) -> u8 {
         match addr {
             // 1. 别名区域 (Aliased region)
@@ -168,20 +192,16 @@ impl Cpu {
                 let offset = (addr - 0x0800_0000) as usize;
                 self.flash[offset]
             }
-            // RAM 区域 (例如 0x2000_0000 - 0x2001_FFFF)
-            0x2000_0000..=0x2001_FFFF => {
+            // RAM 区域 (例如 0x2000_0000 - 0x3FFFFFFF)
+            0x2000_0000..=0x3FFFFFFF => {
                 let offset = (addr - 0x2000_0000) as usize;
                 self.ram[offset]
             }
 
-            // 内部私有外设总线 (PPB, 如 NVIC, SysTick)
-            0x40000000..=0x500607FF => {
-                // 这里可以后续实现外设寄存器
-                0
-            }
+            0x40000000..=0x5FFFFFFF => self.peripheral_bus.borrow_mut().read8(addr),
             0xE000_0000..=0xE00F_FFFF => {
                 // 这里可以后续实现System 控制寄存器寄存器
-                0
+                self.ppb.borrow_mut().read8(addr)
             }
             _ => {
                 // 触发仿真异常：访问了未映射的地址
@@ -194,41 +214,47 @@ impl Cpu {
     fn write_byte(&mut self, addr: u32, val: u8) {
         match addr {
             // RAM 区域
-            0x2000_0000..=0x2001_FFFF => {
+            0x2000_0000..=0x3FFFFFFF => {
                 let offset = (addr - 0x2000_0000) as usize;
                 self.ram[offset] = val;
             }
             // Flash 区域：通常只读，直接写入可能在仿真中报错或模拟 Flash 控制器
             0x0000_0000..=0x0007_FFFF => {
-                eprintln!("Warning: Attempted to write to Flash at 0x{:08X}", addr);
+                // eprintln!("Warning: Attempted to write to Flash at 0x{:08X}", addr);
             }
-            0x40000000..=0x500607FF => {
+            0x0800_0000..=0x0807_FFFF => {
+                // eprintln!("Warning: Attempted to write to Flash at 0x{:08X}", addr);
+                self.flash[(addr - 0x0800_0000) as usize] = val;
+            }
+            0x40000000..=0x5FFFFFFF => {
                 // 这里可以后续实现外设寄存器写入
+                print!("Peripheral Write at 0x{:08X} Value: 0x{:02X}\n", addr, val);
+                self.peripheral_bus.borrow_mut().write8(addr, val);
             }
 
             0xE000_0000..=0xE00F_FFFF => {
-                // 这里可以后续实现System 控制寄存器寄存器写入
+                self.ppb.borrow_mut().write8(addr, val);
             }
             _ => {
                 panic!("Memory Write Error: Unmapped address 0x{:08X}", addr);
             }
         }
     }
+
     // changed: make step take &mut self and avoid borrow conflicts
-    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>) {
+    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) {
         if self.Cpu_pipeline.remain_cycles > 0 {
             self.Cpu_pipeline.remain_cycles -= 1;
             return;
         }
-
+        self.Cpu_pipeline.phase = Phase::Execute;
         let phase = self.Cpu_pipeline.phase;
 
         match phase {
             Phase::Fetch => {
                 //skip fetch phase
-                // // immutable borrows end at the end of the call, so subsequent mutations are allowed
-                // let instruction = self.Cpu_pipeline.fetch(&*self);
-                self.Cpu_pipeline.phase = Phase::Decode;
+                self.Cpu_pipeline.phase = Phase::Execute;
+
                 self.Cpu_pipeline.remain_cycles = ins.op.cycles.fetch_cycles.saturating_sub(1);
             }
             Phase::Decode => {
@@ -238,15 +264,31 @@ impl Cpu {
                 self.Cpu_pipeline.remain_cycles = ins.op.cycles.decode_cycles.saturating_sub(1);
             }
             Phase::Execute => {
-                self.Cpu_pipeline.phase = Phase::Fetch;
-                ins.op.exec.execute(&mut *self, &ins.data);
-                self.update_pc(&ins);
+                self.Cpu_pipeline.phase = Phase::Execute;
+                self.current_pc = current_pc;
+                let pc_update = ins.op.exec.execute(&mut *self, &ins.data);
+                print!(
+                    "Executed instruction {} at 0x{:08X}, PC update: 0x{:X}\n",
+                    ins.data.mnemonic(),
+                    current_pc,
+                    pc_update
+                );
+                self.update_pc(pc_update);
                 self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
             }
         }
     }
 
-    fn update_pc<'a>(&mut self, ins: &Cpu_Instruction<'a>) {
-        self.write_pc(self.read_pc() + ins.op.length as u32);
+    pub fn peripheral_step(&mut self) {
+        self.peripheral_bus.borrow_mut().tick();
+        self.ppb.borrow_mut().tick();
+    }
+
+    pub fn update_pc<'a>(&mut self, update: u32) {
+        if update == 0 {
+            self.next_pc = self.read_pc();
+        } else {
+            self.next_pc = self.current_pc.wrapping_add(update);
+        }
     }
 }

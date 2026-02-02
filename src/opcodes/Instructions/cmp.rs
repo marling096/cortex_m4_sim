@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N,
-    UpdateApsr_V, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
+    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
 };
 
 pub struct Cmp_builder;
@@ -46,23 +46,25 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cmp;
 impl Executable for Op_Cmp {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rn, op2) = get_ops(cpu, data);
         cmp_core(cpu, data, rn, op2);
+        data.size()
     }
 }
 
 pub struct Op_Cmn;
 impl Executable for Op_Cmn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rn, op2) = get_ops(cpu, data);
         cmn_core(cpu, data, rn, op2);
+        data.size()
     }
 }
 
@@ -77,6 +79,8 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) 
     let rn_val = cpu.read_reg(rn);
     // Rn - Op2
     let result = rn_val.wrapping_sub(op2_val);
+
+    print!("Comparing R{} (0x{:08X}) with Op2 (0x{:08X}): Result = 0x{:08X}\n", rn, rn_val, op2_val, result);
 
     UpdateApsr_Z(cpu, result);
     UpdateApsr_N(cpu, result);
@@ -96,41 +100,6 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) 
     };
     UpdateApsr_V(cpu, v);
 }
-
-// pub struct Cmp_Imm;
-// impl Executable for Cmp_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rn, imm) = get_ops(cpu, data);
-//         cmp_core(cpu, data, rn, imm);
-//     }
-// }
-// pub struct Cmp_Imm_match;
-// impl MatchFn for Cmp_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Cmp_Reg;
-// impl Executable for Cmp_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rn, rm) = get_ops(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         cmp_core(cpu, data, rn, val);
-//     }
-// }
-// pub struct Cmp_Reg_match;
-// impl MatchFn for Cmp_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }
 
 // === CMN ===
 // CMN is effectively an ADDS Opcode with the result discarded.
@@ -161,38 +130,3 @@ fn cmn_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) 
     };
     UpdateApsr_V(cpu, v);
 }
-
-// pub struct Cmn_Imm;
-// impl Executable for Cmn_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rn, imm) = get_ops(cpu, data);
-//         cmn_core(cpu, data, rn, imm);
-//     }
-// }
-// pub struct Cmn_Imm_match;
-// impl MatchFn for Cmn_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Cmn_Reg;
-// impl Executable for Cmn_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rn, rm) = get_ops(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         cmn_core(cpu, data, rn, val);
-//     }
-// }
-// pub struct Cmn_Reg_match;
-// impl MatchFn for Cmn_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }

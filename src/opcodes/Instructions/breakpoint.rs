@@ -31,8 +31,9 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Bkpt;
 impl Executable for Op_Bkpt {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         breakpoint_imm(cpu, data);
+        0
     }
 }
 

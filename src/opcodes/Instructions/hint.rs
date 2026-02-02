@@ -27,8 +27,9 @@ pub fn add_Hint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // Hint{cond}
 pub struct Op_Hint;
 impl Executable for Op_Hint {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         Hint(cpu, data);
+        data.size()
     }
 }
 

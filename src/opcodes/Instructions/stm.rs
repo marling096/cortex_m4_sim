@@ -9,14 +9,14 @@ use capstone::arch::arm::ArmOperandType;
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Stm;
 impl Executable for Op_Stm {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-        stm(cpu, data);
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+        stm(cpu, data)
     }
 }
 
-pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
-        return;
+        return data.size();
     }
 
     // Collect operands into a Vec so we can index them
@@ -52,6 +52,7 @@ pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
     if data.writeback() {
         cpu.write_reg(base_reg_id, addr);
     }
+    data.size()
 }
 
 pub struct Stm_builder;

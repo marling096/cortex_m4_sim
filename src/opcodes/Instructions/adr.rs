@@ -9,8 +9,9 @@ use capstone::arch::arm::{ArmInsn, ArmOperandType};
 //ADR{cond} Rd, label
 pub struct Op_Adr;
 impl Executable for Op_Adr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         adr(cpu, data);
+        data.size()
     }
 }
 

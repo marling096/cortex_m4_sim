@@ -1,6 +1,6 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_two, check_condition};
-use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Compare_branch_builder;
 impl InstrBuilder for Compare_branch_builder {
@@ -43,26 +43,30 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cbz;
 impl Executable for Op_Cbz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // CBZ Rn, label
         let (rn, label) = Operand_resolver_two(cpu, data);
 
         let val = cpu.read_reg(rn);
+        print!("CBZ R{}:0x{:08X}, label 0x{:08X}\n", rn, val, label);
         if val == 0 {
             cpu.write_pc(label);
+            0
+        } else {
+            data.size()
         }
     }
 }
 
 pub struct Op_Cbnz;
 impl Executable for Op_Cbnz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
 
         // CBNZ Rn, label
@@ -71,50 +75,9 @@ impl Executable for Op_Cbnz {
         let val = cpu.read_reg(rn);
         if val != 0 {
             cpu.write_pc(label);
+            0
+        } else {
+            data.size()
         }
     }
 }
-
-// pub struct Compare_Branch_Zero;
-
-// impl Executable for Compare_Branch_Zero {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         compare_branch_zero(cpu, data);
-//     }
-// }
-
-// fn compare_branch_zero(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//     if !check_condition(cpu, data.condition()) {
-//         return;
-//     }
-
-//     let rn = data.operands[0];
-//     let label = data.operands[1];
-
-//     let val = cpu.read_reg(rn);
-//     if val == 0 {
-//         cpu.write_pc(label);
-//     }
-// }
-
-// pub struct Compare_Branch_NotZero;
-
-// impl Executable for Compare_Branch_NotZero {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         compare_branch_not_zero(cpu, data);
-//     }
-// }
-
-// fn compare_branch_not_zero(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//     if !check_condition(cpu, data.condition()) {
-//         return;
-//     }
-
-//     let rn = data.operands[0];
-//     let label = data.operands[1];
-
-//     let val = cpu.read_reg(rn);
-//     if val != 0 {
-//         cpu.write_pc(label);
-//     }
-// }

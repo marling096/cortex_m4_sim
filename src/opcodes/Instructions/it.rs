@@ -8,15 +8,13 @@ use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
 pub struct Op_It;
 impl Executable for Op_It {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         it(cpu, data);
+        data.size()
     }
 }
 fn it(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
     if !check_condition(cpu, data.condition()) {
-        let pc = cpu.read_pc_counter();
-        cpu.write_pc_counter(pc + 1); //无状态，通过外部pc计数器跳过后续指令
-
         return;
     }
 }

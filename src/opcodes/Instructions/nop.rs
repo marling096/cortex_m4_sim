@@ -29,8 +29,9 @@ pub fn add_nop_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // NOP{cond}
 pub struct Op_Nop;
 impl Executable for Op_Nop {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         nop(cpu, data);
+        data.size()
     }
 }
 

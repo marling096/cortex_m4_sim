@@ -1,9 +1,9 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N,
-    UpdateApsr_V, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
+    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
 };
-use crate::opcodes::instruction::{InstrBuilder};
 use capstone::arch::arm::ArmOperandType;
 
 pub struct Calculate_builder;
@@ -75,7 +75,6 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             exec: &Op_Rsb,
             adjust_cycles: None,
         },
-
         // Similarly for SUB, SBC, RSB...
     ]
 }
@@ -85,70 +84,65 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Add;
 impl Executable for Op_Add {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_add_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
 pub struct Op_Adc;
 impl Executable for Op_Adc {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_adc_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
-pub  struct Op_Sub;
+pub struct Op_Sub;
 impl Executable for Op_Sub {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_sub_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
 pub struct Op_Sbc;
 impl Executable for Op_Sbc {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_sbc_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
 pub struct Op_Rsb;
 impl Executable for Op_Rsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_rsb_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
-
-
-
-
-fn calculate_add_core(
-    cpu: &mut dyn CpuContext,
-    data: &ArmOpcode,
-    rd: u32,
-    rn: u32,
-    op2_val: u32,
-) {
+fn calculate_add_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
 
     let result = rn_val.wrapping_add(op2_val);
@@ -179,52 +173,9 @@ fn calculate_add_core(
     }
 }
 
-
-
-// pub struct Calculate_Add_Imm;
-// impl Executable for Calculate_Add_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, imm) = Operand2_resolver(cpu, data);
-//         calculate_add_core(cpu, data, rd, rn, imm);
-//     }
-// }
-// pub struct Calculate_Add_Imm_match;
-// impl MatchFn for Calculate_Add_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Calculate_Add_Reg;
-// impl Executable for Calculate_Add_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, rm) = Operand2_resolver(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         calculate_add_core(cpu, data, rd, rn, val);
-//     }
-// }
-// pub struct Calculate_Add_Reg_match;
-// impl MatchFn for Calculate_Add_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }
-
 // === ADC ===
 
-fn calculate_adc_core(
-    cpu: &mut dyn CpuContext,
-    data: &ArmOpcode,
-    rd: u32,
-    rn: u32,
-    op2_val: u32,
-) {
+fn calculate_adc_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
     let apsr = cpu.read_apsr();
     let carry_in = if (apsr & (1u32 << 29)) != 0 {
@@ -258,52 +209,9 @@ fn calculate_adc_core(
     }
 }
 
-
-
-// pub struct Calculate_Adc_Imm;
-// impl Executable for Calculate_Adc_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, imm) = Operand2_resolver(cpu, data);
-//         calculate_adc_core(cpu, data, rd, rn, imm);
-//     }
-// }
-// pub struct Calculate_Adc_Imm_match;
-// impl MatchFn for Calculate_Adc_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Calculate_Adc_Reg;
-// impl Executable for Calculate_Adc_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, rm) = Operand2_resolver(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         calculate_adc_core(cpu, data, rd, rn, val);
-//     }
-// }
-// pub struct Calculate_Adc_Reg_match;
-// impl MatchFn for Calculate_Adc_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }
-
 // === SUB ===
 
-fn calculate_sub_core(
-    cpu: &mut dyn CpuContext,
-    data: &ArmOpcode,
-    rd: u32,
-    rn: u32,
-    op2_val: u32,
-) {
+fn calculate_sub_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
 
     let result = rn_val.wrapping_sub(op2_val);
@@ -330,50 +238,9 @@ fn calculate_sub_core(
     }
 }
 
-// pub struct Calculate_Sub_Imm;
-// impl Executable for Calculate_Sub_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, imm) = Operand2_resolver(cpu, data);
-//         calculate_sub_core(cpu, data, rd, rn, imm);
-//     }
-// }
-// pub struct Calculate_Sub_Imm_match;
-// impl MatchFn for Calculate_Sub_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Calculate_Sub_Reg;
-// impl Executable for Calculate_Sub_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         pub struct Calculate_Sub_Reg_match;
-//         impl MatchFn for Calculate_Sub_Reg_match {
-//             fn op_match(&self, data: &ArmOpcode) -> bool {
-//                 op2_reg_match(data)
-//             }
-//         }
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, rm) = Operand2_resolver(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         calculate_sub_core(cpu, data, rd, rn, val);
-//     }
-// }
-
 // === SBC ===
 
-fn calculate_sbc_core(
-    cpu: &mut dyn CpuContext,
-    data: &ArmOpcode,
-    rd: u32,
-    rn: u32,
-    op2_val: u32,
-) {
+fn calculate_sbc_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
     let apsr = cpu.read_apsr();
     let carry_in = if (apsr & (1u32 << 29)) != 0 {
@@ -413,50 +280,9 @@ fn calculate_sbc_core(
     }
 }
 
-// pub struct Calculate_Sbc_Imm;
-// impl Executable for Calculate_Sbc_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, imm) = Operand2_resolver(cpu, data);
-//         calculate_sbc_core(cpu, data, rd, rn, imm);
-//     }
-// }
-// pub struct Calculate_Sbc_Imm_match;
-// impl MatchFn for Calculate_Sbc_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Calculate_Sbc_Reg;
-// impl Executable for Calculate_Sbc_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, rm) = Operand2_resolver(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         calculate_sbc_core(cpu, data, rd, rn, val);
-//     }
-// }
-// pub struct Calculate_Sbc_Reg_match;
-// impl MatchFn for Calculate_Sbc_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }
-
 // === RSB ===
 
-fn calculate_rsb_core(
-    cpu: &mut dyn CpuContext,
-    data: &ArmOpcode,
-    rd: u32,
-    rn: u32,
-    op2_val: u32,
-) {
+fn calculate_rsb_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
     let rn_val = cpu.read_reg(rn);
 
     // RSB: result = Op2 - Rn
@@ -483,39 +309,3 @@ fn calculate_rsb_core(
         UpdateApsr_V(cpu, v);
     }
 }
-
-// pub struct Calculate_Rsb_Imm;
-// impl Executable for Calculate_Rsb_Imm {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, imm) = Operand2_resolver(cpu, data);
-
-//         calculate_rsb_core(cpu, data, rd, rn, imm);
-//     }
-// }
-// pub struct Calculate_Rsb_Imm_match;
-// impl MatchFn for Calculate_Rsb_Imm_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_imm_match(data)
-//     }
-// }
-
-// pub struct Calculate_Rsb_Reg;
-// impl Executable for Calculate_Rsb_Reg {
-//     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-//         if !check_condition(cpu, data.condition()) {
-//             return;
-//         }
-//         let (rd, rn, rm) = Operand2_resolver(cpu, data);
-//         let val = cpu.read_reg(rm);
-//         calculate_rsb_core(cpu, data, rd, rn, val);
-//     }
-// }
-// pub struct Calculate_Rsb_Reg_match;
-// impl MatchFn for Calculate_Rsb_Reg_match {
-//     fn op_match(&self, data: &ArmOpcode) -> bool {
-//         op2_reg_match(data)
-//     }
-// }

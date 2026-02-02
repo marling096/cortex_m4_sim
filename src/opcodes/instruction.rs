@@ -34,20 +34,14 @@ impl<'a> Cpu_Instruction<'a> {
 }
 
 pub struct Cpu_InstrTable<'a> {
-    pub table: Vec<Cpu_Instruction<'a>>,
-    pub pc_addr: BTreeMap<u32, u32>,
+    pub table: BTreeMap<u32, Cpu_Instruction<'a>>,
 }
 impl<'a> Cpu_InstrTable<'a> {
     pub fn new() -> Cpu_InstrTable<'a> {
-        Cpu_InstrTable {
-            table: Vec::new(),
-            pc_addr: BTreeMap::new(),
-        }
+        Cpu_InstrTable { table: BTreeMap::new() }
     }
     pub fn add_instruction(&mut self, instr: Cpu_Instruction<'a>) {
-        self.table.push(instr);
-        let addr = self.table.last().unwrap().data.address();
-        self.pc_addr.insert(self.table.len() as u32 - 1, addr);
+        self.table.insert(instr.data.address(), instr);
     }
 }
 

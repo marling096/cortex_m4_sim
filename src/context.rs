@@ -14,6 +14,9 @@ pub trait CpuContext {
     fn read_psp(&self, r: u32) -> u32;
     fn write_psp(&mut self, v: u32);
 
+    fn read_sp(&self) -> u32;
+    fn write_sp(&mut self, v: u32);
+
     fn read_lr(&self, r: u32) -> u32;
     fn write_lr(&mut self, v: u32);
 
@@ -22,7 +25,4 @@ pub trait CpuContext {
 
     fn read_apsr(&self) -> u32;
     fn write_apsr(&mut self, v: u32);
-
-    fn read_pc_counter(&self) -> u32;
-    fn write_pc_counter(&mut self, v: u32);
 }

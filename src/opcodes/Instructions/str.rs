@@ -15,7 +15,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
         crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STR as u32,
             name: "STR".to_string(),
-            length: 32,
+            length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
@@ -27,7 +27,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
         crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRB as u32,
             name: "STRB".to_string(),
-            length: 32,
+            length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
@@ -39,7 +39,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
         crate::opcodes::opcode::Opcode {
             insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRH as u32,
             name: "STRH".to_string(),
-            length: 32,
+            length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
@@ -102,60 +102,69 @@ fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
 // --- STR ---
 pub struct Op_Str;
 impl Executable for Op_Str {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let (rt,mut addr) = Operand_resolver_multi(cpu, data);
+        addr  =addr & !3; // Align address to word boundary
         let val = cpu.read_reg(rt);
+        print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
+        
         cpu.write_mem(addr, val);
+        print!("rcc.rcr after STR: 0x{:08X}\n", cpu.read_mem(0x40021000));
+        data.size()
     }
 }
 
 pub struct Op_Strb;
 impl Executable for Op_Strb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rt, addr) = Operand_resolver_multi(cpu, data);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
+        data.size()
     }
 }
 
 pub struct Op_Strsb;
 impl Executable for Op_Strsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rt, addr) = Operand_resolver_multi(cpu, data);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
+        data.size()
     }
 }
 
 pub struct Op_Strh;
 impl Executable for Op_Strh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rt, addr) = Operand_resolver_multi(cpu, data);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
+        data.size()
     }
 }
 
 pub struct Op_Strsh;
 impl Executable for Op_Strsh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
-            return;
+            return data.size();
         }
         let (rt, addr) = Operand_resolver_multi(cpu, data);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
+        data.size()
     }
 }

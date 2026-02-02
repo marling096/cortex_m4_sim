@@ -9,13 +9,13 @@ use capstone::arch::arm::ArmOperandType;
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Ldm;
 impl Executable for Op_Ldm {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-        ldm(cpu, data);
+    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+        ldm(cpu, data)
     }
 }
-pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
+pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
-        return;
+        return data.size();
     }
 
     // Collect operands into a Vec so we can index them
@@ -50,6 +50,12 @@ pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
 
     if data.writeback() {
         cpu.write_reg(base_reg_id, addr);
+    }
+
+    if reg_list_id.contains(&15) {
+        0
+    } else {
+        data.size()
     }
 }
 
