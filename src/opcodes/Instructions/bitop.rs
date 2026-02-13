@@ -91,7 +91,9 @@ impl Executable for Op_And {
             return data.size();
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
+  
         let result = cpu.read_reg(rn) & op2;
+
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
@@ -111,7 +113,6 @@ impl Executable for Op_Orr {
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         let result = cpu.read_reg(rn) | op2;
         cpu.write_reg(rd, result);
-
         if data.update_flags() {
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);

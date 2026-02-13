@@ -7,7 +7,6 @@ pub struct Rcc {
 	pub end: u32,
 
 	pub cr: u32,        // 时钟控制寄存器
-	pub pllcfgr: u32,   // PLL 配置寄存器
 	pub cfgr: u32,      // 时钟配置寄存器
 	pub cir: u32,       // 时钟中断寄存器
 	pub ahb1rstr: u32,  // AHB1 外设复位寄存器
@@ -44,7 +43,7 @@ impl Peripheral for Rcc {
 		let offset = addr & 0xFF;
 		match offset {
 			0x00 => self.cr,
-			0x04 => self.pllcfgr,
+			0x04 => self.cfgr,
 			0x08 => self.cir,
 			0x0C => self.apb2rstr,
 			0x10 => self.ahb1rstr,
@@ -62,12 +61,37 @@ impl Peripheral for Rcc {
 		let offset = addr & 0xFF;
 		match offset {
 			0x00 => {
-				self.cr = val;
-				if (self.cr & (1 << 16)) != 0 {
-					self.cr |= 1 << 17;
+				let mut new_val = val;
+				// HSI ON(Bit 0) -> HSI RDY(Bit 1)
+				if (new_val & (1 << 0)) != 0 {
+					new_val |= 1 << 1;
+				} else {
+					new_val &= !(1 << 1);
 				}
+
+				// HSE ON(Bit 16) -> HSE RDY(Bit 17)
+				if (new_val & (1 << 16)) != 0 {
+					new_val |= 1 << 17;
+				} else {
+					new_val &= !(1 << 17);
+				}
+
+				// PLL ON(Bit 24) -> PLL RDY(Bit 25)
+				if (new_val & (1 << 24)) != 0 {
+					new_val |= 1 << 25;
+				} else {
+					new_val &= !(1 << 25);
+				}
+				self.cr = new_val;
+				println!("cr_val {}" , self.cr);
 			}
-			0x04 => self.pllcfgr = val,
+			0x04 => {
+				let mut new_val = val;
+				let sw = new_val & 0x03;
+				new_val &= !(0x03 << 2);
+				new_val |= sw << 2;
+				self.cfgr = new_val;
+			}
 			0x08 => self.cir = val,
 			0x0C => self.apb2rstr = val,
 			0x10 => self.ahb1rstr = val,

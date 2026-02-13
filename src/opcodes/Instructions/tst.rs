@@ -1,9 +1,9 @@
 use crate::context::CpuContext;
+use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, Opcode, MatchFn, Operand2_resolver, UpdateApsr_C,
+    ArmOpcode, CycleInfo, Executable, MatchFn, Opcode, Operand2_resolver, UpdateApsr_C,
     UpdateApsr_N, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
 };
-use crate::opcodes::instruction::{InstrBuilder};
 use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
 // TST{cond} Rn, Operand2
@@ -16,8 +16,9 @@ impl Executable for Op_Tst {
             return data.size();
         }
 
-        let (rd ,rn, op2) = Operand2_resolver(cpu, data);
-        let result = rn & op2;
+        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rn_data = cpu.read_reg(rn);
+        let result = rn_data & op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
@@ -33,8 +34,9 @@ impl Executable for Op_Teq {
             return data.size();
         }
 
-        let (rd ,rn, op2) = Operand2_resolver(cpu, data);
-        let result = rn ^ op2;
+        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rn_data = cpu.read_reg(rn);
+        let result = rn_data ^ op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
@@ -42,7 +44,6 @@ impl Executable for Op_Teq {
         data.size()
     }
 }
-
 
 pub struct Tst_builder;
 impl InstrBuilder for Tst_builder {

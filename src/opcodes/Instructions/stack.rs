@@ -60,7 +60,7 @@ fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
     data.op_writer();
     let mut sp = cpu.read_reg(13);
-    print!("SP before PUSH:0x{:08X}\n", sp);
+    // print!("SP before PUSH:0x{:08X}\n", sp);
     // PUSH: full-descending (pre-decrement)
     let mut regs: Vec<u32> = Vec::new();
     for op in data.operands() {
@@ -73,12 +73,12 @@ fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     let mut addr = sp.wrapping_sub(4 * count);
     for &r in &regs {
         let val = cpu.read_reg(r);
-        print!("PUSH R{}:0x{:08X} to 0x{:08X}\n", r, val, addr);
+        // print!("PUSH R{}:0x{:08X} to 0x{:08X}\n", r, val, addr);
         cpu.write_mem(addr, val);
         addr = addr.wrapping_add(4);
     }
     sp = sp.wrapping_sub(4 * count);
-    print!("SP:0x{:08X}\n", sp);
+    // print!("SP:0x{:08X}\n", sp);
     cpu.write_reg(13, sp);
     data.size()
 }
@@ -89,7 +89,7 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
     data.op_writer();
     let lr = cpu.read_lr(0);
-    print!("LR before POP:0x{:08X}\n", lr);
+    // print!("LR before POP:0x{:08X}\n", lr);
     let mut sp = cpu.read_reg(13);
     // POP: full-descending stack, so pop is post-increment
     let mut regs: Vec<u32> = Vec::new();
@@ -100,11 +100,15 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
     regs.sort();
     for &r in &regs {
-        let val = cpu.read_mem(sp);
+        let mut val = cpu.read_mem(sp);
+        if r == 15 {
+            val &= !1;
+        }
         cpu.write_reg(r, val);
         sp = sp.wrapping_add(4);
+        // print!("POP R{}:0x{:08X} from 0x{:08X}\n", r, val, sp);
     }
-    print!("SP:0x{:08X}\n", sp);
+    // print!("SP:0x{:08X}\n", sp);
     cpu.write_reg(13, sp);
     if regs.contains(&15) { 0 } else { data.size() }
 }

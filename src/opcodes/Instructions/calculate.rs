@@ -114,6 +114,8 @@ impl Executable for Op_Sub {
         }
         let (rd, rn, op2) = Operand2_resolver(cpu, data);
         calculate_sub_core(cpu, data, rd, rn, op2);
+        print!("SUB: Rn={:#X}, Op2={:#X}\n", cpu.read_reg(rn), op2);
+        print!("SUB Result: {:#X}\n", cpu.read_reg(rd));
         if rd == 15 { 0 } else { data.size() }
     }
 }

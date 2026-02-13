@@ -1,76 +1,3 @@
-// use capstone::InsnDetail;
-// use capstone::arch::arm::{ArmCC, ArmOperandType, ArmShift};
-// use capstone::prelude::*;
-// use ihex::Record;
-// use std::fs::{self, File};
-// use std::io::Write;
-
-// mod context;
-// mod cpu;
-// use crate::cpu::Cpu;
-// mod opcodes;
-// mod peripheral;
-// mod simulator;
-// use crate::opcodes::instruction::{Cpu_InstrTable, Cpu_Instruction, OpcodeTable};
-// use crate::opcodes::opcode::{ArmOpcode, Opcode};
-
-// use crate::peripheral::bus::Bus;
-// use crate::peripheral::gpio::Gpio;
-
-// fn main() -> CsResult<()> {
-//     // 1. 初始化 Capstone (包含 MClass 模式)
-//     let cs: Capstone = Capstone::new()
-//         .arm()
-//         .mode(arch::arm::ArchMode::Thumb)
-//         .extra_mode([arch::arm::ArchExtraMode::MClass].iter().copied())
-//         .detail(true) // 必须开启 detail
-//         .build()
-//         .expect("Failed to create Capstone object");
-
-//     let hex_contents =
-//         fs::read_to_string("project.hex").expect("Something went wrong reading the file");
-//     let mut code = Vec::new();
-//     for record in ihex::Reader::new(&hex_contents) {
-//         if let Ok(Record::Data { value, .. }) = record {
-//             code.extend(value);
-//         }
-//     }
-//     let insns: capstone::Instructions<'_> = cs.disasm_all(&code, 0x0800_0000)?;
-
-//     let opcode_table = OpcodeTable::new();
-//     let table = opcode_table.get_table();
-
-//     // hex_ass_test(&cs, insns, "output.txt");
-
-//     let Cpu_InstrTable = {
-//         let mut instr_table = Cpu_InstrTable::new();
-//         for i in insns.iter() {
-//             let key = i.id().0 as u16;
-//             if let Some(instructions) = table.get(&key) {
-//                 for instruction in instructions {
-//                     let arm_opcode = ArmOpcode::new(&cs, &i);
-//                     let cpu_instruction =
-//                         Cpu_Instruction::new(instruction.clone(), arm_opcode.unwrap());
-//                     instr_table.add_instruction(cpu_instruction);
-//                 }
-//             }
-//         }
-//         instr_table
-//     };
-//     let gpioc = Gpio::new(0x4002_0800, 0x4002_0BFF);
-//     let mut bus = Bus::new();
-//     bus.register_peripheral(Box::new(gpioc));
-
-//     let ppb = Bus::new();
-
-//     let cpu = Cpu::new(48_000_000, 1, bus, ppb);
-
-//     let mut simulator = simulator::Simulator::new(cpu);
-//     simulator.sim_loop(Cpu_InstrTable);
-
-//     Ok(())
-// }
-
 fn hex_ass_test(cs: &Capstone, insns: capstone::Instructions<'_>, file_path: &str) {
     let mut file = File::create(file_path).expect("Unable to create output file");
     for i in insns.iter() {
@@ -217,9 +144,11 @@ mod simulator;
 use crate::opcodes::instruction::{Cpu_InstrTable, Cpu_Instruction, OpcodeTable};
 use crate::opcodes::opcode::{ArmOpcode, Opcode};
 use crate::peripheral::bus::Bus;
-use crate::peripheral::gpio::Gpio;
 use crate::peripheral::flash::Flash;
+use crate::peripheral::gpio::Gpio;
 use crate::peripheral::rcc::Rcc;
+use crate::peripheral::scb::Scb;
+use crate::peripheral::systick::SysTick;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RegionKind {
@@ -298,67 +227,77 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_path = "disassembly_detail.asm";
 
     // 调用封装的反汇编函数
-    let (result, cs, code_bytes, dcw_data, initial_sp, reset_handler_ptr) =
+    let (result, cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =
         disassemble_from_reset_handler(input_path, output_path)?;
     println!(
         "Initial SP: 0x{:08X}, Reset_Handler Ptr: 0x{:08X}",
         initial_sp, reset_handler_ptr
     );
 
-    // 使用返回的 Capstone 和代码字节获取 Instructions
-    let insns = cs
-        .disasm_all(&code_bytes, result.start_address)
-        .map_err(|e| e.to_string())?;
+    // 使用返回的 Capstone 和代码片段获取 Instructions
+    // 我们需要保存所有的 Instructions 对象以保持 Insn 的生命周期
+    let mut all_insns_storage = Vec::new();
+
+    for (addr, bytes) in &code_segments {
+        let insns = cs.disasm_all(bytes, *addr).map_err(|e| e.to_string())?;
+        all_insns_storage.push(insns);
+    }
 
     let opcode_table = OpcodeTable::new();
     let table = opcode_table.get_table();
     let Cpu_InstrTable = {
         let mut instr_table = Cpu_InstrTable::new();
-        for i in insns.iter() {
-            let key = i.id().0 as u16;
-            if let Some(instructions) = table.get(&key) {
-                for instruction in instructions {
-                    let arm_opcode = ArmOpcode::new(&cs, &i);
-                    let cpu_instruction =
-                        Cpu_Instruction::new(instruction.clone(), arm_opcode.unwrap());
-                    instr_table.add_instruction(cpu_instruction);
+        // 遍历所有存储的指令集
+        for insns in &all_insns_storage {
+            for i in insns.iter() {
+                let key = i.id().0 as u16;
+                if let Some(instructions) = table.get(&key) {
+                    for instruction in instructions {
+                        let arm_opcode = ArmOpcode::new(&cs, &i);
+                        let cpu_instruction =
+                            Cpu_Instruction::new(instruction.clone(), arm_opcode.unwrap());
+                        instr_table.add_instruction(cpu_instruction);
+                    }
                 }
             }
         }
         instr_table
     };
-    let gpioc = Gpio::new(0x4002_0800, 0x4002_0BFF);
+    let target_addr = 0x08000510;
+    if let Some(instr) = Cpu_InstrTable.table.get(&target_addr) {
+        println!(
+            "Found instruction at 0x{:08X}: {} {}",
+            target_addr,
+            instr.data.insn.mnemonic().unwrap_or(""),
+            instr.data.insn.op_str().unwrap_or("")
+        );
+    } else {
+        println!(
+            "Instruction at 0x{:08X} not found in Cpu_InstrTable",
+            target_addr
+        );
+    }
+
+    let gpioc = Gpio::new(0x4001_1000, 0x4001_13FF);
     let rcc = Rcc::new(0x4002_0000, 0x4002_1024);
     let flash_interface = Flash::new(0x40022000, 0x4002201C);
     let mut bus = Bus::new();
     bus.register_peripheral(Box::new(gpioc));
-    bus.register_peripheral(Box::new(rcc));
     bus.register_peripheral(Box::new(flash_interface));
+    bus.register_peripheral(Box::new(rcc));
 
-    let ppb = Bus::new();
+    let mut ppb = Bus::new();
+
+    let scb = Scb::new(0xE000_ED00, 0xE000_ED3C);
+    let systick = SysTick::new(0xE000E010, 0xE000E01F);
+    ppb.register_peripheral(Box::new(systick));
+    ppb.register_peripheral(Box::new(scb));
 
     let cpu = Cpu::new(48_000_000, 1, bus, ppb);
 
     let mut simulator = simulator::Simulator::new(cpu);
     simulator.sim_reset(dcw_data, initial_sp, reset_handler_ptr);
     simulator.sim_loop(Cpu_InstrTable);
-
-    // println!("反汇编完成！输出到: {}", output_path);
-    // println!(
-    //     "  - 起始地址 (Reset_Handler): 0x{:08X}",
-    //     result.start_address
-    // );
-    // println!(
-    //     "  - 指令数量: {} (Instructions: {})",
-    //     result.instruction_count,
-    //     insns.len()
-    // );
-    // println!("  - 数据字数量: {}", dcw_data.len());
-
-    // 示例：遍历 Instructions
-    // for insn in insns.iter() {
-    //     println!("0x{:08X}: {} {}", insn.address(), insn.mnemonic().unwrap_or(""), insn.op_str().unwrap_or(""));
-    // }
 
     Ok(())
 }
@@ -390,8 +329,9 @@ pub fn disassemble_from_reset_handler(
     (
         DisassemblyResult,
         Capstone,
-        Vec<u8>,
+        Vec<(u64, Vec<u8>)>,
         BTreeMap<u32, u32>,
+        u32,
         u32,
         u32,
     ),
@@ -530,7 +470,7 @@ pub fn disassemble_from_reset_handler(
     }
 
     // 4. 从 reset_handler 开始排序输出
-    let start_addr = reset_handler_addr.unwrap_or(0);
+    let start_addr = 0x0800_0000;
 
     // 过滤出从 reset_handler 开始的指令
     let filtered_instructions: Vec<&InstructionInfo> = all_instructions
@@ -538,24 +478,24 @@ pub fn disassemble_from_reset_handler(
         .filter(|i| i.address >= start_addr)
         .collect();
 
-    // 5. 从 section 中提取从 reset_handler 开始的完整字节（保持地址连续性）
-    let mut filtered_code_bytes: Vec<u8> = Vec::new();
-    for section in obj_file.sections() {
-        if section.kind() == SectionKind::Text {
-            let section_data = section.data().unwrap_or(&[]);
-            let section_start = section.address();
-            let section_end = section_start + section.size();
-
-            // 检查 reset_handler 是否在这个 section 中
-            if start_addr >= section_start && start_addr < section_end {
-                let offset = (start_addr - section_start) as usize;
-                filtered_code_bytes.extend(&section_data[offset..]);
-            } else if section_start >= start_addr {
-                // 如果整个 section 都在 start_addr 之后，全部添加
-                filtered_code_bytes.extend(section_data);
+    // 5. 过滤出有效的代码段（保持原来的分块结构）
+    let filtered_code_segments: Vec<(u64, Vec<u8>)> = code_segments
+        .into_iter()
+        .filter_map(|(addr, bytes)| {
+            let end_addr = addr + bytes.len() as u64;
+            if end_addr <= start_addr {
+                // 完全在 start_addr 之前，丢弃
+                None
+            } else if addr < start_addr {
+                // 部分重叠，截取后半部分
+                let offset = (start_addr - addr) as usize;
+                Some((start_addr, bytes[offset..].to_vec()))
+            } else {
+                // 完全在 start_addr 之后，保留
+                Some((addr, bytes))
             }
-        }
-    }
+        })
+        .collect();
 
     // 6. 输出到文件
     write_disassembly_to_file(
@@ -576,13 +516,13 @@ pub fn disassemble_from_reset_handler(
     Ok((
         result,
         cs,
-        filtered_code_bytes,
+        filtered_code_segments,
         dcw_data,
         initial_sp,
         reset_handler_ptr,
+        reset_handler_addr.unwrap_or(0) as u32,
     ))
 }
-
 /// 仅解析文件，不输出到文件，返回 Capstone、代码字节和 DCW 数据
 ///
 /// # 参数

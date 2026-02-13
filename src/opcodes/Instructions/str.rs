@@ -112,7 +112,6 @@ impl Executable for Op_Str {
         print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
         
         cpu.write_mem(addr, val);
-        print!("rcc.rcr after STR: 0x{:08X}\n", cpu.read_mem(0x40021000));
         data.size()
     }
 }

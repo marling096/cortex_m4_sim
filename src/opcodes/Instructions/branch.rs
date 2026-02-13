@@ -95,13 +95,16 @@ impl Executable for Op_Bl {
         // BL label
         let label = Operand_resolver(cpu, data);
         let pc = cpu.read_pc();
-        let insn_len = data.insn.len() as u32;
-        let return_addr = pc.wrapping_add(insn_len);
-
+        // let insn_len = data.insn.len() as u32;
+        let return_addr = pc;
+        print!(
+            "BL to 0x{:08X}, return addr 0x{:08X}\n",
+            label,
+            return_addr | 1
+        );
         // Set LSB of return address for Thumb mode
         cpu.write_lr(return_addr | 1);
         cpu.write_pc(label);
-        print!("BL to 0x{:08X}, return addr 0x{:08X}\n", label, return_addr | 1);
         0
     }
 }
@@ -115,6 +118,7 @@ impl Executable for Op_Bx {
 
         // BX Rm
         let val = Operand_resolver(cpu, data);
+        print!("BX to 0x{:08X}\n", val);
         // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
         let target = val & !1;
         cpu.write_pc(target);
@@ -133,8 +137,12 @@ impl Executable for Op_Blx {
         let val = Operand_resolver(cpu, data);
         let pc = cpu.read_pc();
         let insn_len = data.insn.len() as u32;
-        let return_addr = pc.wrapping_add(insn_len);
-
+        let return_addr = pc.wrapping_sub_signed(4).wrapping_add(insn_len);
+        print!(
+            "BLX to 0x{:08X}, return addr 0x{:08X}\n",
+            val,
+            return_addr | 1
+        );
         cpu.write_lr(return_addr | 1);
 
         // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.

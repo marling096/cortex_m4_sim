@@ -1,12 +1,642 @@
 ﻿================================================================================
                     ARM Cortex-M4 反汇编详细信息
-                    起始地址: 0x0800016C (Reset_Handler)
+                    起始地址: 0x08000000 (Reset_Handler)
 ================================================================================
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CODE SECTION                                    │
 └─────────────────────────────────────────────────────────────────────────────┘
 
+
+════════════════════════════════════════════════════════════════════════════
+FUNCTION: <__main>
+════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000EC
+│ Bytes:      00 F0 02 F8
+│ Mnemonic:   bl
+│ Op String:  #0x80000f4
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80000F4 (134217972)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000F0
+│ Bytes:      00 F0 2C F8
+│ Mnemonic:   bl
+│ Op String:  #0x800014c
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x800014C (134218060)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000F4
+│ Bytes:      0A A0
+│ Mnemonic:   adr
+│ Op String:  r0, #0x28
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Immediate: 0x28 (40)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000F6
+│ Bytes:      90 E8 00 0C
+│ Mnemonic:   ldm.w
+│ Op String:  r0, {sl, fp}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: sl
+│       Shift: None
+│   [2] Type:  Register: fp
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000FA
+│ Bytes:      82 44
+│ Mnemonic:   add
+│ Op String:  sl, r0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: sl
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000FC
+│ Bytes:      83 44
+│ Mnemonic:   add
+│ Op String:  fp, r0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: fp
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080000FE
+│ Bytes:      AA F1 01 07
+│ Mnemonic:   sub.w
+│ Op String:  r7, sl, #1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r7
+│       Shift: None
+│   [1] Type:  Register: sl
+│       Shift: None
+│   [2] Type:  Immediate: 0x1 (1)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000102
+│ Bytes:      DA 45
+│ Mnemonic:   cmp
+│ Op String:  sl, fp
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: sl
+│       Shift: None
+│   [1] Type:  Register: fp
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000104
+│ Bytes:      01 D1
+│ Mnemonic:   bne
+│ Op String:  #0x800010a
+│ Condition:  ARM_CC_NE
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x800010A (134217994)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000106
+│ Bytes:      00 F0 21 F8
+│ Mnemonic:   bl
+│ Op String:  #0x800014c
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x800014C (134218060)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800010A
+│ Bytes:      AF F2 09 0E
+│ Mnemonic:   subw
+│ Op String:  lr, pc, #9
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: lr
+│       Shift: None
+│   [1] Type:  Register: pc
+│       Shift: None
+│   [2] Type:  Immediate: 0x9 (9)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800010E
+│ Bytes:      BA E8 0F 00
+│ Mnemonic:   ldm.w
+│ Op String:  sl!, {r0, r1, r2, r3}
+│ Condition:  ARM_CC_AL
+│ Writeback:  Yes
+│ Post-Index: No
+│
+│ Operands (5):
+│   [0] Type:  Register: sl
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Register: r1
+│       Shift: None
+│   [3] Type:  Register: r2
+│       Shift: None
+│   [4] Type:  Register: r3
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000112
+│ Bytes:      13 F0 01 0F
+│ Mnemonic:   tst.w
+│ Op String:  r3, #1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r3
+│       Shift: None
+│   [1] Type:  Immediate: 0x1 (1)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000116
+│ Bytes:      18 BF
+│ Mnemonic:   it
+│ Op String:  ne
+│ Condition:  ARM_CC_NE
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000118
+│ Bytes:      FB 1A
+│ Mnemonic:   subne
+│ Op String:  r3, r7, r3
+│ Condition:  ARM_CC_NE
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r3
+│       Shift: None
+│   [1] Type:  Register: r7
+│       Shift: None
+│   [2] Type:  Register: r3
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800011A
+│ Bytes:      43 F0 01 03
+│ Mnemonic:   orr
+│ Op String:  r3, r3, #1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r3
+│       Shift: None
+│   [1] Type:  Register: r3
+│       Shift: None
+│   [2] Type:  Immediate: 0x1 (1)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800011E
+│ Bytes:      18 47
+│ Mnemonic:   bx
+│ Op String:  r3
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Register: r3
+│       Shift: None
+
+════════════════════════════════════════════════════════════════════════════
+FUNCTION: <__scatterload_zeroinit>
+════════════════════════════════════════════════════════════════════════════
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000128
+│ Bytes:      00 23
+│ Mnemonic:   movs
+│ Op String:  r3, #0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r3
+│       Shift: None
+│   [1] Type:  Immediate: 0x0 (0)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800012A
+│ Bytes:      00 24
+│ Mnemonic:   movs
+│ Op String:  r4, #0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r4
+│       Shift: None
+│   [1] Type:  Immediate: 0x0 (0)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800012C
+│ Bytes:      00 25
+│ Mnemonic:   movs
+│ Op String:  r5, #0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r5
+│       Shift: None
+│   [1] Type:  Immediate: 0x0 (0)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800012E
+│ Bytes:      00 26
+│ Mnemonic:   movs
+│ Op String:  r6, #0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r6
+│       Shift: None
+│   [1] Type:  Immediate: 0x0 (0)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000130
+│ Bytes:      10 3A
+│ Mnemonic:   subs
+│ Op String:  r2, #0x10
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r2
+│       Shift: None
+│   [1] Type:  Immediate: 0x10 (16)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000132
+│ Bytes:      28 BF
+│ Mnemonic:   it
+│ Op String:  hs
+│ Condition:  ARM_CC_HS
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000134
+│ Bytes:      78 C1
+│ Mnemonic:   stmhs
+│ Op String:  r1!, {r3, r4, r5, r6}
+│ Condition:  ARM_CC_HS
+│ Writeback:  Yes
+│ Post-Index: No
+│
+│ Operands (5):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Register: r3
+│       Shift: None
+│   [2] Type:  Register: r4
+│       Shift: None
+│   [3] Type:  Register: r5
+│       Shift: None
+│   [4] Type:  Register: r6
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000136
+│ Bytes:      FB D8
+│ Mnemonic:   bhi
+│ Op String:  #0x8000130
+│ Condition:  ARM_CC_HI
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x8000130 (134218032)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000138
+│ Bytes:      52 07
+│ Mnemonic:   lsls
+│ Op String:  r2, r2, #0x1d
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r2
+│       Shift: None
+│   [1] Type:  Register: r2
+│       Shift: None
+│   [2] Type:  Immediate: 0x1D (29)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800013A
+│ Bytes:      28 BF
+│ Mnemonic:   it
+│ Op String:  hs
+│ Condition:  ARM_CC_HS
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800013C
+│ Bytes:      30 C1
+│ Mnemonic:   stmhs
+│ Op String:  r1!, {r4, r5}
+│ Condition:  ARM_CC_HS
+│ Writeback:  Yes
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Register: r4
+│       Shift: None
+│   [2] Type:  Register: r5
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800013E
+│ Bytes:      48 BF
+│ Mnemonic:   it
+│ Op String:  mi
+│ Condition:  ARM_CC_MI
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000140
+│ Bytes:      0B 60
+│ Mnemonic:   strmi
+│ Op String:  r3, [r1]
+│ Condition:  ARM_CC_MI
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r3
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000142
+│ Bytes:      70 47
+│ Mnemonic:   bx
+│ Op String:  lr
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Register: lr
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000144
+│ Bytes:      1F B5
+│ Mnemonic:   push
+│ Op String:  {r0, r1, r2, r3, r4, lr}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (6):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+│   [2] Type:  Register: r2
+│       Shift: None
+│   [3] Type:  Register: r3
+│       Shift: None
+│   [4] Type:  Register: r4
+│       Shift: None
+│   [5] Type:  Register: lr
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000146
+│ Bytes:      1F BD
+│ Mnemonic:   pop
+│ Op String:  {r0, r1, r2, r3, r4, pc}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (6):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+│   [2] Type:  Register: r2
+│       Shift: None
+│   [3] Type:  Register: r3
+│       Shift: None
+│   [4] Type:  Register: r4
+│       Shift: None
+│   [5] Type:  Register: pc
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000148
+│ Bytes:      10 B5
+│ Mnemonic:   push
+│ Op String:  {r4, lr}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r4
+│       Shift: None
+│   [1] Type:  Register: lr
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800014A
+│ Bytes:      10 BD
+│ Mnemonic:   pop
+│ Op String:  {r4, pc}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r4
+│       Shift: None
+│   [1] Type:  Register: pc
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800014C
+│ Bytes:      00 F0 31 F8
+│ Mnemonic:   bl
+│ Op String:  #0x80001b2
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80001B2 (134218162)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000150
+│ Bytes:      11 46
+│ Mnemonic:   mov
+│ Op String:  r1, r2
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Register: r2
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000152
+│ Bytes:      FF F7 F7 FF
+│ Mnemonic:   bl
+│ Op String:  #0x8000144
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x8000144 (134218052)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000156
+│ Bytes:      00 F0 CF F9
+│ Mnemonic:   bl
+│ Op String:  #0x80004f8
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80004F8 (134219000)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800015A
+│ Bytes:      00 F0 4F F8
+│ Mnemonic:   bl
+│ Op String:  #0x80001fc
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80001FC (134218236)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800015E
+│ Bytes:      03 B4
+│ Mnemonic:   push
+│ Op String:  {r0, r1}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000160
+│ Bytes:      FF F7 F2 FF
+│ Mnemonic:   bl
+│ Op String:  #0x8000148
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x8000148 (134218056)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000164
+│ Bytes:      03 BC
+│ Mnemonic:   pop
+│ Op String:  {r0, r1}
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000166
+│ Bytes:      00 F0 57 F8
+│ Mnemonic:   bl
+│ Op String:  #0x8000218
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x8000218 (134218264)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800016A
+│ Bytes:      00 00
+│ Mnemonic:   movs
+│ Op String:  r0, r0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800016C
 │ Bytes:      09 48
@@ -867,126 +1497,6 @@ FUNCTION: <__use_no_semihosting_swi>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800022C
-│ Bytes:      00 B5
-│ Mnemonic:   push
-│ Op String:  {lr}
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Register: lr
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800022E
-│ Bytes:      03 46
-│ Mnemonic:   mov
-│ Op String:  r3, r0
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r3
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000230
-│ Bytes:      03 E0
-│ Mnemonic:   b
-│ Op String:  #0x800023a
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x800023A (134218298)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000232
-│ Bytes:      4F F4 7A 70
-│ Mnemonic:   mov.w
-│ Op String:  r0, #0x3e8
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Immediate: 0x3E8 (1000)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000236
-│ Bytes:      00 F0 05 F8
-│ Mnemonic:   bl
-│ Op String:  #0x8000244
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x8000244 (134218308)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800023A
-│ Bytes:      18 1E
-│ Mnemonic:   subs
-│ Op String:  r0, r3, #0
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r3
-│       Shift: None
-│   [2] Type:  Immediate: 0x0 (0)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800023C
-│ Bytes:      A3 F1 01 03
-│ Mnemonic:   sub.w
-│ Op String:  r3, r3, #1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r3
-│       Shift: None
-│   [1] Type:  Register: r3
-│       Shift: None
-│   [2] Type:  Immediate: 0x1 (1)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000240
-│ Bytes:      F7 D1
-│ Mnemonic:   bne
-│ Op String:  #0x8000232
-│ Condition:  ARM_CC_NE
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x8000232 (134218290)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000242
-│ Bytes:      00 BD
-│ Mnemonic:   pop
-│ Op String:  {pc}
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Register: pc
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000244
 │ Bytes:      00 EB C0 01
 │ Mnemonic:   add.w
 │ Op String:  r1, r0, r0, lsl #3
@@ -1002,7 +1512,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r0
 │       Shift: LSL #3
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000248
+│ Address:    0x08000230
 │ Bytes:      C9 00
 │ Mnemonic:   lsls
 │ Op String:  r1, r1, #3
@@ -1018,7 +1528,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x3 (3)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800024A
+│ Address:    0x08000232
 │ Bytes:      4F F0 E0 22
 │ Mnemonic:   mov.w
 │ Op String:  r2, #-0x1fff2000
@@ -1032,7 +1542,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0xFFFFFFFFE000E000 (-536813568)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800024E
+│ Address:    0x08000236
 │ Bytes:      51 61
 │ Mnemonic:   str
 │ Op String:  r1, [r2, #0x14]
@@ -1046,7 +1556,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=20]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000250
+│ Address:    0x08000238
 │ Bytes:      00 21
 │ Mnemonic:   movs
 │ Op String:  r1, #0
@@ -1060,7 +1570,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000252
+│ Address:    0x0800023A
 │ Bytes:      91 61
 │ Mnemonic:   str
 │ Op String:  r1, [r2, #0x18]
@@ -1074,7 +1584,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000254
+│ Address:    0x0800023C
 │ Bytes:      05 21
 │ Mnemonic:   movs
 │ Op String:  r1, #5
@@ -1086,6 +1596,126 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: r1
 │       Shift: None
 │   [1] Type:  Immediate: 0x5 (5)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800023E
+│ Bytes:      11 61
+│ Mnemonic:   str
+│ Op String:  r1, [r2, #0x10]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=r2, index=none, scale=1, disp=16]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000240
+│ Bytes:      00 BF
+│ Mnemonic:   nop
+│ Op String:  
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000242
+│ Bytes:      4F F0 E0 21
+│ Mnemonic:   mov.w
+│ Op String:  r1, #-0x1fff2000
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Immediate: 0xFFFFFFFFE000E000 (-536813568)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000246
+│ Bytes:      09 69
+│ Mnemonic:   ldr
+│ Op String:  r1, [r1, #0x10]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=16]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000248
+│ Bytes:      01 F4 80 31
+│ Mnemonic:   and
+│ Op String:  r1, r1, #0x10000
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+│   [2] Type:  Immediate: 0x10000 (65536)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800024C
+│ Bytes:      00 29
+│ Mnemonic:   cmp
+│ Op String:  r1, #0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Immediate: 0x0 (0)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800024E
+│ Bytes:      F8 D0
+│ Mnemonic:   beq
+│ Op String:  #0x8000242
+│ Condition:  ARM_CC_EQ
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x8000242 (134218306)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000250
+│ Bytes:      04 21
+│ Mnemonic:   movs
+│ Op String:  r1, #4
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Immediate: 0x4 (4)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000252
+│ Bytes:      4F F0 E0 22
+│ Mnemonic:   mov.w
+│ Op String:  r2, #-0x1fff2000
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r2
+│       Shift: None
+│   [1] Type:  Immediate: 0xFFFFFFFFE000E000 (-536813568)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000256
@@ -1103,126 +1733,6 @@ FUNCTION: <__use_no_semihosting_swi>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000258
-│ Bytes:      00 BF
-│ Mnemonic:   nop
-│ Op String:  
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800025A
-│ Bytes:      4F F0 E0 21
-│ Mnemonic:   mov.w
-│ Op String:  r1, #-0x1fff2000
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Immediate: 0xFFFFFFFFE000E000 (-536813568)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800025E
-│ Bytes:      09 69
-│ Mnemonic:   ldr
-│ Op String:  r1, [r1, #0x10]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=16]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000260
-│ Bytes:      01 F4 80 31
-│ Mnemonic:   and
-│ Op String:  r1, r1, #0x10000
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-│   [2] Type:  Immediate: 0x10000 (65536)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000264
-│ Bytes:      00 29
-│ Mnemonic:   cmp
-│ Op String:  r1, #0
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Immediate: 0x0 (0)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000266
-│ Bytes:      F8 D0
-│ Mnemonic:   beq
-│ Op String:  #0x800025a
-│ Condition:  ARM_CC_EQ
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x800025A (134218330)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000268
-│ Bytes:      04 21
-│ Mnemonic:   movs
-│ Op String:  r1, #4
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Immediate: 0x4 (4)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800026A
-│ Bytes:      4F F0 E0 22
-│ Mnemonic:   mov.w
-│ Op String:  r2, #-0x1fff2000
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r2
-│       Shift: None
-│   [1] Type:  Immediate: 0xFFFFFFFFE000E000 (-536813568)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800026E
-│ Bytes:      11 61
-│ Mnemonic:   str
-│ Op String:  r1, [r2, #0x10]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=r2, index=none, scale=1, disp=16]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000270
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -1234,7 +1744,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000272
+│ Address:    0x0800025A
 │ Bytes:      2D E9 F0 41
 │ Mnemonic:   push.w
 │ Op String:  {r4, r5, r6, r7, r8, lr}
@@ -1256,7 +1766,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [5] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000276
+│ Address:    0x0800025E
 │ Bytes:      02 46
 │ Mnemonic:   mov
 │ Op String:  r2, r0
@@ -1270,7 +1780,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000278
+│ Address:    0x08000260
 │ Bytes:      00 25
 │ Mnemonic:   movs
 │ Op String:  r5, #0
@@ -1284,7 +1794,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800027A
+│ Address:    0x08000262
 │ Bytes:      00 26
 │ Mnemonic:   movs
 │ Op String:  r6, #0
@@ -1298,7 +1808,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800027C
+│ Address:    0x08000264
 │ Bytes:      00 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0
@@ -1312,7 +1822,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800027E
+│ Address:    0x08000266
 │ Bytes:      00 23
 │ Mnemonic:   movs
 │ Op String:  r3, #0
@@ -1326,7 +1836,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000280
+│ Address:    0x08000268
 │ Bytes:      00 24
 │ Mnemonic:   movs
 │ Op String:  r4, #0
@@ -1340,7 +1850,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000282
+│ Address:    0x0800026A
 │ Bytes:      00 27
 │ Mnemonic:   movs
 │ Op String:  r7, #0
@@ -1354,7 +1864,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000284
+│ Address:    0x0800026C
 │ Bytes:      91 F8 03 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1, #3]
@@ -1368,7 +1878,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000288
+│ Address:    0x08000270
 │ Bytes:      0C F0 0F 05
 │ Mnemonic:   and
 │ Op String:  r5, ip, #0xf
@@ -1384,7 +1894,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0xF (15)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800028C
+│ Address:    0x08000274
 │ Bytes:      91 F8 03 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1, #3]
@@ -1398,7 +1908,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000290
+│ Address:    0x08000278
 │ Bytes:      0C F0 10 0C
 │ Mnemonic:   and
 │ Op String:  ip, ip, #0x10
@@ -1414,7 +1924,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x10 (16)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000294
+│ Address:    0x0800027C
 │ Bytes:      BC F1 00 0F
 │ Mnemonic:   cmp.w
 │ Op String:  ip, #0
@@ -1428,19 +1938,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000298
+│ Address:    0x08000280
 │ Bytes:      03 D0
 │ Mnemonic:   beq
-│ Op String:  #0x80002a2
+│ Op String:  #0x800028a
 │ Condition:  ARM_CC_EQ
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80002A2 (134218402)
+│   [0] Type:  Immediate: 0x800028A (134218378)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800029A
+│ Address:    0x08000282
 │ Bytes:      91 F8 02 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1, #2]
@@ -1454,7 +1964,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=2]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800029E
+│ Address:    0x08000286
 │ Bytes:      4C EA 05 05
 │ Mnemonic:   orr.w
 │ Op String:  r5, ip, r5
@@ -1470,7 +1980,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r5
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002A2
+│ Address:    0x0800028A
 │ Bytes:      91 F8 00 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1]
@@ -1484,7 +1994,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002A6
+│ Address:    0x0800028E
 │ Bytes:      BC F1 00 0F
 │ Mnemonic:   cmp.w
 │ Op String:  ip, #0
@@ -1498,19 +2008,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002AA
+│ Address:    0x08000292
 │ Bytes:      31 D0
 │ Mnemonic:   beq
-│ Op String:  #0x8000310
+│ Op String:  #0x80002f8
 │ Condition:  ARM_CC_EQ
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000310 (134218512)
+│   [0] Type:  Immediate: 0x80002F8 (134218488)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002AC
+│ Address:    0x08000294
 │ Bytes:      14 68
 │ Mnemonic:   ldr
 │ Op String:  r4, [r2]
@@ -1524,7 +2034,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002AE
+│ Address:    0x08000296
 │ Bytes:      00 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0
@@ -1538,19 +2048,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002B0
+│ Address:    0x08000298
 │ Bytes:      2B E0
 │ Mnemonic:   b
-│ Op String:  #0x800030a
+│ Op String:  #0x80002f2
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800030A (134218506)
+│   [0] Type:  Immediate: 0x80002F2 (134218482)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002B2
+│ Address:    0x0800029A
 │ Bytes:      4F F0 01 0C
 │ Mnemonic:   mov.w
 │ Op String:  ip, #1
@@ -1564,7 +2074,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002B6
+│ Address:    0x0800029E
 │ Bytes:      0C FA 00 F3
 │ Mnemonic:   lsl.w
 │ Op String:  r3, ip, r0
@@ -1580,7 +2090,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002BA
+│ Address:    0x080002A2
 │ Bytes:      B1 F8 00 C0
 │ Mnemonic:   ldrh.w
 │ Op String:  ip, [r1]
@@ -1594,7 +2104,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002BE
+│ Address:    0x080002A6
 │ Bytes:      0C EA 03 06
 │ Mnemonic:   and.w
 │ Op String:  r6, ip, r3
@@ -1610,7 +2120,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002C2
+│ Address:    0x080002AA
 │ Bytes:      9E 42
 │ Mnemonic:   cmp
 │ Op String:  r6, r3
@@ -1624,19 +2134,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002C4
+│ Address:    0x080002AC
 │ Bytes:      20 D1
 │ Mnemonic:   bne
-│ Op String:  #0x8000308
+│ Op String:  #0x80002f0
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000308 (134218504)
+│   [0] Type:  Immediate: 0x80002F0 (134218480)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002C6
+│ Address:    0x080002AE
 │ Bytes:      83 00
 │ Mnemonic:   lsls
 │ Op String:  r3, r0, #2
@@ -1652,7 +2162,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x2 (2)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002C8
+│ Address:    0x080002B0
 │ Bytes:      4F F0 0F 0C
 │ Mnemonic:   mov.w
 │ Op String:  ip, #0xf
@@ -1666,7 +2176,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0xF (15)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002CC
+│ Address:    0x080002B4
 │ Bytes:      0C FA 03 F7
 │ Mnemonic:   lsl.w
 │ Op String:  r7, ip, r3
@@ -1682,7 +2192,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002D0
+│ Address:    0x080002B8
 │ Bytes:      BC 43
 │ Mnemonic:   bics
 │ Op String:  r4, r7
@@ -1696,7 +2206,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r7
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002D2
+│ Address:    0x080002BA
 │ Bytes:      05 FA 03 FC
 │ Mnemonic:   lsl.w
 │ Op String:  ip, r5, r3
@@ -1712,7 +2222,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002D6
+│ Address:    0x080002BE
 │ Bytes:      4C EA 04 04
 │ Mnemonic:   orr.w
 │ Op String:  r4, ip, r4
@@ -1726,6 +2236,102 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: ip
 │       Shift: None
 │   [2] Type:  Register: r4
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002C2
+│ Bytes:      91 F8 03 C0
+│ Mnemonic:   ldrb.w
+│ Op String:  ip, [r1, #3]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: ip
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002C6
+│ Bytes:      BC F1 28 0F
+│ Mnemonic:   cmp.w
+│ Op String:  ip, #0x28
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: ip
+│       Shift: None
+│   [1] Type:  Immediate: 0x28 (40)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002CA
+│ Bytes:      06 D1
+│ Mnemonic:   bne
+│ Op String:  #0x80002da
+│ Condition:  ARM_CC_NE
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80002DA (134218458)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002CC
+│ Bytes:      4F F0 01 0C
+│ Mnemonic:   mov.w
+│ Op String:  ip, #1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: ip
+│       Shift: None
+│   [1] Type:  Immediate: 0x1 (1)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002D0
+│ Bytes:      0C FA 00 FC
+│ Mnemonic:   lsl.w
+│ Op String:  ip, ip, r0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: ip
+│       Shift: None
+│   [1] Type:  Register: ip
+│       Shift: None
+│   [2] Type:  Register: r0
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002D4
+│ Bytes:      C2 F8 14 C0
+│ Mnemonic:   str.w
+│ Op String:  ip, [r2, #0x14]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: ip
+│       Shift: None
+│   [1] Type:  Memory [base=r2, index=none, scale=1, disp=20]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080002D8
+│ Bytes:      0A E0
+│ Mnemonic:   b
+│ Op String:  #0x80002f0
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (1):
+│   [0] Type:  Immediate: 0x80002F0 (134218480)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080002DA
@@ -1743,9 +2349,9 @@ FUNCTION: <__use_no_semihosting_swi>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080002DE
-│ Bytes:      BC F1 28 0F
+│ Bytes:      BC F1 48 0F
 │ Mnemonic:   cmp.w
-│ Op String:  ip, #0x28
+│ Op String:  ip, #0x48
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -1753,19 +2359,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │ Operands (2):
 │   [0] Type:  Register: ip
 │       Shift: None
-│   [1] Type:  Immediate: 0x28 (40)
+│   [1] Type:  Immediate: 0x48 (72)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080002E2
-│ Bytes:      06 D1
+│ Bytes:      05 D1
 │ Mnemonic:   bne
-│ Op String:  #0x80002f2
+│ Op String:  #0x80002f0
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80002F2 (134218482)
+│   [0] Type:  Immediate: 0x80002F0 (134218480)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080002E4
@@ -1799,102 +2405,6 @@ FUNCTION: <__use_no_semihosting_swi>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080002EC
-│ Bytes:      C2 F8 14 C0
-│ Mnemonic:   str.w
-│ Op String:  ip, [r2, #0x14]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: ip
-│       Shift: None
-│   [1] Type:  Memory [base=r2, index=none, scale=1, disp=20]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002F0
-│ Bytes:      0A E0
-│ Mnemonic:   b
-│ Op String:  #0x8000308
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x8000308 (134218504)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002F2
-│ Bytes:      91 F8 03 C0
-│ Mnemonic:   ldrb.w
-│ Op String:  ip, [r1, #3]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: ip
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002F6
-│ Bytes:      BC F1 48 0F
-│ Mnemonic:   cmp.w
-│ Op String:  ip, #0x48
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: ip
-│       Shift: None
-│   [1] Type:  Immediate: 0x48 (72)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002FA
-│ Bytes:      05 D1
-│ Mnemonic:   bne
-│ Op String:  #0x8000308
-│ Condition:  ARM_CC_NE
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (1):
-│   [0] Type:  Immediate: 0x8000308 (134218504)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080002FC
-│ Bytes:      4F F0 01 0C
-│ Mnemonic:   mov.w
-│ Op String:  ip, #1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: ip
-│       Shift: None
-│   [1] Type:  Immediate: 0x1 (1)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000300
-│ Bytes:      0C FA 00 FC
-│ Mnemonic:   lsl.w
-│ Op String:  ip, ip, r0
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: ip
-│       Shift: None
-│   [1] Type:  Register: ip
-│       Shift: None
-│   [2] Type:  Register: r0
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000304
 │ Bytes:      C2 F8 10 C0
 │ Mnemonic:   str.w
 │ Op String:  ip, [r2, #0x10]
@@ -1908,7 +2418,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=16]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000308
+│ Address:    0x080002F0
 │ Bytes:      40 1C
 │ Mnemonic:   adds
 │ Op String:  r0, r0, #1
@@ -1924,7 +2434,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800030A
+│ Address:    0x080002F2
 │ Bytes:      08 28
 │ Mnemonic:   cmp
 │ Op String:  r0, #8
@@ -1938,19 +2448,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800030C
+│ Address:    0x080002F4
 │ Bytes:      D1 D3
 │ Mnemonic:   blo
-│ Op String:  #0x80002b2
+│ Op String:  #0x800029a
 │ Condition:  ARM_CC_LO
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80002B2 (134218418)
+│   [0] Type:  Immediate: 0x800029A (134218394)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800030E
+│ Address:    0x080002F6
 │ Bytes:      14 60
 │ Mnemonic:   str
 │ Op String:  r4, [r2]
@@ -1964,7 +2474,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000310
+│ Address:    0x080002F8
 │ Bytes:      B1 F8 00 C0
 │ Mnemonic:   ldrh.w
 │ Op String:  ip, [r1]
@@ -1978,7 +2488,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000314
+│ Address:    0x080002FC
 │ Bytes:      BC F1 FF 0F
 │ Mnemonic:   cmp.w
 │ Op String:  ip, #0xff
@@ -1992,19 +2502,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0xFF (255)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000318
+│ Address:    0x08000300
 │ Bytes:      34 DD
 │ Mnemonic:   ble
-│ Op String:  #0x8000384
+│ Op String:  #0x800036c
 │ Condition:  ARM_CC_LE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000384 (134218628)
+│   [0] Type:  Immediate: 0x800036C (134218604)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800031A
+│ Address:    0x08000302
 │ Bytes:      54 68
 │ Mnemonic:   ldr
 │ Op String:  r4, [r2, #4]
@@ -2018,7 +2528,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800031C
+│ Address:    0x08000304
 │ Bytes:      00 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0
@@ -2032,19 +2542,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800031E
+│ Address:    0x08000306
 │ Bytes:      2E E0
 │ Mnemonic:   b
-│ Op String:  #0x800037e
+│ Op String:  #0x8000366
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800037E (134218622)
+│   [0] Type:  Immediate: 0x8000366 (134218598)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000320
+│ Address:    0x08000308
 │ Bytes:      00 F1 08 0C
 │ Mnemonic:   add.w
 │ Op String:  ip, r0, #8
@@ -2060,7 +2570,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000324
+│ Address:    0x0800030C
 │ Bytes:      4F F0 01 08
 │ Mnemonic:   mov.w
 │ Op String:  r8, #1
@@ -2074,7 +2584,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000328
+│ Address:    0x08000310
 │ Bytes:      08 FA 0C F3
 │ Mnemonic:   lsl.w
 │ Op String:  r3, r8, ip
@@ -2090,7 +2600,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: ip
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800032C
+│ Address:    0x08000314
 │ Bytes:      B1 F8 00 C0
 │ Mnemonic:   ldrh.w
 │ Op String:  ip, [r1]
@@ -2104,7 +2614,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000330
+│ Address:    0x08000318
 │ Bytes:      0C EA 03 06
 │ Mnemonic:   and.w
 │ Op String:  r6, ip, r3
@@ -2120,7 +2630,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000334
+│ Address:    0x0800031C
 │ Bytes:      9E 42
 │ Mnemonic:   cmp
 │ Op String:  r6, r3
@@ -2134,19 +2644,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000336
+│ Address:    0x0800031E
 │ Bytes:      21 D1
 │ Mnemonic:   bne
-│ Op String:  #0x800037c
+│ Op String:  #0x8000364
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800037C (134218620)
+│   [0] Type:  Immediate: 0x8000364 (134218596)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000338
+│ Address:    0x08000320
 │ Bytes:      83 00
 │ Mnemonic:   lsls
 │ Op String:  r3, r0, #2
@@ -2162,7 +2672,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x2 (2)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800033A
+│ Address:    0x08000322
 │ Bytes:      4F F0 0F 0C
 │ Mnemonic:   mov.w
 │ Op String:  ip, #0xf
@@ -2176,7 +2686,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0xF (15)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800033E
+│ Address:    0x08000326
 │ Bytes:      0C FA 03 F7
 │ Mnemonic:   lsl.w
 │ Op String:  r7, ip, r3
@@ -2192,7 +2702,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000342
+│ Address:    0x0800032A
 │ Bytes:      BC 43
 │ Mnemonic:   bics
 │ Op String:  r4, r7
@@ -2206,7 +2716,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r7
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000344
+│ Address:    0x0800032C
 │ Bytes:      05 FA 03 FC
 │ Mnemonic:   lsl.w
 │ Op String:  ip, r5, r3
@@ -2222,7 +2732,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r3
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000348
+│ Address:    0x08000330
 │ Bytes:      4C EA 04 04
 │ Mnemonic:   orr.w
 │ Op String:  r4, ip, r4
@@ -2238,7 +2748,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: r4
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800034C
+│ Address:    0x08000334
 │ Bytes:      91 F8 03 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1, #3]
@@ -2252,7 +2762,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000350
+│ Address:    0x08000338
 │ Bytes:      BC F1 28 0F
 │ Mnemonic:   cmp.w
 │ Op String:  ip, #0x28
@@ -2266,19 +2776,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x28 (40)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000354
+│ Address:    0x0800033C
 │ Bytes:      05 D1
 │ Mnemonic:   bne
-│ Op String:  #0x8000362
+│ Op String:  #0x800034a
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000362 (134218594)
+│   [0] Type:  Immediate: 0x800034A (134218570)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000356
+│ Address:    0x0800033E
 │ Bytes:      00 F1 08 0C
 │ Mnemonic:   add.w
 │ Op String:  ip, r0, #8
@@ -2294,7 +2804,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800035A
+│ Address:    0x08000342
 │ Bytes:      08 FA 0C F8
 │ Mnemonic:   lsl.w
 │ Op String:  r8, r8, ip
@@ -2310,7 +2820,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: ip
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800035E
+│ Address:    0x08000346
 │ Bytes:      C2 F8 14 80
 │ Mnemonic:   str.w
 │ Op String:  r8, [r2, #0x14]
@@ -2324,7 +2834,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=20]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000362
+│ Address:    0x0800034A
 │ Bytes:      91 F8 03 C0
 │ Mnemonic:   ldrb.w
 │ Op String:  ip, [r1, #3]
@@ -2338,7 +2848,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=3]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000366
+│ Address:    0x0800034E
 │ Bytes:      BC F1 48 0F
 │ Mnemonic:   cmp.w
 │ Op String:  ip, #0x48
@@ -2352,19 +2862,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x48 (72)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800036A
+│ Address:    0x08000352
 │ Bytes:      07 D1
 │ Mnemonic:   bne
-│ Op String:  #0x800037c
+│ Op String:  #0x8000364
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800037C (134218620)
+│   [0] Type:  Immediate: 0x8000364 (134218596)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800036C
+│ Address:    0x08000354
 │ Bytes:      00 F1 08 0C
 │ Mnemonic:   add.w
 │ Op String:  ip, r0, #8
@@ -2380,7 +2890,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000370
+│ Address:    0x08000358
 │ Bytes:      4F F0 01 08
 │ Mnemonic:   mov.w
 │ Op String:  r8, #1
@@ -2394,7 +2904,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000374
+│ Address:    0x0800035C
 │ Bytes:      08 FA 0C F8
 │ Mnemonic:   lsl.w
 │ Op String:  r8, r8, ip
@@ -2410,7 +2920,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Register: ip
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000378
+│ Address:    0x08000360
 │ Bytes:      C2 F8 10 80
 │ Mnemonic:   str.w
 │ Op String:  r8, [r2, #0x10]
@@ -2424,7 +2934,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=16]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800037C
+│ Address:    0x08000364
 │ Bytes:      40 1C
 │ Mnemonic:   adds
 │ Op String:  r0, r0, #1
@@ -2440,7 +2950,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [2] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800037E
+│ Address:    0x08000366
 │ Bytes:      08 28
 │ Mnemonic:   cmp
 │ Op String:  r0, #8
@@ -2454,19 +2964,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000380
+│ Address:    0x08000368
 │ Bytes:      CE D3
 │ Mnemonic:   blo
-│ Op String:  #0x8000320
+│ Op String:  #0x8000308
 │ Condition:  ARM_CC_LO
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000320 (134218528)
+│   [0] Type:  Immediate: 0x8000308 (134218504)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000382
+│ Address:    0x0800036A
 │ Bytes:      54 60
 │ Mnemonic:   str
 │ Op String:  r4, [r2, #4]
@@ -2480,7 +2990,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000384
+│ Address:    0x0800036C
 │ Bytes:      BD E8 F0 81
 │ Mnemonic:   pop.w
 │ Op String:  {r4, r5, r6, r7, r8, pc}
@@ -2502,7 +3012,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [5] Type:  Register: pc
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000388
+│ Address:    0x08000370
 │ Bytes:      41 61
 │ Mnemonic:   str
 │ Op String:  r1, [r0, #0x14]
@@ -2516,7 +3026,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=20]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800038A
+│ Address:    0x08000372
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2528,7 +3038,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800038C
+│ Address:    0x08000374
 │ Bytes:      01 61
 │ Mnemonic:   str
 │ Op String:  r1, [r0, #0x10]
@@ -2542,7 +3052,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=16]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800038E
+│ Address:    0x08000376
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2554,7 +3064,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000390
+│ Address:    0x08000378
 │ Bytes:      00 BF
 │ Mnemonic:   nop
 │ Op String:  
@@ -2562,19 +3072,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │ Writeback:  No
 │ Post-Index: No
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000392
+│ Address:    0x0800037A
 │ Bytes:      FE E7
 │ Mnemonic:   b
-│ Op String:  #0x8000392
+│ Op String:  #0x800037a
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000392 (134218642)
+│   [0] Type:  Immediate: 0x800037A (134218618)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000394
+│ Address:    0x0800037C
 │ Bytes:      00 BF
 │ Mnemonic:   nop
 │ Op String:  
@@ -2582,19 +3092,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │ Writeback:  No
 │ Post-Index: No
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000396
+│ Address:    0x0800037E
 │ Bytes:      FE E7
 │ Mnemonic:   b
-│ Op String:  #0x8000396
+│ Op String:  #0x800037e
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000396 (134218646)
+│   [0] Type:  Immediate: 0x800037E (134218622)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000398
+│ Address:    0x08000380
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2606,7 +3116,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800039A
+│ Address:    0x08000382
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2618,10 +3128,10 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800039C
+│ Address:    0x08000384
 │ Bytes:      29 B1
 │ Mnemonic:   cbz
-│ Op String:  r1, #0x80003aa
+│ Op String:  r1, #0x8000392
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -2629,10 +3139,10 @@ FUNCTION: <__use_no_semihosting_swi>
 │ Operands (2):
 │   [0] Type:  Register: r1
 │       Shift: None
-│   [1] Type:  Immediate: 0x80003AA (134218666)
+│   [1] Type:  Immediate: 0x8000392 (134218642)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800039E
+│ Address:    0x08000386
 │ Bytes:      06 4A
 │ Mnemonic:   ldr
 │ Op String:  r2, [pc, #0x18]
@@ -2646,7 +3156,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003A0
+│ Address:    0x08000388
 │ Bytes:      92 69
 │ Mnemonic:   ldr
 │ Op String:  r2, [r2, #0x18]
@@ -2660,7 +3170,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003A2
+│ Address:    0x0800038A
 │ Bytes:      02 43
 │ Mnemonic:   orrs
 │ Op String:  r2, r0
@@ -2674,7 +3184,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003A4
+│ Address:    0x0800038C
 │ Bytes:      04 4B
 │ Mnemonic:   ldr
 │ Op String:  r3, [pc, #0x10]
@@ -2688,7 +3198,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=16]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003A6
+│ Address:    0x0800038E
 │ Bytes:      9A 61
 │ Mnemonic:   str
 │ Op String:  r2, [r3, #0x18]
@@ -2702,19 +3212,19 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r3, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003A8
+│ Address:    0x08000390
 │ Bytes:      04 E0
 │ Mnemonic:   b
-│ Op String:  #0x80003b4
+│ Op String:  #0x800039c
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80003B4 (134218676)
+│   [0] Type:  Immediate: 0x800039C (134218652)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003AA
+│ Address:    0x08000392
 │ Bytes:      03 4A
 │ Mnemonic:   ldr
 │ Op String:  r2, [pc, #0xc]
@@ -2728,7 +3238,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=12]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003AC
+│ Address:    0x08000394
 │ Bytes:      92 69
 │ Mnemonic:   ldr
 │ Op String:  r2, [r2, #0x18]
@@ -2742,7 +3252,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r2, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003AE
+│ Address:    0x08000396
 │ Bytes:      82 43
 │ Mnemonic:   bics
 │ Op String:  r2, r0
@@ -2756,7 +3266,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003B0
+│ Address:    0x08000398
 │ Bytes:      01 4B
 │ Mnemonic:   ldr
 │ Op String:  r3, [pc, #4]
@@ -2770,7 +3280,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003B2
+│ Address:    0x0800039A
 │ Bytes:      9A 61
 │ Mnemonic:   str
 │ Op String:  r2, [r3, #0x18]
@@ -2784,7 +3294,7 @@ FUNCTION: <__use_no_semihosting_swi>
 │   [1] Type:  Memory [base=r3, index=none, scale=1, disp=24]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003B4
+│ Address:    0x0800039C
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2800,7 +3310,7 @@ FUNCTION: <__use_no_semihosting_swi>
 FUNCTION: <SVC_Handler>
 ════════════════════════════════════════════════════════════════════════════
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003BC
+│ Address:    0x080003A4
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -2812,7 +3322,7 @@ FUNCTION: <SVC_Handler>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003BE
+│ Address:    0x080003A6
 │ Bytes:      10 B5
 │ Mnemonic:   push
 │ Op String:  {r4, lr}
@@ -2826,19 +3336,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003C0
+│ Address:    0x080003A8
 │ Bytes:      00 F0 02 F8
 │ Mnemonic:   bl
-│ Op String:  #0x80003c8
+│ Op String:  #0x80003b0
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80003C8 (134218696)
+│   [0] Type:  Immediate: 0x80003B0 (134218672)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003C4
+│ Address:    0x080003AC
 │ Bytes:      10 BD
 │ Mnemonic:   pop
 │ Op String:  {r4, pc}
@@ -2852,7 +3362,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: pc
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003C6
+│ Address:    0x080003AE
 │ Bytes:      00 00
 │ Mnemonic:   movs
 │ Op String:  r0, r0
@@ -2866,7 +3376,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003C8
+│ Address:    0x080003B0
 │ Bytes:      0C B5
 │ Mnemonic:   push
 │ Op String:  {r2, r3, lr}
@@ -2882,7 +3392,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003CA
+│ Address:    0x080003B2
 │ Bytes:      00 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0
@@ -2896,7 +3406,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003CC
+│ Address:    0x080003B4
 │ Bytes:      01 90
 │ Mnemonic:   str
 │ Op String:  r0, [sp, #4]
@@ -2908,6 +3418,144 @@ FUNCTION: <SVC_Handler>
 │   [0] Type:  Register: r0
 │       Shift: None
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003B6
+│ Bytes:      00 90
+│ Mnemonic:   str
+│ Op String:  r0, [sp]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003B8
+│ Bytes:      33 48
+│ Mnemonic:   ldr
+│ Op String:  r0, [pc, #0xcc]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=204]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003BA
+│ Bytes:      00 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003BC
+│ Bytes:      40 F4 80 30
+│ Mnemonic:   orr
+│ Op String:  r0, r0, #0x10000
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x10000 (65536)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003C0
+│ Bytes:      31 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0xc4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=196]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003C2
+│ Bytes:      08 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003C4
+│ Bytes:      00 BF
+│ Mnemonic:   nop
+│ Op String:  
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003C6
+│ Bytes:      30 48
+│ Mnemonic:   ldr
+│ Op String:  r0, [pc, #0xc0]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=192]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003C8
+│ Bytes:      00 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080003CA
+│ Bytes:      00 F4 00 30
+│ Mnemonic:   and
+│ Op String:  r0, r0, #0x20000
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x20000 (131072)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080003CE
@@ -2925,144 +3573,6 @@ FUNCTION: <SVC_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080003D0
-│ Bytes:      33 48
-│ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0xcc]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=204]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003D2
-│ Bytes:      00 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003D4
-│ Bytes:      40 F4 80 30
-│ Mnemonic:   orr
-│ Op String:  r0, r0, #0x10000
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x10000 (65536)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003D8
-│ Bytes:      31 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0xc4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=196]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003DA
-│ Bytes:      08 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003DC
-│ Bytes:      00 BF
-│ Mnemonic:   nop
-│ Op String:  
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003DE
-│ Bytes:      30 48
-│ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0xc0]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=192]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003E0
-│ Bytes:      00 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003E2
-│ Bytes:      00 F4 00 30
-│ Mnemonic:   and
-│ Op String:  r0, r0, #0x20000
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x20000 (131072)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003E6
-│ Bytes:      00 90
-│ Mnemonic:   str
-│ Op String:  r0, [sp]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003E8
 │ Bytes:      01 98
 │ Mnemonic:   ldr
 │ Op String:  r0, [sp, #4]
@@ -3076,7 +3586,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003EA
+│ Address:    0x080003D2
 │ Bytes:      40 1C
 │ Mnemonic:   adds
 │ Op String:  r0, r0, #1
@@ -3092,7 +3602,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003EC
+│ Address:    0x080003D4
 │ Bytes:      01 90
 │ Mnemonic:   str
 │ Op String:  r0, [sp, #4]
@@ -3106,7 +3616,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003EE
+│ Address:    0x080003D6
 │ Bytes:      00 98
 │ Mnemonic:   ldr
 │ Op String:  r0, [sp]
@@ -3120,10 +3630,10 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003F0
+│ Address:    0x080003D8
 │ Bytes:      18 B9
 │ Mnemonic:   cbnz
-│ Op String:  r0, #0x80003fa
+│ Op String:  r0, #0x80003e2
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3131,10 +3641,10 @@ FUNCTION: <SVC_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Immediate: 0x80003FA (134218746)
+│   [1] Type:  Immediate: 0x80003E2 (134218722)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003F2
+│ Address:    0x080003DA
 │ Bytes:      01 98
 │ Mnemonic:   ldr
 │ Op String:  r0, [sp, #4]
@@ -3148,7 +3658,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003F4
+│ Address:    0x080003DC
 │ Bytes:      B0 F5 A0 6F
 │ Mnemonic:   cmp.w
 │ Op String:  r0, #0x500
@@ -3162,19 +3672,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x500 (1280)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003F8
+│ Address:    0x080003E0
 │ Bytes:      F1 D1
 │ Mnemonic:   bne
-│ Op String:  #0x80003de
+│ Op String:  #0x80003c6
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80003DE (134218718)
+│   [0] Type:  Immediate: 0x80003C6 (134218694)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003FA
+│ Address:    0x080003E2
 │ Bytes:      29 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0xa4]
@@ -3188,7 +3698,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=164]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003FC
+│ Address:    0x080003E4
 │ Bytes:      00 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0]
@@ -3202,7 +3712,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080003FE
+│ Address:    0x080003E6
 │ Bytes:      00 F4 00 30
 │ Mnemonic:   and
 │ Op String:  r0, r0, #0x20000
@@ -3218,10 +3728,10 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x20000 (131072)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000402
+│ Address:    0x080003EA
 │ Bytes:      10 B1
 │ Mnemonic:   cbz
-│ Op String:  r0, #0x800040a
+│ Op String:  r0, #0x80003f2
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3229,10 +3739,10 @@ FUNCTION: <SVC_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Immediate: 0x800040A (134218762)
+│   [1] Type:  Immediate: 0x80003F2 (134218738)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000404
+│ Address:    0x080003EC
 │ Bytes:      01 20
 │ Mnemonic:   movs
 │ Op String:  r0, #1
@@ -3246,7 +3756,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000406
+│ Address:    0x080003EE
 │ Bytes:      00 90
 │ Mnemonic:   str
 │ Op String:  r0, [sp]
@@ -3260,19 +3770,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000408
+│ Address:    0x080003F0
 │ Bytes:      01 E0
 │ Mnemonic:   b
-│ Op String:  #0x800040e
+│ Op String:  #0x80003f6
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800040E (134218766)
+│   [0] Type:  Immediate: 0x80003F6 (134218742)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800040A
+│ Address:    0x080003F2
 │ Bytes:      00 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0
@@ -3286,7 +3796,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800040C
+│ Address:    0x080003F4
 │ Bytes:      00 90
 │ Mnemonic:   str
 │ Op String:  r0, [sp]
@@ -3300,7 +3810,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800040E
+│ Address:    0x080003F6
 │ Bytes:      00 98
 │ Mnemonic:   ldr
 │ Op String:  r0, [sp]
@@ -3314,7 +3824,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000410
+│ Address:    0x080003F8
 │ Bytes:      01 28
 │ Mnemonic:   cmp
 │ Op String:  r0, #1
@@ -3328,19 +3838,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000412
+│ Address:    0x080003FA
 │ Bytes:      43 D1
 │ Mnemonic:   bne
-│ Op String:  #0x800049c
+│ Op String:  #0x8000484
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800049C (134218908)
+│   [0] Type:  Immediate: 0x8000484 (134218884)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000414
+│ Address:    0x080003FC
 │ Bytes:      23 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0x8c]
@@ -3354,7 +3864,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=140]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000416
+│ Address:    0x080003FE
 │ Bytes:      00 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0]
@@ -3368,7 +3878,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000418
+│ Address:    0x08000400
 │ Bytes:      40 F0 10 00
 │ Mnemonic:   orr
 │ Op String:  r0, r0, #0x10
@@ -3384,7 +3894,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x10 (16)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800041C
+│ Address:    0x08000404
 │ Bytes:      21 49
 │ Mnemonic:   ldr
 │ Op String:  r1, [pc, #0x84]
@@ -3398,7 +3908,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=132]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800041E
+│ Address:    0x08000406
 │ Bytes:      08 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1]
@@ -3412,7 +3922,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000420
+│ Address:    0x08000408
 │ Bytes:      08 46
 │ Mnemonic:   mov
 │ Op String:  r0, r1
@@ -3426,7 +3936,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000422
+│ Address:    0x0800040A
 │ Bytes:      00 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0]
@@ -3440,7 +3950,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000424
+│ Address:    0x0800040C
 │ Bytes:      20 F0 03 00
 │ Mnemonic:   bic
 │ Op String:  r0, r0, #3
@@ -3456,7 +3966,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x3 (3)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000428
+│ Address:    0x08000410
 │ Bytes:      08 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1]
@@ -3468,6 +3978,162 @@ FUNCTION: <SVC_Handler>
 │   [0] Type:  Register: r0
 │       Shift: None
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000412
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000414
+│ Bytes:      00 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000416
+│ Bytes:      40 F0 02 00
+│ Mnemonic:   orr
+│ Op String:  r0, r0, #2
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x2 (2)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800041A
+│ Bytes:      08 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800041C
+│ Bytes:      1A 48
+│ Mnemonic:   ldr
+│ Op String:  r0, [pc, #0x68]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=104]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800041E
+│ Bytes:      40 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000420
+│ Bytes:      19 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x64]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=100]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000422
+│ Bytes:      48 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000424
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000426
+│ Bytes:      40 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000428
+│ Bytes:      48 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800042A
@@ -3485,9 +4151,9 @@ FUNCTION: <SVC_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800042C
-│ Bytes:      00 68
+│ Bytes:      40 68
 │ Mnemonic:   ldr
-│ Op String:  r0, [r0]
+│ Op String:  r0, [r0, #4]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3495,13 +4161,13 @@ FUNCTION: <SVC_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800042E
-│ Bytes:      40 F0 02 00
+│ Bytes:      40 F4 80 60
 │ Mnemonic:   orr
-│ Op String:  r0, r0, #2
+│ Op String:  r0, r0, #0x400
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3511,13 +4177,13 @@ FUNCTION: <SVC_Handler>
 │       Shift: None
 │   [1] Type:  Register: r0
 │       Shift: None
-│   [2] Type:  Immediate: 0x2 (2)
+│   [2] Type:  Immediate: 0x400 (1024)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000432
-│ Bytes:      08 60
+│ Bytes:      48 60
 │ Mnemonic:   str
-│ Op String:  r0, [r1]
+│ Op String:  r0, [r1, #4]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3525,13 +4191,13 @@ FUNCTION: <SVC_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000434
-│ Bytes:      1A 48
-│ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0x68]
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -3539,7 +4205,7 @@ FUNCTION: <SVC_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=104]
+│   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000436
@@ -3557,162 +4223,6 @@ FUNCTION: <SVC_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x08000438
-│ Bytes:      19 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x64]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=100]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800043A
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800043C
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800043E
-│ Bytes:      40 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000440
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000442
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000444
-│ Bytes:      40 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000446
-│ Bytes:      40 F4 80 60
-│ Mnemonic:   orr
-│ Op String:  r0, r0, #0x400
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x400 (1024)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800044A
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800044C
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800044E
-│ Bytes:      40 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000450
 │ Bytes:      20 F4 7C 10
 │ Mnemonic:   bic
 │ Op String:  r0, r0, #0x3f0000
@@ -3728,7 +4238,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x3F0000 (4128768)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000454
+│ Address:    0x0800043C
 │ Bytes:      48 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1, #4]
@@ -3742,7 +4252,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000456
+│ Address:    0x0800043E
 │ Bytes:      08 46
 │ Mnemonic:   mov
 │ Op String:  r0, r1
@@ -3756,7 +4266,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000458
+│ Address:    0x08000440
 │ Bytes:      40 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0, #4]
@@ -3770,7 +4280,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800045A
+│ Address:    0x08000442
 │ Bytes:      40 F4 E8 10
 │ Mnemonic:   orr
 │ Op String:  r0, r0, #0x1d0000
@@ -3786,7 +4296,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x1D0000 (1900544)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800045E
+│ Address:    0x08000446
 │ Bytes:      48 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1, #4]
@@ -3800,7 +4310,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000460
+│ Address:    0x08000448
 │ Bytes:      08 46
 │ Mnemonic:   mov
 │ Op String:  r0, r1
@@ -3814,7 +4324,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000462
+│ Address:    0x0800044A
 │ Bytes:      00 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0]
@@ -3828,7 +4338,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000464
+│ Address:    0x0800044C
 │ Bytes:      40 F0 80 70
 │ Mnemonic:   orr
 │ Op String:  r0, r0, #0x1000000
@@ -3844,7 +4354,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x1000000 (16777216)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000468
+│ Address:    0x08000450
 │ Bytes:      08 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1]
@@ -3858,7 +4368,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800046A
+│ Address:    0x08000452
 │ Bytes:      00 BF
 │ Mnemonic:   nop
 │ Op String:  
@@ -3866,7 +4376,7 @@ FUNCTION: <SVC_Handler>
 │ Writeback:  No
 │ Post-Index: No
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800046C
+│ Address:    0x08000454
 │ Bytes:      0C 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0x30]
@@ -3880,7 +4390,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=48]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800046E
+│ Address:    0x08000456
 │ Bytes:      00 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0]
@@ -3894,7 +4404,7 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000470
+│ Address:    0x08000458
 │ Bytes:      00 F0 00 70
 │ Mnemonic:   and
 │ Op String:  r0, r0, #0x2000000
@@ -3910,7 +4420,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0x2000000 (33554432)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000474
+│ Address:    0x0800045C
 │ Bytes:      00 28
 │ Mnemonic:   cmp
 │ Op String:  r0, #0
@@ -3924,19 +4434,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x0 (0)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000476
+│ Address:    0x0800045E
 │ Bytes:      F9 D0
 │ Mnemonic:   beq
-│ Op String:  #0x800046c
+│ Op String:  #0x8000454
 │ Condition:  ARM_CC_EQ
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800046C (134218860)
+│   [0] Type:  Immediate: 0x8000454 (134218836)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000478
+│ Address:    0x08000460
 │ Bytes:      09 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0x24]
@@ -3948,6 +4458,144 @@ FUNCTION: <SVC_Handler>
 │   [0] Type:  Register: r0
 │       Shift: None
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=36]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000462
+│ Bytes:      40 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000464
+│ Bytes:      20 F0 03 00
+│ Mnemonic:   bic
+│ Op String:  r0, r0, #3
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x3 (3)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000468
+│ Bytes:      07 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x1c]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=28]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800046A
+│ Bytes:      48 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800046C
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800046E
+│ Bytes:      40 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000470
+│ Bytes:      40 F0 02 00
+│ Mnemonic:   orr
+│ Op String:  r0, r0, #2
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x2 (2)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000474
+│ Bytes:      48 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000476
+│ Bytes:      00 BF
+│ Mnemonic:   nop
+│ Op String:  
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000478
+│ Bytes:      03 48
+│ Mnemonic:   ldr
+│ Op String:  r0, [pc, #0xc]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=12]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800047A
@@ -3965,144 +4613,6 @@ FUNCTION: <SVC_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x0800047C
-│ Bytes:      20 F0 03 00
-│ Mnemonic:   bic
-│ Op String:  r0, r0, #3
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x3 (3)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000480
-│ Bytes:      07 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x1c]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=28]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000482
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000484
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000486
-│ Bytes:      40 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000488
-│ Bytes:      40 F0 02 00
-│ Mnemonic:   orr
-│ Op String:  r0, r0, #2
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x2 (2)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800048C
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800048E
-│ Bytes:      00 BF
-│ Mnemonic:   nop
-│ Op String:  
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000490
-│ Bytes:      03 48
-│ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0xc]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=12]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000492
-│ Bytes:      40 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000494
 │ Bytes:      00 F0 0C 00
 │ Mnemonic:   and
 │ Op String:  r0, r0, #0xc
@@ -4118,7 +4628,7 @@ FUNCTION: <SVC_Handler>
 │   [2] Type:  Immediate: 0xC (12)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000498
+│ Address:    0x08000480
 │ Bytes:      08 28
 │ Mnemonic:   cmp
 │ Op String:  r0, #8
@@ -4132,19 +4642,19 @@ FUNCTION: <SVC_Handler>
 │   [1] Type:  Immediate: 0x8 (8)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800049A
+│ Address:    0x08000482
 │ Bytes:      F9 D1
 │ Mnemonic:   bne
-│ Op String:  #0x8000490
+│ Op String:  #0x8000478
 │ Condition:  ARM_CC_NE
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000490 (134218896)
+│   [0] Type:  Immediate: 0x8000478 (134218872)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800049C
+│ Address:    0x08000484
 │ Bytes:      0C BD
 │ Mnemonic:   pop
 │ Op String:  {r2, r3, pc}
@@ -4164,7 +4674,7 @@ FUNCTION: <SVC_Handler>
 FUNCTION: <SysTick_Handler>
 ════════════════════════════════════════════════════════════════════════════
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004A8
+│ Address:    0x08000490
 │ Bytes:      70 47
 │ Mnemonic:   bx
 │ Op String:  lr
@@ -4176,7 +4686,7 @@ FUNCTION: <SysTick_Handler>
 │   [0] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004AA
+│ Address:    0x08000492
 │ Bytes:      00 00
 │ Mnemonic:   movs
 │ Op String:  r0, r0
@@ -4190,7 +4700,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Register: r0
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004AC
+│ Address:    0x08000494
 │ Bytes:      10 B5
 │ Mnemonic:   push
 │ Op String:  {r4, lr}
@@ -4204,7 +4714,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004AE
+│ Address:    0x08000496
 │ Bytes:      13 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0x4c]
@@ -4216,6 +4726,162 @@ FUNCTION: <SysTick_Handler>
 │   [0] Type:  Register: r0
 │       Shift: None
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=76]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x08000498
+│ Bytes:      00 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800049A
+│ Bytes:      40 F0 01 00
+│ Mnemonic:   orr
+│ Op String:  r0, r0, #1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (3):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r0
+│       Shift: None
+│   [2] Type:  Immediate: 0x1 (1)
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x0800049E
+│ Bytes:      11 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x44]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=68]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004A0
+│ Bytes:      08 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004A2
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004A4
+│ Bytes:      40 68
+│ Mnemonic:   ldr
+│ Op String:  r0, [r0, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004A6
+│ Bytes:      10 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x40]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=64]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004A8
+│ Bytes:      08 40
+│ Mnemonic:   ands
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004AA
+│ Bytes:      0E 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x38]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=56]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004AC
+│ Bytes:      48 60
+│ Mnemonic:   str
+│ Op String:  r0, [r1, #4]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004AE
+│ Bytes:      08 46
+│ Mnemonic:   mov
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080004B0
@@ -4233,25 +4899,9 @@ FUNCTION: <SysTick_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080004B2
-│ Bytes:      40 F0 01 00
-│ Mnemonic:   orr
-│ Op String:  r0, r0, #1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (3):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r0
-│       Shift: None
-│   [2] Type:  Immediate: 0x1 (1)
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004B6
-│ Bytes:      11 49
+│ Bytes:      0E 49
 │ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x44]
+│ Op String:  r1, [pc, #0x38]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4259,7 +4909,35 @@ FUNCTION: <SysTick_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r1
 │       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=68]
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=56]
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004B4
+│ Bytes:      08 40
+│ Mnemonic:   ands
+│ Op String:  r0, r1
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r0
+│       Shift: None
+│   [1] Type:  Register: r1
+│       Shift: None
+────────────────────────────────────────────────────────────────────────────
+│ Address:    0x080004B6
+│ Bytes:      0B 49
+│ Mnemonic:   ldr
+│ Op String:  r1, [pc, #0x2c]
+│ Condition:  ARM_CC_AL
+│ Writeback:  No
+│ Post-Index: No
+│
+│ Operands (2):
+│   [0] Type:  Register: r1
+│       Shift: None
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=44]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080004B8
@@ -4291,9 +4969,9 @@ FUNCTION: <SysTick_Handler>
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080004BC
-│ Bytes:      40 68
+│ Bytes:      00 68
 │ Mnemonic:   ldr
-│ Op String:  r0, [r0, #4]
+│ Op String:  r0, [r0]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4301,178 +4979,10 @@ FUNCTION: <SysTick_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
+│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
 │ Address:    0x080004BE
-│ Bytes:      10 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x40]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=64]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004C0
-│ Bytes:      08 40
-│ Mnemonic:   ands
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004C2
-│ Bytes:      0E 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x38]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=56]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004C4
-│ Bytes:      48 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1, #4]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004C6
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004C8
-│ Bytes:      00 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004CA
-│ Bytes:      0E 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x38]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=56]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004CC
-│ Bytes:      08 40
-│ Mnemonic:   ands
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004CE
-│ Bytes:      0B 49
-│ Mnemonic:   ldr
-│ Op String:  r1, [pc, #0x2c]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r1
-│       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=44]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004D0
-│ Bytes:      08 60
-│ Mnemonic:   str
-│ Op String:  r0, [r1]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004D2
-│ Bytes:      08 46
-│ Mnemonic:   mov
-│ Op String:  r0, r1
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Register: r1
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004D4
-│ Bytes:      00 68
-│ Mnemonic:   ldr
-│ Op String:  r0, [r0]
-│ Condition:  ARM_CC_AL
-│ Writeback:  No
-│ Post-Index: No
-│
-│ Operands (2):
-│   [0] Type:  Register: r0
-│       Shift: None
-│   [1] Type:  Memory [base=r0, index=none, scale=1, disp=0]
-│       Shift: None
-────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004D6
 │ Bytes:      20 F4 80 20
 │ Mnemonic:   bic
 │ Op String:  r0, r0, #0x40000
@@ -4488,7 +4998,7 @@ FUNCTION: <SysTick_Handler>
 │   [2] Type:  Immediate: 0x40000 (262144)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004DA
+│ Address:    0x080004C2
 │ Bytes:      08 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1]
@@ -4502,7 +5012,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004DC
+│ Address:    0x080004C4
 │ Bytes:      08 46
 │ Mnemonic:   mov
 │ Op String:  r0, r1
@@ -4516,7 +5026,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Register: r1
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004DE
+│ Address:    0x080004C6
 │ Bytes:      40 68
 │ Mnemonic:   ldr
 │ Op String:  r0, [r0, #4]
@@ -4530,7 +5040,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=r0, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004E0
+│ Address:    0x080004C8
 │ Bytes:      20 F4 FE 00
 │ Mnemonic:   bic
 │ Op String:  r0, r0, #0x7f0000
@@ -4546,7 +5056,7 @@ FUNCTION: <SysTick_Handler>
 │   [2] Type:  Immediate: 0x7F0000 (8323072)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004E4
+│ Address:    0x080004CC
 │ Bytes:      48 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1, #4]
@@ -4560,7 +5070,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=4]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004E6
+│ Address:    0x080004CE
 │ Bytes:      4F F4 1F 00
 │ Mnemonic:   mov.w
 │ Op String:  r0, #0x9f0000
@@ -4574,7 +5084,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Immediate: 0x9F0000 (10420224)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004EA
+│ Address:    0x080004D2
 │ Bytes:      88 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1, #8]
@@ -4588,19 +5098,19 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=8]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004EC
+│ Address:    0x080004D4
 │ Bytes:      FF F7 67 FF
 │ Mnemonic:   bl
-│ Op String:  #0x80003be
+│ Op String:  #0x80003a6
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x80003BE (134218686)
+│   [0] Type:  Immediate: 0x80003A6 (134218662)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004F0
+│ Address:    0x080004D8
 │ Bytes:      4F F0 00 60
 │ Mnemonic:   mov.w
 │ Op String:  r0, #0x8000000
@@ -4614,7 +5124,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Immediate: 0x8000000 (134217728)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004F4
+│ Address:    0x080004DC
 │ Bytes:      04 49
 │ Mnemonic:   ldr
 │ Op String:  r1, [pc, #0x10]
@@ -4628,7 +5138,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=16]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004F6
+│ Address:    0x080004DE
 │ Bytes:      08 60
 │ Mnemonic:   str
 │ Op String:  r0, [r1]
@@ -4642,7 +5152,7 @@ FUNCTION: <SysTick_Handler>
 │   [1] Type:  Memory [base=r1, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x080004F8
+│ Address:    0x080004E0
 │ Bytes:      10 BD
 │ Mnemonic:   pop
 │ Op String:  {r4, pc}
@@ -4660,7 +5170,7 @@ FUNCTION: <SysTick_Handler>
 FUNCTION: <UsageFault_Handler>
 ════════════════════════════════════════════════════════════════════════════
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800050C
+│ Address:    0x080004F4
 │ Bytes:      00 BF
 │ Mnemonic:   nop
 │ Op String:  
@@ -4668,19 +5178,19 @@ FUNCTION: <UsageFault_Handler>
 │ Writeback:  No
 │ Post-Index: No
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800050E
+│ Address:    0x080004F6
 │ Bytes:      FE E7
 │ Mnemonic:   b
-│ Op String:  #0x800050e
+│ Op String:  #0x80004f6
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800050E (134219022)
+│   [0] Type:  Immediate: 0x80004F6 (134218998)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000510
+│ Address:    0x080004F8
 │ Bytes:      08 B5
 │ Mnemonic:   push
 │ Op String:  {r3, lr}
@@ -4694,7 +5204,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Register: lr
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000512
+│ Address:    0x080004FA
 │ Bytes:      01 21
 │ Mnemonic:   movs
 │ Op String:  r1, #1
@@ -4708,7 +5218,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x1 (1)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000514
+│ Address:    0x080004FC
 │ Bytes:      10 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0x10
@@ -4722,19 +5232,19 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x10 (16)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000516
+│ Address:    0x080004FE
 │ Bytes:      FF F7 41 FF
 │ Mnemonic:   bl
-│ Op String:  #0x800039c
+│ Op String:  #0x8000384
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800039C (134218652)
+│   [0] Type:  Immediate: 0x8000384 (134218628)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800051A
+│ Address:    0x08000502
 │ Bytes:      10 20
 │ Mnemonic:   movs
 │ Op String:  r0, #0x10
@@ -4748,7 +5258,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x10 (16)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800051C
+│ Address:    0x08000504
 │ Bytes:      8D F8 03 00
 │ Mnemonic:   strb.w
 │ Op String:  r0, [sp, #3]
@@ -4762,7 +5272,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=3]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000520
+│ Address:    0x08000508
 │ Bytes:      40 02
 │ Mnemonic:   lsls
 │ Op String:  r0, r0, #9
@@ -4778,7 +5288,7 @@ FUNCTION: <UsageFault_Handler>
 │   [2] Type:  Immediate: 0x9 (9)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000522
+│ Address:    0x0800050A
 │ Bytes:      AD F8 00 00
 │ Mnemonic:   strh.w
 │ Op String:  r0, [sp]
@@ -4792,7 +5302,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=0]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000526
+│ Address:    0x0800050E
 │ Bytes:      03 20
 │ Mnemonic:   movs
 │ Op String:  r0, #3
@@ -4806,7 +5316,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x3 (3)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000528
+│ Address:    0x08000510
 │ Bytes:      8D F8 02 00
 │ Mnemonic:   strb.w
 │ Op String:  r0, [sp, #2]
@@ -4820,7 +5330,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Memory [base=sp, index=none, scale=1, disp=2]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800052C
+│ Address:    0x08000514
 │ Bytes:      69 46
 │ Mnemonic:   mov
 │ Op String:  r1, sp
@@ -4834,10 +5344,10 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Register: sp
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800052E
-│ Bytes:      0B 48
+│ Address:    0x08000516
+│ Bytes:      0A 48
 │ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0x2c]
+│ Op String:  r0, [pc, #0x28]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4845,34 +5355,34 @@ FUNCTION: <UsageFault_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=44]
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=40]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000530
+│ Address:    0x08000518
 │ Bytes:      FF F7 9F FE
 │ Mnemonic:   bl
-│ Op String:  #0x8000272
+│ Op String:  #0x800025a
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000272 (134218354)
+│   [0] Type:  Immediate: 0x800025A (134218330)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000534
-│ Bytes:      11 E0
+│ Address:    0x0800051C
+│ Bytes:      0F E0
 │ Mnemonic:   b
-│ Op String:  #0x800055a
+│ Op String:  #0x800053e
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800055A (134219098)
+│   [0] Type:  Immediate: 0x800053E (134219070)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000536
+│ Address:    0x0800051E
 │ Bytes:      4F F4 00 51
 │ Mnemonic:   mov.w
 │ Op String:  r1, #0x2000
@@ -4886,10 +5396,10 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x2000 (8192)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800053A
-│ Bytes:      08 48
+│ Address:    0x08000522
+│ Bytes:      07 48
 │ Mnemonic:   ldr
-│ Op String:  r0, [pc, #0x20]
+│ Op String:  r0, [pc, #0x1c]
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4897,25 +5407,25 @@ FUNCTION: <UsageFault_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=32]
+│   [1] Type:  Memory [base=pc, index=none, scale=1, disp=28]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800053C
+│ Address:    0x08000524
 │ Bytes:      FF F7 24 FF
 │ Mnemonic:   bl
-│ Op String:  #0x8000388
+│ Op String:  #0x8000370
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000388 (134218632)
+│   [0] Type:  Immediate: 0x8000370 (134218608)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000540
-│ Bytes:      4F F4 FA 70
-│ Mnemonic:   mov.w
-│ Op String:  r0, #0x1f4
+│ Address:    0x08000528
+│ Bytes:      0A 20
+│ Mnemonic:   movs
+│ Op String:  r0, #0xa
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4923,11 +5433,11 @@ FUNCTION: <UsageFault_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Immediate: 0x1F4 (500)
+│   [1] Type:  Immediate: 0xA (10)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000544
-│ Bytes:      FF F7 72 FE
+│ Address:    0x0800052A
+│ Bytes:      FF F7 7F FE
 │ Mnemonic:   bl
 │ Op String:  #0x800022c
 │ Condition:  ARM_CC_AL
@@ -4938,7 +5448,7 @@ FUNCTION: <UsageFault_Handler>
 │   [0] Type:  Immediate: 0x800022C (134218284)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000548
+│ Address:    0x0800052E
 │ Bytes:      4F F4 00 51
 │ Mnemonic:   mov.w
 │ Op String:  r1, #0x2000
@@ -4952,7 +5462,7 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Immediate: 0x2000 (8192)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800054C
+│ Address:    0x08000532
 │ Bytes:      03 48
 │ Mnemonic:   ldr
 │ Op String:  r0, [pc, #0xc]
@@ -4966,22 +5476,22 @@ FUNCTION: <UsageFault_Handler>
 │   [1] Type:  Memory [base=pc, index=none, scale=1, disp=12]
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800054E
-│ Bytes:      FF F7 1D FF
+│ Address:    0x08000534
+│ Bytes:      FF F7 1E FF
 │ Mnemonic:   bl
-│ Op String:  #0x800038c
+│ Op String:  #0x8000374
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x800038C (134218636)
+│   [0] Type:  Immediate: 0x8000374 (134218612)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000552
-│ Bytes:      4F F4 FA 70
-│ Mnemonic:   mov.w
-│ Op String:  r0, #0x1f4
+│ Address:    0x08000538
+│ Bytes:      0A 20
+│ Mnemonic:   movs
+│ Op String:  r0, #0xa
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
@@ -4989,11 +5499,11 @@ FUNCTION: <UsageFault_Handler>
 │ Operands (2):
 │   [0] Type:  Register: r0
 │       Shift: None
-│   [1] Type:  Immediate: 0x1F4 (500)
+│   [1] Type:  Immediate: 0xA (10)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x08000556
-│ Bytes:      FF F7 69 FE
+│ Address:    0x0800053A
+│ Bytes:      FF F7 77 FE
 │ Mnemonic:   bl
 │ Op String:  #0x800022c
 │ Condition:  ARM_CC_AL
@@ -5004,16 +5514,16 @@ FUNCTION: <UsageFault_Handler>
 │   [0] Type:  Immediate: 0x800022C (134218284)
 │       Shift: None
 ────────────────────────────────────────────────────────────────────────────
-│ Address:    0x0800055A
-│ Bytes:      EC E7
+│ Address:    0x0800053E
+│ Bytes:      EE E7
 │ Mnemonic:   b
-│ Op String:  #0x8000536
+│ Op String:  #0x800051e
 │ Condition:  ARM_CC_AL
 │ Writeback:  No
 │ Post-Index: No
 │
 │ Operands (1):
-│   [0] Type:  Immediate: 0x8000536 (134219062)
+│   [0] Type:  Immediate: 0x800051E (134219038)
 │       Shift: None
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -5026,15 +5536,15 @@ Address        Hex            Value
 0x08000002     00 20          DCW  0x2000
 0x08000004     6D 01          DCW  0x016D
 0x08000006     00 08          DCW  0x0800
-0x08000008     99 03          DCW  0x0399
+0x08000008     81 03          DCW  0x0381
 0x0800000A     00 08          DCW  0x0800
-0x0800000C     91 03          DCW  0x0391
+0x0800000C     79 03          DCW  0x0379
 0x0800000E     00 08          DCW  0x0800
-0x08000010     95 03          DCW  0x0395
+0x08000010     7D 03          DCW  0x037D
 0x08000012     00 08          DCW  0x0800
 0x08000014     27 02          DCW  0x0227
 0x08000016     00 08          DCW  0x0800
-0x08000018     0D 05          DCW  0x050D
+0x08000018     F5 04          DCW  0x04F5
 0x0800001A     00 08          DCW  0x0800
 0x0800001C     00 00          DCW  0x0000
 0x0800001E     00 00          DCW  0x0000
@@ -5044,15 +5554,15 @@ Address        Hex            Value
 0x08000026     00 00          DCW  0x0000
 0x08000028     00 00          DCW  0x0000
 0x0800002A     00 00          DCW  0x0000
-0x0800002C     BD 03          DCW  0x03BD
+0x0800002C     A5 03          DCW  0x03A5
 0x0800002E     00 08          DCW  0x0800
 0x08000030     2B 02          DCW  0x022B
 0x08000032     00 08          DCW  0x0800
 0x08000034     00 00          DCW  0x0000
 0x08000036     00 00          DCW  0x0000
-0x08000038     9B 03          DCW  0x039B
+0x08000038     83 03          DCW  0x0383
 0x0800003A     00 08          DCW  0x0800
-0x0800003C     A9 04          DCW  0x04A9
+0x0800003C     91 04          DCW  0x0491
 0x0800003E     00 08          DCW  0x0800
 0x08000040     87 01          DCW  0x0187
 0x08000042     00 08          DCW  0x0800
@@ -5140,12 +5650,12 @@ Address        Hex            Value
 0x080000E6     00 08          DCW  0x0800
 0x080000E8     87 01          DCW  0x0187
 0x080000EA     00 08          DCW  0x0800
-0x08000120     40 04          DCW  0x0440
+0x08000120     24 04          DCW  0x0424
 0x08000122     00 00          DCW  0x0000
-0x08000124     50 04          DCW  0x0450
+0x08000124     34 04          DCW  0x0434
 0x08000126     00 00          DCW  0x0000
 0x08000192     00 00          DCW  0x0000
-0x08000194     AD 04          DCW  0x04AD
+0x08000194     95 04          DCW  0x0495
 0x08000196     00 08          DCW  0x0800
 0x08000198     ED 00          DCW  0x00ED
 0x0800019A     00 08          DCW  0x0800
@@ -5161,34 +5671,34 @@ Address        Hex            Value
 0x08000216     00 20          DCW  0x2000
 0x08000220     26 00          DCW  0x0026
 0x08000222     02 00          DCW  0x0002
-0x080003B6     00 00          DCW  0x0000
-0x080003B8     00 10          DCW  0x1000
-0x080003BA     02 40          DCW  0x4002
-0x0800049E     00 00          DCW  0x0000
-0x080004A0     00 10          DCW  0x1000
-0x080004A2     02 40          DCW  0x4002
-0x080004A4     00 20          DCW  0x2000
-0x080004A6     02 40          DCW  0x4002
-0x080004FA     00 00          DCW  0x0000
-0x080004FC     00 10          DCW  0x1000
-0x080004FE     02 40          DCW  0x4002
-0x08000500     00 00          DCW  0x0000
-0x08000502     FF F8          DCW  0xF8FF
-0x08000504     FF FF          DCW  0xFFFF
-0x08000506     F6 FE          DCW  0xFEF6
-0x08000508     08 ED          DCW  0xED08
-0x0800050A     00 E0          DCW  0xE000
-0x0800055C     00 10          DCW  0x1000
-0x0800055E     01 40          DCW  0x4001
-0x08000560     70 05          DCW  0x0570
-0x08000562     00 08          DCW  0x0800
-0x08000564     00 00          DCW  0x0000
-0x08000566     00 20          DCW  0x2000
-0x08000568     60 06          DCW  0x0660
-0x0800056A     00 00          DCW  0x0000
-0x0800056C     28 01          DCW  0x0128
-0x0800056E     00 08          DCW  0x0800
+0x0800039E     00 00          DCW  0x0000
+0x080003A0     00 10          DCW  0x1000
+0x080003A2     02 40          DCW  0x4002
+0x08000486     00 00          DCW  0x0000
+0x08000488     00 10          DCW  0x1000
+0x0800048A     02 40          DCW  0x4002
+0x0800048C     00 20          DCW  0x2000
+0x0800048E     02 40          DCW  0x4002
+0x080004E2     00 00          DCW  0x0000
+0x080004E4     00 10          DCW  0x1000
+0x080004E6     02 40          DCW  0x4002
+0x080004E8     00 00          DCW  0x0000
+0x080004EA     FF F8          DCW  0xF8FF
+0x080004EC     FF FF          DCW  0xFFFF
+0x080004EE     F6 FE          DCW  0xFEF6
+0x080004F0     08 ED          DCW  0xED08
+0x080004F2     00 E0          DCW  0xE000
+0x08000540     00 10          DCW  0x1000
+0x08000542     01 40          DCW  0x4001
+0x08000544     54 05          DCW  0x0554
+0x08000546     00 08          DCW  0x0800
+0x08000548     00 00          DCW  0x0000
+0x0800054A     00 20          DCW  0x2000
+0x0800054C     60 06          DCW  0x0660
+0x0800054E     00 00          DCW  0x0000
+0x08000550     28 01          DCW  0x0128
+0x08000552     00 08          DCW  0x0800
 
 ================================================================================
-                    总计: 360 条指令, 166 个数据字
+                    总计: 396 条指令, 166 个数据字
 ================================================================================
