@@ -1,5 +1,5 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver};
+use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver, OperandResolver};
 use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Breakpoint_builder;
@@ -21,6 +21,7 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Bkpt,
+            operand_resolver: &OpBkptResolver,
             adjust_cycles: None,
         },
     ]
@@ -32,12 +33,22 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 pub struct Op_Bkpt;
 impl Executable for Op_Bkpt {
     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        breakpoint_imm(cpu, data);
+        // BKPT may be unconditional but follow common pattern
+        let imm = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
+        breakpoint_imm(cpu, imm);
         0
     }
 }
+fn breakpoint_imm(_cpu: &mut dyn CpuContext, imm: u32) {
+    println!("BKPT #{}", imm);
+}
 
-fn breakpoint_imm(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-    let imm = Operand_resolver(cpu, data);
-    // println!("BKPT #{}", imm);
+pub struct OpBkptResolver;
+impl OperandResolver for OpBkptResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let imm = Operand_resolver(cpu, data);
+        data.transed_operands.reserve(1);
+        data.transed_operands.push(imm);
+        imm
+    }
 }

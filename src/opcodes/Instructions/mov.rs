@@ -1,7 +1,7 @@
 use crate::context::CpuContext;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
-    check_condition,
+    ArmOpcode, Executable, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_Z, check_condition,
 };
 use crate::opcodes::instruction::{InstrBuilder};
 
@@ -19,11 +19,12 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
             name: "MOV".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
-                fetch_cycles: 1,
+                fetch_cycles: 0,
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
             exec: &Op_Mov,
+            operand_resolver: &OpMovResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -31,11 +32,12 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
             name: "MVN".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
-                fetch_cycles: 1,
+                fetch_cycles: 0,
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
             exec: &Op_Mvn,
+            operand_resolver: &OpMovResolver,
             adjust_cycles: None,
         },
     ]
@@ -45,9 +47,15 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // MOV{cond} Rd, #imm16
 // MVN{S}{cond} Rd, Operand2
 
-fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> (u32, u32) {
-    let (rn, rd, op2) = Operand2_resolver(cpu, data);
-    (rn, op2)
+pub struct OpMovResolver;
+impl OperandResolver for OpMovResolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rd, _rn, op2) = Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rd);
+        data.transed_operands.push(op2);
+        op2
+    }
 }
 
 pub struct Op_Mov;
@@ -57,7 +65,8 @@ impl Executable for Op_Mov {
             return data.size();
         }
 
-        let (rd, imm) = get_ops(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let imm = data.transed_operands.get(1).copied().unwrap_or(0);
 
         cpu.write_reg(rd, imm);
         // print!("mov addr:0x{:08x}\n",imm);
@@ -76,7 +85,8 @@ impl Executable for Op_Mvn {
             return data.size();
         }
 
-        let (rd, val) = get_ops(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let val = data.transed_operands.get(1).copied().unwrap_or(0);
         let result = !val;
 
         cpu.write_reg(rd, result);

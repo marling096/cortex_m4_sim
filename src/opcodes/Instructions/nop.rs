@@ -1,5 +1,5 @@
 use crate::context::CpuContext;
-use crate::opcodes::opcode::{ArmOpcode, Executable, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 use crate::opcodes::instruction::{InstrBuilder};
 
 pub struct Nop_builder;
@@ -21,6 +21,7 @@ pub fn add_nop_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Nop,
+            operand_resolver: &OpNopResolver,
             adjust_cycles: None,
         },
     ]
@@ -30,14 +31,18 @@ pub fn add_nop_def() -> Vec<crate::opcodes::opcode::Opcode> {
 pub struct Op_Nop;
 impl Executable for Op_Nop {
     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        nop(cpu, data);
+        if !check_condition(cpu, data.condition()) {
+            return data.size();
+        }
+        // no-op
         data.size()
     }
 }
 
-fn nop(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-    if !check_condition(cpu, data.condition()) {
-        return;
+pub struct OpNopResolver;
+impl OperandResolver for OpNopResolver {
+    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, _data: &mut ArmOpcode) -> u32 {
+        // NOP has no operands
+        0
     }
-    // no-op
 }

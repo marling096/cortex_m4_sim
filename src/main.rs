@@ -261,10 +261,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         }
+        println!("Building instruction table finished. Opitimizing...");
+        instr_table.optimize();
         instr_table
     };
     let target_addr = 0x08000510;
-    if let Some(instr) = Cpu_InstrTable.table.get(&target_addr) {
+    if let Some(instr) = Cpu_InstrTable.get(target_addr) {
         println!(
             "Found instruction at 0x{:08X}: {} {}",
             target_addr,
@@ -278,8 +280,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
+    let shared_freq = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(72_000_000));
     let gpioc = Gpio::new(0x4001_1000, 0x4001_13FF);
-    let rcc = Rcc::new(0x4002_0000, 0x4002_1024);
+    let rcc = Rcc::new(0x4002_0000, 0x4002_1024, shared_freq.clone());
     let flash_interface = Flash::new(0x40022000, 0x4002201C);
     let mut bus = Bus::new();
     bus.register_peripheral(Box::new(gpioc));
@@ -293,7 +296,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ppb.register_peripheral(Box::new(systick));
     ppb.register_peripheral(Box::new(scb));
 
-    let cpu = Cpu::new(48_000_000, 1, bus, ppb);
+    let cpu = Cpu::new(shared_freq, 1, bus, ppb);
 
     let mut simulator = simulator::Simulator::new(cpu);
     simulator.sim_reset(dcw_data, initial_sp, reset_handler_ptr);

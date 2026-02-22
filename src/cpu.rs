@@ -1,12 +1,15 @@
 use std::cell::RefCell;
 use std::vec;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Instant;
 
 use crate::context::CpuContext;
 use crate::opcodes::instruction::Cpu_Instruction;
 use crate::peripheral::bus::Bus;
 
 pub struct Cpu {
-    pub frequency: u32,
+    pub frequency: Arc<AtomicU32>,
     pub machine_cycle: u8,
     pub Cycles: u64,
 
@@ -167,7 +170,7 @@ impl CpuContext for Cpu {
 }
 
 impl Cpu {
-    pub fn new(frequency: u32, machine_cycle: u8, peripheral_bus: Bus, ppb: Bus) -> Cpu {
+    pub fn new(frequency: Arc<AtomicU32>, machine_cycle: u8, peripheral_bus: Bus, ppb: Bus) -> Cpu {
         Cpu {
             frequency,
             machine_cycle,
@@ -254,12 +257,12 @@ impl Cpu {
             }
             0x40000000..=0x5FFFFFFF => {
                 // 这里可以后续实现外设寄存器写入
-                print!("Peripheral Write at 0x{:08X} Value: 0x{:08X}\n", addr, val);
+                // print!("Peripheral Write at 0x{:08X} Value: 0x{:08X}\n", addr, val);
                 self.peripheral_bus.borrow_mut().write32(addr, val);
             }
 
             0xE000_0000..=0xE00F_FFFF => {
-                println!("PPB Write at 0x{:08X} Value: 0x{:08X}", addr, val);
+                // println!("PPB Write at 0x{:08X} Value: 0x{:08X}", addr, val);
                 self.ppb.borrow_mut().write32(addr, val);
             }
             _ => {
@@ -270,40 +273,34 @@ impl Cpu {
 
     // changed: make step take &mut self and avoid borrow conflicts
     pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) {
+        
         if self.Cpu_pipeline.remain_cycles > 0 {
             self.Cpu_pipeline.remain_cycles -= 1;
             return;
         }
         self.Cpu_pipeline.phase = Phase::Execute;
         let phase = self.Cpu_pipeline.phase;
-
+        let start = Instant::now();
         match phase {
-            Phase::Fetch => {
-                //skip fetch phase
-                self.Cpu_pipeline.phase = Phase::Execute;
-
-                self.Cpu_pipeline.remain_cycles = ins.op.cycles.fetch_cycles.saturating_sub(1);
-            }
-            Phase::Decode => {
-                // let instruction = self.Cpu_pipeline.fetch(&*self); // Placeholder
-                // self.Cpu_pipeline.decode(Opcode);
-                self.Cpu_pipeline.phase = Phase::Execute;
-                self.Cpu_pipeline.remain_cycles = ins.op.cycles.decode_cycles.saturating_sub(1);
-            }
             Phase::Execute => {
                 self.Cpu_pipeline.phase = Phase::Execute;
                 self.current_pc = current_pc;
                 let pc_update = ins.op.exec.execute(&mut *self, &ins.data);
-                print!(
-                    "Executed instruction {} at 0x{:08X}, PC update: 0x{:X}\n",
-                    ins.data.mnemonic(),
-                    current_pc,
-                    pc_update
-                );
+                // print!(
+                //     "Executed instruction {} at 0x{:08X}, PC update: 0x{:X}\n",
+                //     ins.data.mnemonic(),
+                //     current_pc,
+                //     pc_update
+                // );
                 self.update_pc(pc_update);
                 self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
             }
+            _ => {
+                panic!("Invalid pipeline phase during execution");
+            }
         }
+        let duration = start.elapsed();
+        // println!("Step execution time: {:?}", duration);
     }
 
     pub fn peripheral_step(&mut self) {

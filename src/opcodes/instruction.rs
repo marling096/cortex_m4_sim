@@ -1,5 +1,5 @@
 use crate::context::CpuContext;
-use crate::opcodes::Instructions::adr::Adr_builder;
+use crate::opcodes::Instructions::adr::AdrBuilder;
 use crate::opcodes::Instructions::bitop::Bitop_builder;
 use crate::opcodes::Instructions::branch::Branch_builder;
 use crate::opcodes::Instructions::breakpoint::Breakpoint_builder;
@@ -22,6 +22,7 @@ use crate::opcodes::opcode::{ArmOpcode, CycleInfo, Executable, Opcode, check_con
 
 use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
 use std::collections::{BTreeMap, HashMap};
+use rustc_hash::FxHashMap;
 
 pub struct Cpu_Instruction<'a> {
     pub op: Opcode,
@@ -34,16 +35,94 @@ impl<'a> Cpu_Instruction<'a> {
 }
 
 pub struct Cpu_InstrTable<'a> {
-    pub table: BTreeMap<u32, Cpu_Instruction<'a>>,
+    pub table: FxHashMap<u32, Cpu_Instruction<'a>>,
+    fast_table: Vec<Option<Cpu_Instruction<'a>>>,
+    fast_base: u32,
 }
+
 impl<'a> Cpu_InstrTable<'a> {
     pub fn new() -> Cpu_InstrTable<'a> {
-        Cpu_InstrTable { table: BTreeMap::new() }
+        Cpu_InstrTable {
+            table: FxHashMap::default(),
+            fast_table: Vec::new(),
+            fast_base: 0,
+        }
     }
+    
     pub fn add_instruction(&mut self, instr: Cpu_Instruction<'a>) {
         self.table.insert(instr.data.address(), instr);
     }
+
+    #[inline(always)]
+    pub fn get(&self, addr: u32) -> Option<&Cpu_Instruction<'a>> {
+        // 利用无符号数溢出特性合并判断：如果 addr < fast_base，减法结果会是一个巨大的 u32，
+        // 肯定大于 fast_table.len()，从而一次检查涵盖上下界。
+        let offset = (addr.wrapping_sub(self.fast_base)) >> 1;
+        if (offset as usize) < self.fast_table.len() {
+             // Safety: 已经在 if 中检查了边界，使用 get_unchecked 移除切片内部的二次检查
+             // 对于高性能取指非常关键
+             unsafe {
+                 if let Some(ins) = self.fast_table.get_unchecked(offset as usize) {
+                     return Some(ins);
+                 }
+             }
+        }
+        // Fallback to slow path (HashMap) - 仅在未命中 fast_table 时触发
+        if self.table.is_empty() { None } else { self.table.get(&addr) }
+    }
+
+    pub fn optimize(&mut self) {
+        if self.table.is_empty() {
+            return;
+        }
+        
+        // Find address range
+        let mut min_addr = u32::MAX;
+        let mut max_addr = 0;
+        for k in self.table.keys() {
+            if *k < min_addr { min_addr = *k; }
+            if *k > max_addr { max_addr = *k; }
+        }
+
+        // Check if optimization is feasible (limit to 16MB range)
+        let range = max_addr - min_addr;
+        if range > 16 * 1024 * 1024 {
+            println!("Address range too large for fast lookup: {} bytes. Optimization skipped.", range);
+            return;
+        }
+        
+        // Determine vector size. +2 to cover the last instruction fully
+        let size = (range / 2) as usize + 2; 
+        
+        let mut fast_table = Vec::with_capacity(size);
+        for _ in 0..size {
+            fast_table.push(None);
+        }
+        
+        self.fast_base = min_addr;
+
+        // Move instructions from HashMap to Vec
+        // We iterate over execution order (keys) to be deterministic, though not strictly needed
+        let mut keys: Vec<u32> = self.table.keys().cloned().collect();
+        keys.sort();
+
+        for addr in keys {
+            if let Some(instr) = self.table.remove(&addr) {
+                let offset = ((addr - self.fast_base) >> 1) as usize;
+                if offset < fast_table.len() {
+                    fast_table[offset] = Some(instr);
+                } else {
+                    // Should not happen, put back
+                    self.table.insert(addr, instr);
+                }
+            }
+        }
+
+        self.fast_table = fast_table;
+        println!("Instruction table optimized: Base=0x{:08X}, Size={}, Entries moved to fast lookup.", self.fast_base, size);
+    }
 }
+
 
 pub struct OpcodeTable {
     pub table: HashMap<u16, Vec<Opcode>>,
@@ -74,7 +153,7 @@ impl OpcodeTable {
             Box::new(Str_builder),
             Box::new(Calculate_builder),
             Box::new(Breakpoint_builder),
-            Box::new(Adr_builder),
+            Box::new(AdrBuilder),
             Box::new(Movs_builder),
             Box::new(Hint_builder),
             Box::new(Ldm_builder),

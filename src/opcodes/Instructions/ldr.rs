@@ -1,6 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, check_condition};
+use crate::opcodes::opcode::{
+    ArmOpcode, Executable, Operand_resolver_multi, OperandResolver, check_condition,
+};
 use capstone::arch::arm::ArmOperandType;
 
 pub struct Ldr_builder;
@@ -22,6 +24,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ldr,
+            operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -34,6 +37,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ldrb,
+            operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -46,6 +50,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ldrsb,
+            operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -58,6 +63,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ldrh,
+            operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -70,6 +76,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ldrsh,
+            operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
         // Additional LDR variants (LDRH, LDRSB, LDRSH, LDRD) would be defined similarly
@@ -131,11 +138,12 @@ impl Executable for Op_Ldr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, mut addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
+        let mut addr = data.transed_operands.get(1).copied().unwrap_or(0);
         // data.op_writer();
         addr = addr & !3; // Align address to word boundary
         let val = cpu.read_mem(addr);
-        print!("LDR from address 0x{:08X}: 0x{:08X}\n", addr, val);
+        // print!("LDR from address 0x{:08X}: 0x{:08X}\n", addr, val);
         cpu.write_reg(rt, val);
         if rt == 15 { 0 } else { data.size() }
     }
@@ -147,7 +155,8 @@ impl Executable for Op_Ldrb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
         let val = read_u8(cpu, addr);
         cpu.write_reg(rt, val);
         if rt == 15 { 0 } else { data.size() }
@@ -160,7 +169,8 @@ impl Executable for Op_Ldrsb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
         let val = read_u8(cpu, addr);
         let signed_val = (val as i8) as i32 as u32;
         cpu.write_reg(rt, signed_val);
@@ -174,7 +184,8 @@ impl Executable for Op_Ldrh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
         let val = read_u16(cpu, addr);
         cpu.write_reg(rt, val);
         if rt == 15 { 0 } else { data.size() }
@@ -187,7 +198,8 @@ impl Executable for Op_Ldrsh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
         let val = read_u16(cpu, addr);
         let signed_val = (val as i16) as i32 as u32;
         cpu.write_reg(rt, signed_val);
@@ -209,5 +221,16 @@ impl Executable for Op_Ldrd {
         // cpu.write_reg(rt, val1);
         // cpu.write_reg(rt2, val2);
         data.size()
+    }
+}
+
+pub struct OpLdrResolver;
+impl OperandResolver for OpLdrResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rt);
+        data.transed_operands.push(addr);
+        addr
     }
 }

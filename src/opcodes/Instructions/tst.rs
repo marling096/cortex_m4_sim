@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, MatchFn, Opcode, Operand2_resolver, UpdateApsr_C,
-    UpdateApsr_N, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, Operand2_resolver,
+    UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z, check_condition,
 };
 use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
@@ -16,13 +16,15 @@ impl Executable for Op_Tst {
             return data.size();
         }
 
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
         let rn_data = cpu.read_reg(rn);
         let result = rn_data & op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
-        // Note: C flag update logic should be added here based on Operand2 specifics
+        UpdateApsr_C(cpu, data.update_carry);
+
         data.size()
     }
 }
@@ -34,14 +36,27 @@ impl Executable for Op_Teq {
             return data.size();
         }
 
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
         let rn_data = cpu.read_reg(rn);
         let result = rn_data ^ op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
-        // Note: C flag update logic should be added here based on Operand2 specifics
+        UpdateApsr_C(cpu, data.update_carry);
+
         data.size()
+    }
+}
+
+pub struct OpTst_resolver;
+impl OperandResolver for OpTst_resolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (_rd, rn, op2) = Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rn);
+        data.transed_operands.push(op2);
+        op2
     }
 }
 
@@ -63,6 +78,7 @@ pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Tst,
+            operand_resolver: &OpTst_resolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -75,6 +91,7 @@ pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Teq,
+            operand_resolver: &OpTst_resolver,
             adjust_cycles: None,
         },
     ]

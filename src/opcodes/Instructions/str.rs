@@ -1,6 +1,6 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, OperandResolver, check_condition};
 use capstone::arch::arm::ArmOperandType;
 
 pub struct Str_builder;
@@ -22,6 +22,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Str,
+            operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -34,6 +35,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Strb,
+            operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -46,6 +48,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Strh,
+            operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
     ]
@@ -106,10 +109,11 @@ impl Executable for Op_Str {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt,mut addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
+        let mut addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
         addr  =addr & !3; // Align address to word boundary
         let val = cpu.read_reg(rt);
-        print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
+        // print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
         
         cpu.write_mem(addr, val);
         data.size()
@@ -122,7 +126,8 @@ impl Executable for Op_Strb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
         data.size()
@@ -135,7 +140,8 @@ impl Executable for Op_Strsb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
         data.size()
@@ -148,7 +154,8 @@ impl Executable for Op_Strh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
         data.size()
@@ -161,9 +168,21 @@ impl Executable for Op_Strsh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
+        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
         data.size()
+    }
+}
+
+pub struct OpStrResolver;
+impl OperandResolver for OpStrResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rt, addr) = Operand_resolver_multi(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rt);
+        data.transed_operands.push(addr);
+        addr
     }
 }

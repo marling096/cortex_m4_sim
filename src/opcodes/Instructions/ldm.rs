@@ -1,8 +1,7 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
-    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, OperandResolver, check_condition,
 };
 use capstone::arch::arm::ArmOperandType;
 
@@ -59,6 +58,28 @@ pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
 }
 
+pub struct OpLdm_resolver;
+impl OperandResolver for OpLdm_resolver {
+    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let operands: Vec<_> = data.operands().collect();
+        let base_reg = operands.get(0).expect("missing base register");
+
+        if let capstone::arch::arm::ArmOperandType::Reg(reg_id) = base_reg.op_type {
+            let base = data.resolve_reg(reg_id);
+            data.transed_operands.reserve(operands.len());
+            data.transed_operands.push(base);
+            for op in &operands[1..] {
+                if let capstone::arch::arm::ArmOperandType::Reg(r) = op.op_type {
+                    data.transed_operands.push(data.resolve_reg(r));
+                }
+            }
+            base
+        } else {
+            panic!("Expected base register");
+        }
+    }
+}
+
 pub struct Ldm_builder;
 impl InstrBuilder for Ldm_builder {
     fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
@@ -76,6 +97,7 @@ pub fn add_ldm_def() -> Vec<crate::opcodes::opcode::Opcode> {
             execute_cycles: 1,
         },
         exec: &Op_Ldm,
+        operand_resolver: &OpLdm_resolver,
         adjust_cycles: None,
     }]
 }

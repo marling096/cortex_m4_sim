@@ -1,32 +1,42 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, MatchFn, Opcode, Operand_resolver_two, Operand2_resolver,
-    UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, Operand_resolver_two, OperandResolver, check_condition,
 };
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
-//ADR{cond} Rd, label
-pub struct Op_Adr;
-impl Executable for Op_Adr {
+// ADR{cond} Rd, label
+pub struct OpAdr;
+impl Executable for OpAdr {
     fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        adr(cpu, data);
-        data.size()
+        if !check_condition(cpu, data.condition()) {
+            return data.size();
+        }
+
+        // Use safe access to avoid panics if resolver failed to populate operands
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let address = data.transed_operands.get(1).copied().unwrap_or(0);
+
+        cpu.write_reg(rd, address);
+
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
-pub fn adr(cpu: &mut dyn CpuContext, data: &ArmOpcode) {
-    if !check_condition(cpu, data.condition()) {
-        return;
+pub struct OpAdrResolver;
+impl OperandResolver for OpAdrResolver {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let (rd, label) = Operand_resolver_two(cpu, data);
+
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rd);
+        data.transed_operands.push(label);
+
+        label
     }
-    let (rd, label) = Operand_resolver_two(cpu, data);
-    let pc_val = cpu.read_pc();
-    let address = pc_val.wrapping_add(label);
-    cpu.write_reg(rd, address);
 }
 
-pub struct Adr_builder;
-impl InstrBuilder for Adr_builder {
+pub struct AdrBuilder;
+impl InstrBuilder for AdrBuilder {
     fn build(&self) -> Vec<crate::opcodes::opcode::Opcode> {
         add_adr_def()
     }
@@ -42,7 +52,8 @@ pub fn add_adr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &Op_Adr,
+        exec: &OpAdr,
+        operand_resolver: &OpAdrResolver,
         adjust_cycles: None,
     }]
 }

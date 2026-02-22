@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
-    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, MatchFn, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_V, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
 };
 use capstone::arch::arm::ArmOperandType;
 
@@ -25,6 +25,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Add,
+            operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -37,6 +38,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Adc,
+            operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -49,6 +51,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Sub,
+            operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -61,6 +64,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Sbc,
+            operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -73,10 +77,23 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Rsb,
+            operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
         // Similarly for SUB, SBC, RSB...
     ]
+}
+
+pub struct OpCalculateResolver;
+impl OperandResolver for OpCalculateResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(3);
+        data.transed_operands.push(rd);
+        data.transed_operands.push(rn);
+        data.transed_operands.push(op2);
+        op2
+    }
 }
 
 // ADD, ADC, SUB, SBC, RSB
@@ -88,7 +105,9 @@ impl Executable for Op_Add {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         calculate_add_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -100,7 +119,9 @@ impl Executable for Op_Adc {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         calculate_adc_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -112,10 +133,12 @@ impl Executable for Op_Sub {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         calculate_sub_core(cpu, data, rd, rn, op2);
-        print!("SUB: Rn={:#X}, Op2={:#X}\n", cpu.read_reg(rn), op2);
-        print!("SUB Result: {:#X}\n", cpu.read_reg(rd));
+        // print!("SUB: Rn={:#X}, Op2={:#X}\n", cpu.read_reg(rn), op2);
+        // print!("SUB Result: {:#X}\n", cpu.read_reg(rd));
         if rd == 15 { 0 } else { data.size() }
     }
 }
@@ -126,7 +149,9 @@ impl Executable for Op_Sbc {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         calculate_sbc_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -138,7 +163,9 @@ impl Executable for Op_Rsb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         calculate_rsb_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }

@@ -92,12 +92,12 @@ impl Peripheral for SysTick {
 
         if self.Sys_enableflag() {
             self.cvr -= 1;
-            println!("systick tick_val {}", self.cvr);
+            // println!("systick tick_val {}", self.cvr);
         }
 
         if self.cvr == 0 {
             self.csr |= SYST_CSR_COUNTFLAG;
-            println!("set conutflag");
+            // println!("set conutflag");
             if self.Sys_enableflag() {
                 self.cvr = self.rvr; // 自动重装载
             }

@@ -1,7 +1,7 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, Opcode, Operand_resolver, check_condition,
+    ArmOpcode, CycleInfo, Executable, Opcode, Operand_resolver, OperandResolver, check_condition,
 };
 use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
 
@@ -24,6 +24,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_B,
+            operand_resolver: &OpBranchResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -36,6 +37,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Bl,
+            operand_resolver: &OpBranchResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -48,6 +50,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Bx,
+            operand_resolver: &OpBxResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -60,6 +63,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Blx,
+            operand_resolver: &OpBxResolver,
             adjust_cycles: None,
         },
     ]
@@ -77,9 +81,8 @@ impl Executable for Op_B {
             return data.size();
         }
 
-        // B label
-        let label = Operand_resolver(cpu, data);
-
+        // B label (resolved by resolver into transed_operands)
+        let label = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
         cpu.write_pc(label);
         0
     }
@@ -93,16 +96,9 @@ impl Executable for Op_Bl {
         }
 
         // BL label
-        let label = Operand_resolver(cpu, data);
+        let label = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
         let pc = cpu.read_pc();
-        // let insn_len = data.insn.len() as u32;
         let return_addr = pc;
-        print!(
-            "BL to 0x{:08X}, return addr 0x{:08X}\n",
-            label,
-            return_addr | 1
-        );
-        // Set LSB of return address for Thumb mode
         cpu.write_lr(return_addr | 1);
         cpu.write_pc(label);
         0
@@ -117,9 +113,7 @@ impl Executable for Op_Bx {
         }
 
         // BX Rm
-        let val = Operand_resolver(cpu, data);
-        print!("BX to 0x{:08X}\n", val);
-        // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
+        let val = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
         let target = val & !1;
         cpu.write_pc(target);
         0
@@ -134,20 +128,34 @@ impl Executable for Op_Blx {
         }
 
         // BLX Rm
-        let val = Operand_resolver(cpu, data);
+        let val = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
         let pc = cpu.read_pc();
         let insn_len = data.insn.len() as u32;
         let return_addr = pc.wrapping_sub_signed(4).wrapping_add(insn_len);
-        print!(
-            "BLX to 0x{:08X}, return addr 0x{:08X}\n",
-            val,
-            return_addr | 1
-        );
         cpu.write_lr(return_addr | 1);
 
-        // Bit[0] of the value in Rm must be 1, but the address to branch to is created by changing bit[0] to 0.
         let target = val & !1;
         cpu.write_pc(target);
         0
+    }
+}
+
+pub struct OpBranchResolver;
+impl OperandResolver for OpBranchResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let val = Operand_resolver(cpu, data);
+        data.transed_operands.reserve(1);
+        data.transed_operands.push(val);
+        val
+    }
+}
+
+pub struct OpBxResolver;
+impl OperandResolver for OpBxResolver {
+    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+        let val = Operand_resolver(cpu, data);
+        data.transed_operands.reserve(1);
+        data.transed_operands.push(val);
+        val
     }
 }

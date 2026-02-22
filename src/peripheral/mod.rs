@@ -5,5 +5,6 @@ pub mod flash;
 pub mod rcc;
 pub mod scb;
 pub mod systick;
+pub mod nvic;
 
         

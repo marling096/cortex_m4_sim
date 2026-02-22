@@ -25,6 +25,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_And,
+            operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -37,6 +38,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Orr,
+            operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -49,6 +51,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Eor,
+            operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -61,6 +64,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Bic,
+            operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
         Opcode {
@@ -73,6 +77,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Orn,
+            operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
     ]
@@ -90,17 +95,20 @@ impl Executable for Op_And {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
-  
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+
         let result = cpu.read_reg(rn) & op2;
 
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
+            UpdateApsr_C(cpu, data.update_carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
-        data.size()
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
@@ -110,14 +118,17 @@ impl Executable for Op_Orr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         let result = cpu.read_reg(rn) | op2;
         cpu.write_reg(rd, result);
         if data.update_flags() {
+            UpdateApsr_C(cpu, data.update_carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
-        data.size()
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
@@ -127,15 +138,18 @@ impl Executable for Op_Bic {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         let result = cpu.read_reg(rn) & !op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
+            UpdateApsr_C(cpu, data.update_carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
-        data.size()
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
@@ -145,15 +159,18 @@ impl Executable for Op_Orn {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         let result = cpu.read_reg(rn) | !op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
+            UpdateApsr_C(cpu, data.update_carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
-        data.size()
+        if rd == 15 { 0 } else { data.size() }
     }
 }
 
@@ -163,15 +180,30 @@ impl Executable for Op_Eor {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
         let result = cpu.read_reg(rn) ^ op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
+            UpdateApsr_C(cpu, data.update_carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
-        data.size()
+        if rd == 15 { 0 } else { data.size() }
+    }
+}
+
+pub struct OpBitResolver;
+impl crate::opcodes::opcode::OperandResolver for OpBitResolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rd, rn, op2) = crate::opcodes::opcode::Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(3);
+        data.transed_operands.push(rd);
+        data.transed_operands.push(rn);
+        data.transed_operands.push(op2);
+        op2
     }
 }
 

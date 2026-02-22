@@ -1,4 +1,5 @@
 use std::option;
+use std::time::Instant;
 
 use crate::context::CpuContext;
 use capstone::prelude::*;
@@ -12,6 +13,7 @@ pub struct Opcode {
 
     pub exec: &'static dyn Executable,
     // pub operands: ArmOpcode<'a>,
+    pub operand_resolver: &'static dyn OperandResolver,
     pub adjust_cycles: Option<CycleAdjustFn>,
 }
 
@@ -23,7 +25,7 @@ impl Opcode {
         cycles: CycleInfo,
 
         exec: &'static dyn Executable,
-        // operands: ArmOpcode<'a>,
+        operand_resolver: &'static dyn OperandResolver,
         adjust_cycles: Option<CycleAdjustFn>,
     ) -> Opcode {
         Opcode {
@@ -32,7 +34,7 @@ impl Opcode {
             length,
             cycles,
             exec: exec,
-            // operands: operands,
+            operand_resolver: operand_resolver,
             adjust_cycles: adjust_cycles,
         }
     }
@@ -41,7 +43,11 @@ impl Opcode {
 }
 
 pub trait Executable {
-    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode)->u32;
+    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode) -> u32;
+}
+
+pub trait OperandResolver {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32;
 }
 
 #[derive(Clone, Copy)]
@@ -73,12 +79,18 @@ use capstone::{Insn, InsnDetail};
 pub struct ArmOpcode<'a> {
     /// 原始指令对象
     pub insn: &'a Insn<'a>,
-
-    pub transed_operands: Vec<u32>,
-    /// 指令详细信息 (含操作数、CC、Writeback 等)
     pub detail: InsnDetail<'a>,
     /// Capstone 句柄引用，用于解析寄存器名
     cs: &'a Capstone,
+
+    /// 转换后的操作数列表 (如寄存器编号、立即数值等)，由 OperandResolver 填充
+    pub transed_operands: Vec<u32>,
+    /// 指令详细信息 (含操作数、CC、Writeback 等)
+    ///
+    /// 注意：这个字段在创建 ArmOpcode 时就被解析并存储，避免了后续多次调用 cs.insn_detail() 的性能开销
+    pub update_flags: bool,
+
+    pub update_carry: u8,
 }
 
 impl<'a> ArmOpcode<'a> {
@@ -110,21 +122,29 @@ impl<'a> ArmOpcode<'a> {
 
     /// 从原始 Insn 创建 ArmOpcode
     pub fn new(cs: &'a Capstone, insn: &'a Insn<'a>) -> Option<Self> {
+        let start = Instant::now();
         let detail = cs.insn_detail(insn).ok()?;
 
         if let arch::ArchDetail::ArmDetail(_) = detail.arch_detail() {
+            let duration = start.elapsed();
+            // println!("ArmOpcode::new execution time: {:?}", duration);
             Some(ArmOpcode {
                 insn,
-                transed_operands: Vec::new(),
                 detail,
                 cs,
+                transed_operands: Vec::new(),
+                update_flags: false,
+                update_carry: 0,
             })
+
+
         } else {
             None
         }
     }
 
     pub fn trans_operands(&mut self) {
+        let start = Instant::now();
         // 解构 self 以避免借用冲突
         let detail = &self.detail;
         let cs = &self.cs;
@@ -179,10 +199,12 @@ impl<'a> ArmOpcode<'a> {
                 _ => {}
             }
         }
+        let duration = start.elapsed();
+        println!("ArmOpcode::trans_operands execution time: {:?}", duration);
     }
 
     pub fn op_writer(&self) {
-        println!("op_str: {}", self.insn.op_str().unwrap_or(""));
+        // println!("op_str: {}", self.insn.op_str().unwrap_or(""));
     }
 
     /// 获取指令 ID (u32)
@@ -325,9 +347,10 @@ pub fn get_ops_op2(_data: &ArmOpcode) {}
 // Operand2 -- rm ,{ shiift #n}
 pub fn Operand2_resolver(
     cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmOpcode,
+    data: &mut ArmOpcode,
 ) -> (u32, u32, u32) //rd, rn ,value of Operand2  //carry直接更新
 {
+    let start = Instant::now();
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
@@ -356,96 +379,16 @@ pub fn Operand2_resolver(
 
     let op2 = ops.last().unwrap();
     let (val, carry) = op_shift(cpu, op2.clone(), data);
-    // let (val, carry) = match &op2.op_type {
-    //     ArmOperandType::Reg(reg) => {
-    //         let val = cpu.read_reg(data.resolve_reg(*reg));
-    //         let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
 
-    //         // 处理 shift
-    //         match op2.shift {
-    //             ArmShift::Lsl(shift) => {
-    //                 // LSL, Logical Shift Left
-    //                 match shift {
-    //                     0 => (val, current_c),
-    //                     1..=31 => {
-    //                         let carry = (val >> (32 - shift)) & 1;
-    //                         (val << shift, carry as u8)
-    //                     }
-    //                     32 => (0, (val & 1) as u8),
-    //                     _ => (0, 0),
-    //                 }
-    //             }
-    //             ArmShift::Lsr(shift) => {
-    //                 // LSR, Logical Shift Right
-    //                 match shift {
-    //                     0 => (val, current_c),
-    //                     1..=31 => {
-    //                         let carry = (val >> (shift - 1)) & 1;
-    //                         (val >> shift, carry as u8)
-    //                     }
-    //                     32 => (0, (val >> 31) as u8),
-    //                     _ => (0, 0),
-    //                 }
-    //             }
-    //             ArmShift::Asr(shift) => {
-    //                 // ASR, Arithmetic Shift Right
-    //                 match shift {
-    //                     0 => (val, current_c),
-    //                     1..=31 => {
-    //                         let carry = (val >> (shift - 1)) & 1;
-    //                         let res = ((val as i32) >> shift) as u32;
-    //                         (res, carry as u8)
-    //                     }
-    //                     _ => {
-    //                         // shift >= 32
-    //                         let carry = (val >> 31) & 1;
-    //                         let res = if (val as i32) < 0 { 0xFFFFFFFF } else { 0 };
-    //                         (res, carry as u8)
-    //                     }
-    //                 }
-    //             }
-    //             ArmShift::Ror(shift) => {
-    //                 // ROR, Rotate Right
-    //                 if shift == 0 {
-    //                     (val, current_c)
-    //                 } else {
-    //                     let shift_mod = shift % 32;
-    //                     if shift_mod == 0 {
-    //                         (val, (val >> 31) as u8)
-    //                     } else {
-    //                         let res = val.rotate_right(shift_mod);
-    //                         let carry = (res >> 31) & 1;
-    //                         (res, carry as u8)
-    //                     }
-    //                 }
-    //             }
-    //             ArmShift::Rrx(_) => {
-    //                 // RRX, Rotate Right with Extend
-    //                 let c_out = (val & 1) as u8;
-    //                 let res = (val >> 1) | ((current_c as u32) << 31);
-    //                 (res, c_out)
-    //             }
-    //             _ => (val, current_c),
-    //         }
-    //     }
-    //     ArmOperandType::Imm(imm) => {
-    //         let val = *imm as u32;
-    //         let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
-    //         (val, current_c)
-    //     }
-    //     _ => panic!("operand2 is not a register"),
-    // };
-
-    // if data.update_flags() {
-    //     UpdateApsr_C(cpu, carry);
-    // }
-
+    let duration = start.elapsed();
+    // println!("Operand2_resolver execution time: {:?}", duration);
     (rd, rn, val)
 }
 
 // op{cond} label/rm
 //return value of Operand
 pub fn Operand_resolver(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> u32 {
+    let start = Instant::now();
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
@@ -467,6 +410,8 @@ pub fn Operand_resolver(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpco
         _ => panic!("operand is not a register or immediate"),
     };
 
+    let duration = start.elapsed();
+    // println!("Operand_resolver execution time: {:?}", duration);
     val
 }
 
@@ -476,6 +421,7 @@ pub fn Operand_resolver_two(
     cpu: &mut dyn crate::context::CpuContext,
     data: &ArmOpcode,
 ) -> (u32, u32) {
+    let start = Instant::now();
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
@@ -501,6 +447,8 @@ pub fn Operand_resolver_two(
         _ => panic!("operand2 is not a register or immediate"),
     };
 
+    let duration = start.elapsed();
+    println!("Operand_resolver_two execution time: {:?}", duration);
     (rn, val2)
 }
 
@@ -511,8 +459,9 @@ pub fn Operand_resolver_two(
 //return (rt , value of [Rn {, #offset}](address))
 pub fn Operand_resolver_multi(
     cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmOpcode,
+    data: &mut ArmOpcode,
 ) -> (u32, u32) {
+    let start = Instant::now();
     let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
         arm
     } else {
@@ -541,7 +490,8 @@ pub fn Operand_resolver_multi(
                     let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
                     let (r2_val, carry) = op_shift_match(op2.clone(), val, current_c);
                     if data.update_flags() {
-                        UpdateApsr_C(cpu, carry);
+                        // UpdateApsr_C(cpu, carry);
+                        data.update_carry = carry;
                     }
                     base.wrapping_add(r2_val)
                 } else {
@@ -572,6 +522,8 @@ pub fn Operand_resolver_multi(
             _ => panic!("operand2 is not a memory operand"),
             // 前索引
         };
+        let duration = start.elapsed();
+        println!("Operand_resolver_multi execution time: {:?}", duration);
         (rt, addr)
     }
 }
@@ -625,7 +577,7 @@ pub fn op2_reg_match(data: &ArmOpcode) -> bool {
 pub fn op_shift(
     cpu: &mut dyn crate::context::CpuContext,
     op2: ArmOperand,
-    data: &ArmOpcode,
+    data: &mut ArmOpcode,
 ) -> (u32, u8) {
     //
 
@@ -646,7 +598,8 @@ pub fn op_shift(
     };
 
     if data.update_flags() {
-        UpdateApsr_C(cpu, carry);
+        // UpdateApsr_C(cpu, carry);
+        data.update_carry = carry;
     }
     (val, carry)
 }

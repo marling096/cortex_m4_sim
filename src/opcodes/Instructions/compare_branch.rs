@@ -1,6 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_two, check_condition};
+use crate::opcodes::opcode::{
+    ArmOpcode, Executable, Operand_resolver_two, OperandResolver, check_condition,
+};
 
 pub struct Compare_branch_builder;
 impl InstrBuilder for Compare_branch_builder {
@@ -21,6 +23,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Cbz,
+            operand_resolver: &OpCompareBranchResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -33,6 +36,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Cbnz,
+            operand_resolver: &OpCompareBranchResolver,
             adjust_cycles: None,
         },
     ]
@@ -49,10 +53,11 @@ impl Executable for Op_Cbz {
         }
 
         // CBZ Rn, label
-        let (rn, label) = Operand_resolver_two(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let label = data.transed_operands.get(1).copied().unwrap_or(0);
 
         let val = cpu.read_reg(rn);
-        print!("CBZ R{}:0x{:08X}, label 0x{:08X}\n", rn, val, label);
+        // print!("CBZ R{}:0x{:08X}, label 0x{:08X}\n", rn, val, label);
         if val == 0 {
             cpu.write_pc(label);
             0
@@ -70,7 +75,8 @@ impl Executable for Op_Cbnz {
         }
 
         // CBNZ Rn, label
-        let (rn, label) = Operand_resolver_two(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let label = data.transed_operands.get(1).copied().unwrap_or(0);
 
         let val = cpu.read_reg(rn);
         if val != 0 {
@@ -79,5 +85,16 @@ impl Executable for Op_Cbnz {
         } else {
             data.size()
         }
+    }
+}
+
+pub struct OpCompareBranchResolver;
+impl OperandResolver for OpCompareBranchResolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rn, label) = Operand_resolver_two(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rn);
+        data.transed_operands.push(label);
+        label
     }
 }

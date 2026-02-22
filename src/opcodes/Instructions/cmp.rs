@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
-    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_V, UpdateApsr_Z, check_condition,
 };
 
 pub struct Cmp_builder;
@@ -24,6 +24,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Cmp,
+            operand_resolver: &OpCmpResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -36,6 +37,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Cmn,
+            operand_resolver: &OpCmpResolver,
             adjust_cycles: None,
         },
     ]
@@ -50,7 +52,8 @@ impl Executable for Op_Cmp {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rn, op2) = get_ops(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
         cmp_core(cpu, data, rn, op2);
         data.size()
     }
@@ -62,15 +65,22 @@ impl Executable for Op_Cmn {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rn, op2) = get_ops(cpu, data);
+        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
+        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
         cmn_core(cpu, data, rn, op2);
         data.size()
     }
 }
 
-fn get_ops(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> (u32, u32) {
-    let (rn, rd, op2) = Operand2_resolver(cpu, data);
-    (rn, op2)
+pub struct OpCmpResolver;
+impl OperandResolver for OpCmpResolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let (rn, _rd, op2) = Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(2);
+        data.transed_operands.push(rn);
+        data.transed_operands.push(op2);
+        op2
+    }
 }
 
 // === CMP ===
@@ -80,7 +90,7 @@ fn cmp_core(cpu: &mut dyn CpuContext, _data: &ArmOpcode, rn: u32, op2_val: u32) 
     // Rn - Op2
     let result = rn_val.wrapping_sub(op2_val);
 
-    print!("Comparing R{} (0x{:08X}) with Op2 (0x{:08X}): Result = 0x{:08X}\n", rn, rn_val, op2_val, result);
+    // print!("Comparing R{} (0x{:08X}) with Op2 (0x{:08X}): Result = 0x{:08X}\n", rn, rn_val, op2_val, result);
 
     UpdateApsr_Z(cpu, result);
     UpdateApsr_N(cpu, result);

@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z,
-    check_condition,
+    ArmOpcode, Executable, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_Z, check_condition,
 };
 
 pub struct Shiift_builder;
@@ -24,6 +24,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Asr,
+            operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -36,6 +37,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Lsl,
+            operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -48,6 +50,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Lsr,
+            operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -60,6 +63,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Ror,
+            operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
@@ -72,9 +76,23 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 execute_cycles: 1,
             },
             exec: &Op_Rrx,
+            operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
     ]
+}
+
+pub struct OpShiftResolver;
+impl OperandResolver for OpShiftResolver {
+    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        // Delegate complex operand parsing to the shared Operand2_resolver
+        let (rd, rm, val) = Operand2_resolver(cpu, data);
+        data.transed_operands.reserve(3);
+        data.transed_operands.push(rd);
+        data.transed_operands.push(rm);
+        data.transed_operands.push(val);
+        val
+    }
 }
 
 // ASR, LSL, LSR, ROR, and RRX
@@ -88,9 +106,10 @@ impl Executable for Op_Asr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
+        let mut rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF; // Only bottom byte used
         let rm_val = cpu.read_reg(rm);
-        rs_val = rs_val & 0xFF; // Only bottom byte used
 
         let result = if rs_val == 0 {
             rm_val
@@ -128,15 +147,12 @@ impl Executable for Op_Lsl {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
         let rm_val = cpu.read_reg(rm);
-        rs_val = rs_val & 0xFF;
 
-        let result = if rs_val >= 32 {
-            0
-        } else {
-            rm_val.wrapping_shl(rs_val)
-        };
+        let result = if rs_val >= 32 { 0 } else { rm_val.wrapping_shl(rs_val) };
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
@@ -163,9 +179,10 @@ impl Executable for Op_Lsr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
         let rm_val = cpu.read_reg(rm);
-        rs_val = rs_val & 0xFF;
 
         let result = if rs_val >= 32 { 0 } else { rm_val >> rs_val };
 
@@ -195,16 +212,13 @@ impl Executable for Op_Ror {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rm, mut rs_val) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
         let rm_val = cpu.read_reg(rm);
-        rs_val = rs_val & 0xFF;
 
         let shift = rs_val & 31;
-        let result = if rs_val == 0 {
-            rm_val
-        } else {
-            rm_val.rotate_right(shift)
-        };
+        let result = if rs_val == 0 { rm_val } else { rm_val.rotate_right(shift) };
 
         cpu.write_reg(rd, result);
 
@@ -226,7 +240,8 @@ impl Executable for Op_Rrx {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let (rd, rd2, rm) = Operand2_resolver(cpu, data);
+        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
+        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
         let rm_val = cpu.read_reg(rm);
         let carry_in = (cpu.read_apsr() >> 29) & 1;
 

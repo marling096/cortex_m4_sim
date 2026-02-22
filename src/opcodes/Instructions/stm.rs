@@ -1,8 +1,7 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
-    UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, OperandResolver, check_condition,
 };
 use capstone::arch::arm::ArmOperandType;
 
@@ -18,32 +17,17 @@ pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
         return data.size();
     }
-
-    // Collect operands into a Vec so we can index them
-    let operands: Vec<_> = data.operands().collect();
-    let base_reg = operands.get(0).expect("missing base register");
-    let reg_list = &operands[1..];
-
-    let base_reg_id = match base_reg.op_type {
-        ArmOperandType::Reg(reg_id) => data.resolve_reg(reg_id),
-        _ => panic!("Expected base register"),
+    // Use transed_operands populated by resolver: [base, rlist...]
+    let base_reg_id = data.transed_operands.get(0).copied().unwrap_or(0);
+    let reg_list_ids = if data.transed_operands.len() > 1 {
+        data.transed_operands[1..].to_vec()
+    } else {
+        Vec::new()
     };
 
-    let reg_list_id = reg_list
-        .iter()
-        .filter_map(|op| {
-            if let ArmOperandType::Reg(reg_id) = op.op_type {
-                Some(data.resolve_reg(reg_id))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<u32>>();
-
     let base_addr = cpu.read_reg(base_reg_id);
-
     let mut addr = base_addr;
-    for reg_id in &reg_list_id {
+    for reg_id in &reg_list_ids {
         let value = cpu.read_reg(*reg_id);
         cpu.write_mem(addr, value);
         addr = addr.wrapping_add(4);
@@ -52,6 +36,7 @@ pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if data.writeback() {
         cpu.write_reg(base_reg_id, addr);
     }
+
     data.size()
 }
 
@@ -72,6 +57,29 @@ pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
             execute_cycles: 1,
         },
         exec: &Op_Stm,
+        operand_resolver: &OpStm_resolver,
         adjust_cycles: None,
     }]
+}
+
+pub struct OpStm_resolver;
+impl OperandResolver for OpStm_resolver {
+    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+        let operands: Vec<_> = data.operands().collect();
+        let base_reg = operands.get(0).expect("missing base register");
+
+        if let ArmOperandType::Reg(reg_id) = base_reg.op_type {
+            let base = data.resolve_reg(reg_id);
+            data.transed_operands.reserve(operands.len());
+            data.transed_operands.push(base);
+            for op in &operands[1..] {
+                if let ArmOperandType::Reg(r) = op.op_type {
+                    data.transed_operands.push(data.resolve_reg(r));
+                }
+            }
+            base
+        } else {
+            panic!("Expected base register");
+        }
+    }
 }
