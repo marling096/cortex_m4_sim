@@ -1,10 +1,11 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, MatchFn, Opcode, Operand2_resolver, UpdateApsr_C,
-    UpdateApsr_N, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_Z, check_condition,
 };
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
+use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
+use capstone::arch::DetailsArchInsn;
 
 pub struct Bitop_builder;
 impl InstrBuilder for Bitop_builder {
@@ -95,16 +96,16 @@ impl Executable for Op_And {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_and_carry(cpu, data);
 
         let result = cpu.read_reg(rn) & op2;
 
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
-            UpdateApsr_C(cpu, data.update_carry);
+            UpdateApsr_C(cpu, carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
@@ -118,13 +119,13 @@ impl Executable for Op_Orr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_and_carry(cpu, data);
         let result = cpu.read_reg(rn) | op2;
         cpu.write_reg(rd, result);
         if data.update_flags() {
-            UpdateApsr_C(cpu, data.update_carry);
+            UpdateApsr_C(cpu, carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
@@ -138,14 +139,14 @@ impl Executable for Op_Bic {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_and_carry(cpu, data);
         let result = cpu.read_reg(rn) & !op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
-            UpdateApsr_C(cpu, data.update_carry);
+            UpdateApsr_C(cpu, carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
@@ -159,14 +160,14 @@ impl Executable for Op_Orn {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_and_carry(cpu, data);
         let result = cpu.read_reg(rn) | !op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
-            UpdateApsr_C(cpu, data.update_carry);
+            UpdateApsr_C(cpu, carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
@@ -180,14 +181,14 @@ impl Executable for Op_Eor {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_and_carry(cpu, data);
         let result = cpu.read_reg(rn) ^ op2;
         cpu.write_reg(rd, result);
 
         if data.update_flags() {
-            UpdateApsr_C(cpu, data.update_carry);
+            UpdateApsr_C(cpu, carry);
             UpdateApsr_Z(cpu, result);
             UpdateApsr_N(cpu, result);
         }
@@ -196,14 +197,107 @@ impl Executable for Op_Eor {
 }
 
 pub struct OpBitResolver;
-impl crate::opcodes::opcode::OperandResolver for OpBitResolver {
-    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (rd, rn, op2) = crate::opcodes::opcode::Operand2_resolver(cpu, data);
-        data.transed_operands.reserve(3);
-        data.transed_operands.push(rd);
-        data.transed_operands.push(rn);
-        data.transed_operands.push(op2);
-        op2
+impl OperandResolver for OpBitResolver {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let arch_detail = if let capstone::arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
+            arm
+        } else {
+            panic!("ArmOpcode has invalid detail");
+        };
+        let ops: Vec<_> = arch_detail.operands().collect();
+
+        let mut rd = 0;
+        let mut rn = 0;
+
+        if ops.len() == 3 {
+            if let ArmOperandType::Reg(r) = ops[0].op_type {
+                rd = data.resolve_reg(r);
+            }
+            if let ArmOperandType::Reg(r) = ops[1].op_type {
+                rn = data.resolve_reg(r);
+            }
+        } else if ops.len() == 2 {
+            if let ArmOperandType::Reg(r) = ops[0].op_type {
+                rd = data.resolve_reg(r);
+                rn = rd;
+            }
+        }
+
+        data.arm_operands.rd = rd;
+        data.arm_operands.rn = rn;
+        data.arm_operands.op2 = ops.last().cloned();
+
+        rd
+    }
+}
+
+fn resolve_op2_and_carry(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> (u32, u8) {
+    let current_c = ((cpu.read_apsr() >> 29) & 1) as u8;
+    let Some(op2) = &data.arm_operands.op2 else {
+        return (0, current_c);
+    };
+
+    match op2.op_type {
+        ArmOperandType::Reg(reg) => {
+            let value = cpu.read_reg(data.resolve_reg(reg));
+            op_shift_match(op2.shift, value, current_c)
+        }
+        ArmOperandType::Imm(imm) => (imm as u32, current_c),
+        _ => (0, current_c),
+    }
+}
+
+fn op_shift_match(shift: ArmShift, value: u32, current_c: u8) -> (u32, u8) {
+    match shift {
+        ArmShift::Lsl(amount) => match amount {
+            0 => (value, current_c),
+            1..=31 => {
+                let carry = ((value >> (32 - amount)) & 1) as u8;
+                (value.wrapping_shl(amount), carry)
+            }
+            32 => (0, (value & 1) as u8),
+            _ => (0, 0),
+        },
+        ArmShift::Lsr(amount) => match amount {
+            0 => (value, current_c),
+            1..=31 => {
+                let carry = ((value >> (amount - 1)) & 1) as u8;
+                (value >> amount, carry)
+            }
+            32 => (0, (value >> 31) as u8),
+            _ => (0, 0),
+        },
+        ArmShift::Asr(amount) => match amount {
+            0 => (value, current_c),
+            1..=31 => {
+                let carry = ((value >> (amount - 1)) & 1) as u8;
+                (((value as i32) >> amount) as u32, carry)
+            }
+            _ => {
+                let carry = ((value >> 31) & 1) as u8;
+                let result = if (value as i32) < 0 { 0xFFFF_FFFF } else { 0 };
+                (result, carry)
+            }
+        },
+        ArmShift::Ror(amount) => {
+            if amount == 0 {
+                (value, current_c)
+            } else {
+                let shift_mod = amount % 32;
+                if shift_mod == 0 {
+                    (value, (value >> 31) as u8)
+                } else {
+                    let result = value.rotate_right(shift_mod);
+                    (result, ((result >> 31) & 1) as u8)
+                }
+            }
+        }
+        ArmShift::Rrx(_) => {
+            let carry = (value & 1) as u8;
+            let result = (value >> 1) | ((current_c as u32) << 31);
+            (result, carry)
+        }
+        _ => (value, current_c),
     }
 }
 

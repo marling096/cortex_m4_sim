@@ -1,8 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, MatchFn, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
-    UpdateApsr_V, UpdateApsr_Z, check_condition, op2_imm_match, op2_reg_match,
+    ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
+    UpdateApsr_Z, check_condition, resolve_op2_runtime,
 };
 use capstone::arch::arm::ArmOperandType;
 
@@ -86,13 +86,25 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpCalculateResolver;
 impl OperandResolver for OpCalculateResolver {
-    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (rd, rn, op2) = Operand2_resolver(cpu, data);
-        data.transed_operands.reserve(3);
-        data.transed_operands.push(rd);
-        data.transed_operands.push(rn);
-        data.transed_operands.push(op2);
-        op2
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let rd = match data.get_operand(0) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        let rn = match data.get_operand(1) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => rd,
+            },
+            None => rd,
+        };
+        data.arm_operands.rd = rd;
+        data.arm_operands.rn = rn;
+        data.arm_operands.op2 = data.get_operand(2).or_else(|| data.get_operand(1));
+        rd
     }
 }
 
@@ -105,9 +117,9 @@ impl Executable for Op_Add {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_add_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -119,9 +131,9 @@ impl Executable for Op_Adc {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_adc_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -133,9 +145,9 @@ impl Executable for Op_Sub {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_sub_core(cpu, data, rd, rn, op2);
         // print!("SUB: Rn={:#X}, Op2={:#X}\n", cpu.read_reg(rn), op2);
         // print!("SUB Result: {:#X}\n", cpu.read_reg(rd));
@@ -149,9 +161,9 @@ impl Executable for Op_Sbc {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_sbc_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }
@@ -163,9 +175,9 @@ impl Executable for Op_Rsb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rn = data.transed_operands.get(1).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(2).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_rsb_core(cpu, data, rd, rn, op2);
         if rd == 15 { 0 } else { data.size() }
     }

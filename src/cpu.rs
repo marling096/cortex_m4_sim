@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::vec;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -19,13 +20,37 @@ pub struct Cpu {
     pub ram: Vec<u8>,   // 模拟 SRAM (例如 128KB)
     pub registers: Registers,
 
-    pub current_pc: u32, // 当前 指令地址
-
     pub next_pc: u32, // 预取的下一条指令地址
 
     pub peripheral_bus: RefCell<Bus>,
 
     pub ppb: RefCell<Bus>,
+
+    exec_profile: RefCell<CpuExecProfile>,
+    exec_op_stats: RefCell<BTreeMap<String, OpExecStat>>,
+    profiling_enabled: bool,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct CpuExecProfile {
+    pub step_calls: u64,
+    pub execute_calls: u64,
+    pub pipeline_stall_count: u64,
+
+    pub op_exec_duration: std::time::Duration,
+    pub update_pc_duration: std::time::Duration,
+
+    pub mem_read_count: u64,
+    pub mem_write_count: u64,
+    pub mem_read_duration: std::time::Duration,
+    pub mem_write_duration: std::time::Duration,
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct OpExecStat {
+    pub calls: u64,
+    pub total_duration: std::time::Duration,
+    pub max_duration: std::time::Duration,
 }
 struct Registers {
     reg: [u32; 16], // R0 - R15    // 应用程序状态寄存器 (xPSR 的一部分)
@@ -35,21 +60,12 @@ struct Registers {
 
 struct Cpu_pipeline {
     remain_cycles: u32,
-    phase: Phase,
-}
-
-#[derive(Copy, Clone)]
-enum Phase {
-    Fetch,
-    Decode,
-    Execute,
 }
 
 impl Cpu_pipeline {
     fn new() -> Cpu_pipeline {
         Cpu_pipeline {
             remain_cycles: 0,
-            phase: Phase::Fetch,
         }
     }
 }
@@ -183,11 +199,38 @@ impl Cpu {
                 apsr: 0,
                 is_msp: true,
             },
-            current_pc: 0,
             next_pc: 0,
             peripheral_bus: RefCell::new(peripheral_bus),
             ppb: RefCell::new(ppb),
+            exec_profile: RefCell::new(CpuExecProfile::default()),
+            exec_op_stats: RefCell::new(BTreeMap::new()),
+            profiling_enabled: true,
         }
+    }
+
+    pub fn set_profiling_enabled(&mut self, enabled: bool) {
+        self.profiling_enabled = enabled;
+        if !enabled {
+            *self.exec_profile.borrow_mut() = CpuExecProfile::default();
+            self.exec_op_stats.borrow_mut().clear();
+        }
+    }
+
+    pub fn is_profiling_enabled(&self) -> bool {
+        self.profiling_enabled
+    }
+
+    pub fn take_exec_profile(&mut self) -> CpuExecProfile {
+        let snapshot = *self.exec_profile.borrow();
+        *self.exec_profile.borrow_mut() = CpuExecProfile::default();
+        snapshot
+    }
+
+    pub fn take_exec_op_stats(&mut self) -> Vec<(String, OpExecStat)> {
+        let mut stats = self.exec_op_stats.borrow_mut();
+        let snapshot = stats.iter().map(|(mnemonic, stat)| (mnemonic.clone(), *stat)).collect();
+        stats.clear();
+        snapshot
     }
 
     pub fn reset_handler(&mut self, reset_vector: u32) {
@@ -200,8 +243,14 @@ impl Cpu {
         self.registers.is_msp = true;
     }
 
+    #[inline(always)]
     fn read32(&self, addr: u32) -> u32 {
-        match addr {
+        let start = if self.profiling_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
+        let value = match addr {
             // 1. 别名区域 (Aliased region)
             // 将 0x0000_0000 起始的访问重定向到 Flash
             0x0000_0000..=0x0007_FFFF => {
@@ -233,11 +282,26 @@ impl Cpu {
                 // 触发仿真异常：访问了未映射的地址
                 panic!("Memory Read Error: Unmapped address 0x{:08X}", addr);
             }
+        };
+
+        if let Some(start) = start {
+            let elapsed = start.elapsed();
+            let mut profile = self.exec_profile.borrow_mut();
+            profile.mem_read_count += 1;
+            profile.mem_read_duration += elapsed;
         }
+
+        value
     }
 
     /// 核心写入函数：处理不同区域的写入权限
+    #[inline(always)]
     fn write32(&mut self, addr: u32, val: u32) {
+        let start = if self.profiling_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         match addr {
             // RAM 区域
             0x2000_0000..=0x3FFFFFFF => {
@@ -269,50 +333,86 @@ impl Cpu {
                 panic!("Memory Write Error: Unmapped address 0x{:08X}", addr);
             }
         }
+
+        if let Some(start) = start {
+            let elapsed = start.elapsed();
+            let mut profile = self.exec_profile.borrow_mut();
+            profile.mem_write_count += 1;
+            profile.mem_write_duration += elapsed;
+        }
     }
 
     // changed: make step take &mut self and avoid borrow conflicts
+    #[inline(always)]
     pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) {
-        
-        if self.Cpu_pipeline.remain_cycles > 0 {
-            self.Cpu_pipeline.remain_cycles -= 1;
+        if !self.profiling_enabled {
+            if self.Cpu_pipeline.remain_cycles > 0 {
+                self.Cpu_pipeline.remain_cycles -= 1;
+                return;
+            }
+
+            let pc_update = ins.op.exec.execute(&mut *self, &ins.data);
+            self.update_pc_with_current(current_pc, pc_update);
+            self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
             return;
         }
-        self.Cpu_pipeline.phase = Phase::Execute;
-        let phase = self.Cpu_pipeline.phase;
-        let start = Instant::now();
-        match phase {
-            Phase::Execute => {
-                self.Cpu_pipeline.phase = Phase::Execute;
-                self.current_pc = current_pc;
-                let pc_update = ins.op.exec.execute(&mut *self, &ins.data);
-                // print!(
-                //     "Executed instruction {} at 0x{:08X}, PC update: 0x{:X}\n",
-                //     ins.data.mnemonic(),
-                //     current_pc,
-                //     pc_update
-                // );
-                self.update_pc(pc_update);
-                self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
-            }
-            _ => {
-                panic!("Invalid pipeline phase during execution");
-            }
+
+        self.exec_profile.borrow_mut().step_calls += 1;
+
+        if self.Cpu_pipeline.remain_cycles > 0 {
+            self.Cpu_pipeline.remain_cycles -= 1;
+            self.exec_profile.borrow_mut().pipeline_stall_count += 1;
+            return;
         }
-        let duration = start.elapsed();
-        // println!("Step execution time: {:?}", duration);
+        self.exec_profile.borrow_mut().execute_calls += 1;
+
+        let op_start = Instant::now();
+        let pc_update = ins.op.exec.execute(&mut *self, &ins.data);
+        let op_elapsed = op_start.elapsed();
+        self.exec_profile.borrow_mut().op_exec_duration += op_elapsed;
+        {
+            let mnemonic = ins.data.mnemonic().to_string();
+            let mut stats = self.exec_op_stats.borrow_mut();
+            let entry = stats.entry(mnemonic).or_default();
+            entry.calls += 1;
+            entry.total_duration += op_elapsed;
+            entry.max_duration = entry.max_duration.max(op_elapsed);
+        }
+
+        let update_start = Instant::now();
+        self.update_pc_with_current(current_pc, pc_update);
+        let update_elapsed = update_start.elapsed();
+        self.exec_profile.borrow_mut().update_pc_duration += update_elapsed;
+
+        self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
     }
 
+    #[inline(always)]
     pub fn peripheral_step(&mut self) {
         self.peripheral_bus.borrow_mut().tick();
         self.ppb.borrow_mut().tick();
     }
 
+    #[inline(always)]
     pub fn update_pc<'a>(&mut self, update: u32) {
         if update == 0 {
             self.next_pc = self.read_pc();
         } else {
-            self.next_pc = self.current_pc.wrapping_add(update);
+            self.next_pc = self.read_pc().wrapping_sub(4).wrapping_add(update);
         }
+    }
+
+    #[inline(always)]
+    fn update_pc_with_current(&mut self, current_pc: u32, update: u32) {
+        if update == 0 {
+            self.next_pc = self.read_pc();
+        } else {
+            self.next_pc = current_pc.wrapping_add(update);
+        }
+    }
+
+    #[inline(always)]
+    pub fn prefetch_next_pc(&mut self, current_pc: u32) {
+        self.registers.reg[15] = current_pc.wrapping_add(4);
     }
 }

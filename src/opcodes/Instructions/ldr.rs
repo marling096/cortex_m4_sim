@@ -1,9 +1,10 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand_resolver_multi, OperandResolver, check_condition,
+    ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
 };
 use capstone::arch::arm::ArmOperandType;
+use capstone::arch::DetailsArchInsn;
 
 pub struct Ldr_builder;
 impl InstrBuilder for Ldr_builder {
@@ -91,12 +92,8 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // opD{cond} Rt, Rt2, [Rn], #offset
 
 // Helpers for Memory Access
-fn read_u32(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
-    cpu.read_mem(addr)
-}
-
 fn read_u8(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
-    let word = cpu.read_mem((addr & !3));
+    let word = cpu.read_mem(addr & !3);
     let shift = (addr & 3) * 8;
     (word >> shift) & 0xFF
 }
@@ -107,29 +104,17 @@ fn read_u16(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
     (word >> shift) & 0xFFFF
 }
 
-fn write_u32(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
-    cpu.write_mem(addr, val);
-}
-
-fn write_u8(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
-    let aligned_addr = addr & !3;
-    let word = cpu.read_mem(aligned_addr);
-    let shift = (addr & 3) * 8;
-    let mask = !(0xFF << shift);
-    let new_word = (word & mask) | ((val & 0xFF) << shift);
-    cpu.write_mem(aligned_addr, new_word);
-}
-
-fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
-    let aligned_addr = addr & !3;
-    let word = cpu.read_mem(aligned_addr);
-    let shift = (addr & 2) * 8;
-    let mask = !(0xFFFF << shift);
-    let new_word = (word & mask) | ((val & 0xFFFF) << shift);
-    cpu.write_mem(aligned_addr, new_word);
-}
-
 // --- Address Resolution Helpers ---
+fn operand_resolver_multi_cached(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> (u32, u32) {
+    if data.arm_operands.mem_has_index || data.arm_operands.mem_writeback {
+        return operand_resolver_multi_runtime(cpu, data);
+    }
+
+    let rt = data.arm_operands.rd;
+    let base = cpu.read_reg(data.arm_operands.rn);
+    let addr = base.wrapping_add_signed(data.arm_operands.mem_disp);
+    (rt, addr)
+}
 
 // --- LDR ---
 pub struct Op_Ldr;
@@ -138,8 +123,7 @@ impl Executable for Op_Ldr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
-        let mut addr = data.transed_operands.get(1).copied().unwrap_or(0);
+        let (rt, mut addr) = operand_resolver_multi_cached(cpu, data);
         // data.op_writer();
         addr = addr & !3; // Align address to word boundary
         let val = cpu.read_mem(addr);
@@ -155,8 +139,7 @@ impl Executable for Op_Ldrb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
+        let (rt, addr) = operand_resolver_multi_cached(cpu, data);
         let val = read_u8(cpu, addr);
         cpu.write_reg(rt, val);
         if rt == 15 { 0 } else { data.size() }
@@ -169,8 +152,7 @@ impl Executable for Op_Ldrsb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
+        let (rt, addr) = operand_resolver_multi_cached(cpu, data);
         let val = read_u8(cpu, addr);
         let signed_val = (val as i8) as i32 as u32;
         cpu.write_reg(rt, signed_val);
@@ -184,8 +166,7 @@ impl Executable for Op_Ldrh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
+        let (rt, addr) = operand_resolver_multi_cached(cpu, data);
         let val = read_u16(cpu, addr);
         cpu.write_reg(rt, val);
         if rt == 15 { 0 } else { data.size() }
@@ -198,8 +179,7 @@ impl Executable for Op_Ldrsh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or(0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or(0);
+        let (rt, addr) = operand_resolver_multi_cached(cpu, data);
         let val = read_u16(cpu, addr);
         let signed_val = (val as i16) as i32 as u32;
         cpu.write_reg(rt, signed_val);
@@ -207,30 +187,47 @@ impl Executable for Op_Ldrsh {
     }
 }
 
-// --- LDRD ---
-
-pub struct Op_Ldrd;
-impl Executable for Op_Ldrd {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
-            return data.size();
-        }
-        // let (rt, rt2, addr) = Operand_resolver_multi(cpu, data);
-        // let val1 = cpu.read_mem(addr);
-        // let val2 = cpu.read_mem(addr.wrapping_add(4));
-        // cpu.write_reg(rt, val1);
-        // cpu.write_reg(rt2, val2);
-        data.size()
-    }
-}
-
 pub struct OpLdrResolver;
 impl OperandResolver for OpLdrResolver {
-    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
-        data.transed_operands.reserve(2);
-        data.transed_operands.push(rt);
-        data.transed_operands.push(addr);
-        addr
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let arch_detail = if let capstone::arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
+            arm
+        } else {
+            panic!("ArmOpcode has invalid detail");
+        };
+
+        let mut operands = arch_detail.operands();
+        let op_rt = operands.next().expect("missing rt operand");
+        let op_mem = operands.next().expect("missing mem operand");
+        let op3 = operands.next();
+
+        data.arm_operands.rd = match op_rt.op_type {
+            ArmOperandType::Reg(r) => data.resolve_reg(r),
+            _ => panic!("first operand is not a register"),
+        };
+
+        data.arm_operands.mem_has_index = false;
+        data.arm_operands.mem_writeback = data.writeback();
+        data.arm_operands.mem_post_index = op3.is_some();
+        data.arm_operands.mem_post_imm = 0;
+        data.arm_operands.mem_disp = 0;
+
+        match op_mem.op_type {
+            ArmOperandType::Mem(mem) => {
+                data.arm_operands.rn = data.resolve_reg(mem.base());
+                data.arm_operands.mem_disp = mem.disp();
+                data.arm_operands.mem_has_index = mem.index() != capstone::RegId::INVALID_REG;
+            }
+            _ => panic!("operand2 is not a memory operand"),
+        }
+
+        if let Some(op3) = op3 {
+            data.arm_operands.mem_post_imm = match op3.op_type {
+                ArmOperandType::Imm(imm) => imm,
+                _ => 0,
+            };
+        }
+
+        data.arm_operands.rd
     }
 }

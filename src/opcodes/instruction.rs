@@ -1,4 +1,3 @@
-use crate::context::CpuContext;
 use crate::opcodes::Instructions::adr::AdrBuilder;
 use crate::opcodes::Instructions::bitop::Bitop_builder;
 use crate::opcodes::Instructions::branch::Branch_builder;
@@ -18,10 +17,9 @@ use crate::opcodes::Instructions::stack::Stack_builder;
 use crate::opcodes::Instructions::stm::Stm_builder;
 use crate::opcodes::Instructions::str::Str_builder;
 use crate::opcodes::Instructions::tst::Tst_builder;
-use crate::opcodes::opcode::{ArmOpcode, CycleInfo, Executable, Opcode, check_condition};
+use crate::opcodes::opcode::{ArmOpcode, Opcode};
 
-use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use rustc_hash::FxHashMap;
 
 pub struct Cpu_Instruction<'a> {
@@ -49,7 +47,8 @@ impl<'a> Cpu_InstrTable<'a> {
         }
     }
     
-    pub fn add_instruction(&mut self, instr: Cpu_Instruction<'a>) {
+    pub fn add_instruction(&mut self, mut instr: Cpu_Instruction<'a>) {
+        instr.op.operand_resolver.resolve(&mut instr.data);
         self.table.insert(instr.data.address(), instr);
     }
 

@@ -1,10 +1,10 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, Operand2_resolver,
-    UpdateApsr_C, UpdateApsr_N, UpdateApsr_Z, check_condition,
+    ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    UpdateApsr_Z, check_condition, resolve_op2_runtime,
 };
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
+use capstone::arch::arm::ArmOperandType;
 
 // TST{cond} Rn, Operand2
 // TEQ{cond} Rn, Operand2
@@ -16,14 +16,14 @@ impl Executable for Op_Tst {
             return data.size();
         }
 
-        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_runtime(cpu, data);
         let rn_data = cpu.read_reg(rn);
         let result = rn_data & op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
-        UpdateApsr_C(cpu, data.update_carry);
+        UpdateApsr_C(cpu, carry);
 
         data.size()
     }
@@ -36,14 +36,14 @@ impl Executable for Op_Teq {
             return data.size();
         }
 
-        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
-        let op2 = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rn = data.arm_operands.rn;
+        let (op2, carry) = resolve_op2_runtime(cpu, data);
         let rn_data = cpu.read_reg(rn);
         let result = rn_data ^ op2;
 
         UpdateApsr_N(cpu, result);
         UpdateApsr_Z(cpu, result);
-        UpdateApsr_C(cpu, data.update_carry);
+        UpdateApsr_C(cpu, carry);
 
         data.size()
     }
@@ -51,12 +51,17 @@ impl Executable for Op_Teq {
 
 pub struct OpTst_resolver;
 impl OperandResolver for OpTst_resolver {
-    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (_rd, rn, op2) = Operand2_resolver(cpu, data);
-        data.transed_operands.reserve(2);
-        data.transed_operands.push(rn);
-        data.transed_operands.push(op2);
-        op2
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let rn = match data.get_operand(0) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        data.arm_operands.rn = rn;
+        data.arm_operands.op2 = data.get_operand(1);
+        rn
     }
 }
 

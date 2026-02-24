@@ -1,7 +1,6 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
-use capstone::arch::arm::ArmInsn;
 
 pub struct Op_It;
 impl Executable for Op_It {
@@ -38,7 +37,7 @@ pub fn add_it_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpItResolver;
 impl OperandResolver for OpItResolver {
-    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
         // IT has no runtime operands for this emulator
         0
     }

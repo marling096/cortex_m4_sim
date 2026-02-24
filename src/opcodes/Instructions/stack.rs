@@ -83,8 +83,6 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         return data.size();
     }
     data.op_writer();
-    let lr = cpu.read_lr(0);
-    // print!("LR before POP:0x{:08X}\n", lr);
     let mut sp = cpu.read_reg(13);
     // POP: full-descending stack, so pop is post-increment
     let regs: Vec<u32> = data.transed_operands.iter().copied().collect();
@@ -103,7 +101,7 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
 
 pub struct OpStackResolver;
 impl OperandResolver for OpStackResolver {
-    fn resolve(&self, _cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
         let mut regs: Vec<u32> = Vec::new();
         for op in data.operands() {
             if let capstone::arch::arm::ArmOperandType::Reg(reg_id) = op.op_type {

@@ -280,7 +280,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
     }
 
-    let shared_freq = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(72_000_000));
+    let shared_freq = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(8_000_000));
     let gpioc = Gpio::new(0x4001_1000, 0x4001_13FF);
     let rcc = Rcc::new(0x4002_0000, 0x4002_1024, shared_freq.clone());
     let flash_interface = Flash::new(0x40022000, 0x4002201C);

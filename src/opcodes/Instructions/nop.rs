@@ -41,7 +41,7 @@ impl Executable for Op_Nop {
 
 pub struct OpNopResolver;
 impl OperandResolver for OpNopResolver {
-    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
         // NOP has no operands
         0
     }

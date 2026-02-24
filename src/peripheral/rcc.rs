@@ -23,6 +23,9 @@ pub struct Rcc {
 }
 
 impl Rcc {
+    const HSI_FREQ: u32 = 16_000_000;
+    const HSE_FREQ: u32 = 8_000_000;
+
     pub fn new(start: u32, end: u32, sys_clock: Arc<AtomicU32>) -> Self {
         Self {
             start,
@@ -30,6 +33,101 @@ impl Rcc {
             sys_clock,
             ..Default::default()
         }
+    }
+
+    fn is_hsi_ready(&self) -> bool {
+        (self.cr & (1 << 0)) != 0 && (self.cr & (1 << 1)) != 0
+    }
+
+    fn is_hse_ready(&self) -> bool {
+        (self.cr & (1 << 16)) != 0 && (self.cr & (1 << 17)) != 0
+    }
+
+    fn is_pll_ready(&self) -> bool {
+        (self.cr & (1 << 24)) != 0 && (self.cr & (1 << 25)) != 0
+    }
+
+    fn pll_input_clock(&self) -> Option<u32> {
+        let pll_src_hse = (self.cfgr & (1 << 16)) != 0;
+        if pll_src_hse {
+            if !self.is_hse_ready() {
+                return None;
+            }
+
+            let hse_div2 = (self.cfgr & (1 << 17)) != 0;
+            if hse_div2 {
+                Some(Self::HSE_FREQ / 2)
+            } else {
+                Some(Self::HSE_FREQ)
+            }
+        } else if self.is_hsi_ready() {
+            Some(Self::HSI_FREQ / 2)
+        } else {
+            None
+        }
+    }
+
+    fn pll_multiplier(&self) -> u32 {
+        let mul_bits = ((self.cfgr >> 18) & 0x0f) as u8;
+        match mul_bits {
+            0b0000..=0b1101 => (mul_bits as u32) + 2,
+            0b1110 | 0b1111 => 16,
+            _ => 2,
+        }
+    }
+
+    fn pll_clock(&self) -> Option<u32> {
+        if !self.is_pll_ready() {
+            return None;
+        }
+
+        let pll_in = self.pll_input_clock()?;
+        Some(pll_in.saturating_mul(self.pll_multiplier()))
+    }
+
+    fn compute_sys_clock(&self) -> u32 {
+        let clock_src = (self.cfgr >> 2) & 0x03;
+        match clock_src {
+            0b00 => {
+                if self.is_hsi_ready() {
+                    Self::HSI_FREQ
+                } else {
+                    0
+                }
+            }
+            0b01 => {
+                if self.is_hse_ready() {
+                    Self::HSE_FREQ
+                } else if self.is_hsi_ready() {
+                    Self::HSI_FREQ
+                } else {
+                    0
+                }
+            }
+            0b10 => {
+                if let Some(pll_clk) = self.pll_clock() {
+                    pll_clk
+                } else if self.is_hse_ready() {
+                    Self::HSE_FREQ
+                } else if self.is_hsi_ready() {
+                    Self::HSI_FREQ
+                } else {
+                    0
+                }
+            }
+            _ => {
+                if self.is_hsi_ready() {
+                    Self::HSI_FREQ
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    fn update_sys_clock(&self) {
+        let freq = self.compute_sys_clock();
+        self.sys_clock.store(freq, Ordering::Relaxed);
     }
 }
 
@@ -86,18 +184,7 @@ impl Peripheral for Rcc {
                     new_val &= !(1 << 25);
                 }
                 self.cr = new_val;
-                // println!("cr_val {}", self.cr);
-
-                // 更新主频逻辑 (简化示例)
-                // 实际应根据 PLL/HSE 配置计算
-                let new_freq = if (self.cr & (1 << 24)) != 0 {
-                    168_000_000 // PLL On -> 168MHz (Example)
-                } else if (self.cr & (1 << 16)) != 0 {
-                    8_000_000   // HSE On -> 8MHz
-                } else {
-                    16_000_000  // HSI On -> 16MHz (Default)
-                };
-                self.sys_clock.store(new_freq, Ordering::Relaxed);
+                self.update_sys_clock();
             }
             0x04 => {
                 let mut new_val = val;
@@ -105,6 +192,8 @@ impl Peripheral for Rcc {
                 new_val &= !(0x03 << 2);
                 new_val |= sw << 2;
                 self.cfgr = new_val;
+
+                self.update_sys_clock();
             }
             0x08 => self.cir = val,
             0x0C => self.apb2rstr = val,

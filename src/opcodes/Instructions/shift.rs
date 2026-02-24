@@ -1,9 +1,10 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand2_resolver, OperandResolver, UpdateApsr_C, UpdateApsr_N,
+    ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
     UpdateApsr_Z, check_condition,
 };
+use capstone::arch::arm::ArmOperandType;
 
 pub struct Shiift_builder;
 impl InstrBuilder for Shiift_builder {
@@ -84,14 +85,26 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpShiftResolver;
 impl OperandResolver for OpShiftResolver {
-    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
-        // Delegate complex operand parsing to the shared Operand2_resolver
-        let (rd, rm, val) = Operand2_resolver(cpu, data);
-        data.transed_operands.reserve(3);
-        data.transed_operands.push(rd);
-        data.transed_operands.push(rm);
-        data.transed_operands.push(val);
-        val
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        let rd = match data.get_operand(0) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        let rm = match data.get_operand(1) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+
+        data.arm_operands.rd = rd;
+        data.arm_operands.rn = rm;
+        data.arm_operands.op2 = data.get_operand(2);
+        rd
     }
 }
 
@@ -106,9 +119,9 @@ impl Executable for Op_Asr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
-        let mut rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF; // Only bottom byte used
+        let rd = data.arm_operands.rd;
+        let rm = data.arm_operands.rn;
+        let rs_val = resolve_shift_amount(cpu, data);
         let rm_val = cpu.read_reg(rm);
 
         let result = if rs_val == 0 {
@@ -147,9 +160,9 @@ impl Executable for Op_Lsl {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
-        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
+        let rd = data.arm_operands.rd;
+        let rm = data.arm_operands.rn;
+        let rs_val = resolve_shift_amount(cpu, data);
         let rm_val = cpu.read_reg(rm);
 
         let result = if rs_val >= 32 { 0 } else { rm_val.wrapping_shl(rs_val) };
@@ -179,9 +192,9 @@ impl Executable for Op_Lsr {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
-        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
+        let rd = data.arm_operands.rd;
+        let rm = data.arm_operands.rn;
+        let rs_val = resolve_shift_amount(cpu, data);
         let rm_val = cpu.read_reg(rm);
 
         let result = if rs_val >= 32 { 0 } else { rm_val >> rs_val };
@@ -212,9 +225,9 @@ impl Executable for Op_Ror {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
-        let rs_val = data.transed_operands.get(2).copied().unwrap_or(0) & 0xFF;
+        let rd = data.arm_operands.rd;
+        let rm = data.arm_operands.rn;
+        let rs_val = resolve_shift_amount(cpu, data);
         let rm_val = cpu.read_reg(rm);
 
         let shift = rs_val & 31;
@@ -240,8 +253,8 @@ impl Executable for Op_Rrx {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let rm = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let rm = data.arm_operands.rn;
         let rm_val = cpu.read_reg(rm);
         let carry_in = (cpu.read_apsr() >> 29) & 1;
 
@@ -255,5 +268,16 @@ impl Executable for Op_Rrx {
             UpdateApsr_C(cpu, carry as u8);
         }
         if rd == 15 { 0 } else { data.size() }
+    }
+}
+
+fn resolve_shift_amount(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    match &data.arm_operands.op2 {
+        Some(op) => match op.op_type {
+            ArmOperandType::Imm(imm) => (imm as u32) & 0xFF,
+            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)) & 0xFF,
+            _ => 0,
+        },
+        None => 0,
     }
 }

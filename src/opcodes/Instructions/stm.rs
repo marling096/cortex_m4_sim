@@ -64,7 +64,7 @@ pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpStm_resolver;
 impl OperandResolver for OpStm_resolver {
-    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
         let operands: Vec<_> = data.operands().collect();
         let base_reg = operands.get(0).expect("missing base register");
 

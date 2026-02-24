@@ -1,8 +1,9 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand_resolver_two, OperandResolver, check_condition,
+    ArmOpcode, Executable, OperandResolver, check_condition,
 };
+use capstone::arch::arm::ArmOperandType;
 
 pub struct Compare_branch_builder;
 impl InstrBuilder for Compare_branch_builder {
@@ -52,9 +53,8 @@ impl Executable for Op_Cbz {
             return data.size();
         }
 
-        // CBZ Rn, label
-        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
-        let label = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rn = data.arm_operands.rn;
+        let label = resolve_compare_branch_target(cpu, data);
 
         let val = cpu.read_reg(rn);
         // print!("CBZ R{}:0x{:08X}, label 0x{:08X}\n", rn, val, label);
@@ -74,9 +74,8 @@ impl Executable for Op_Cbnz {
             return data.size();
         }
 
-        // CBNZ Rn, label
-        let rn = data.transed_operands.get(0).copied().unwrap_or(0);
-        let label = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rn = data.arm_operands.rn;
+        let label = resolve_compare_branch_target(cpu, data);
 
         let val = cpu.read_reg(rn);
         if val != 0 {
@@ -90,11 +89,26 @@ impl Executable for Op_Cbnz {
 
 pub struct OpCompareBranchResolver;
 impl OperandResolver for OpCompareBranchResolver {
-    fn resolve(&self, cpu: &mut dyn crate::context::CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (rn, label) = Operand_resolver_two(cpu, data);
-        data.transed_operands.reserve(2);
-        data.transed_operands.push(rn);
-        data.transed_operands.push(label);
-        label
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.rn = match data.get_operand(0) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        data.arm_operands.op2 = data.get_operand(1);
+        data.arm_operands.rn
+    }
+}
+
+fn resolve_compare_branch_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    match &data.arm_operands.op2 {
+        Some(op) => match op.op_type {
+            ArmOperandType::Imm(imm) => imm as u32,
+            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)),
+            _ => 0,
+        },
+        None => 0,
     }
 }

@@ -1,7 +1,8 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{ArmOpcode, Executable, Operand_resolver_multi, OperandResolver, check_condition};
-use capstone::arch::arm::ArmOperandType;
+use crate::opcodes::opcode::{
+    ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
+};
 
 pub struct Str_builder;
 impl InstrBuilder for Str_builder {
@@ -62,26 +63,6 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // opD{cond} Rt, Rt2, [Rn], #offset
 
 // Helpers for Memory Access
-fn read_u32(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
-    cpu.read_mem(addr)
-}
-
-fn read_u8(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
-    let word = cpu.read_mem((addr & !3));
-    let shift = (addr & 3) * 8;
-    (word >> shift) & 0xFF
-}
-
-fn read_u16(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
-    let word = cpu.read_mem(addr & !3);
-    let shift = (addr & 2) * 8;
-    (word >> shift) & 0xFFFF
-}
-
-fn write_u32(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
-    cpu.write_mem(addr, val);
-}
-
 fn write_u8(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
     let aligned_addr = addr & !3;
     let word = cpu.read_mem(aligned_addr);
@@ -109,8 +90,7 @@ impl Executable for Op_Str {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
-        let mut addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
+        let (rt, mut addr) = operand_resolver_multi_runtime(cpu, data);
         addr  =addr & !3; // Align address to word boundary
         let val = cpu.read_reg(rt);
         // print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
@@ -126,22 +106,7 @@ impl Executable for Op_Strb {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
-        let val = cpu.read_reg(rt) & 0xFF;
-        write_u8(cpu, addr, val);
-        data.size()
-    }
-}
-
-pub struct Op_Strsb;
-impl Executable for Op_Strsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
-            return data.size();
-        }
-        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
+        let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
         data.size()
@@ -154,22 +119,7 @@ impl Executable for Op_Strh {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
-        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
-        let val = cpu.read_reg(rt) & 0xFFFF;
-        write_u16(cpu, addr, val);
-        data.size()
-    }
-}
-
-pub struct Op_Strsh;
-impl Executable for Op_Strsh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
-            return data.size();
-        }
-        let rt = data.transed_operands.get(0).copied().unwrap_or_else(||0);
-        let addr = data.transed_operands.get(1).copied().unwrap_or_else(||0);
+        let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
         data.size()
@@ -178,11 +128,7 @@ impl Executable for Op_Strsh {
 
 pub struct OpStrResolver;
 impl OperandResolver for OpStrResolver {
-    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
-        let (rt, addr) = Operand_resolver_multi(cpu, data);
-        data.transed_operands.reserve(2);
-        data.transed_operands.push(rt);
-        data.transed_operands.push(addr);
-        addr
+    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
+        0
     }
 }

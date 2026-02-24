@@ -39,7 +39,7 @@ impl Executable for Op_Hint {
 
 pub struct OpHintResolver;
 impl OperandResolver for OpHintResolver {
-    fn resolve(&self, _cpu: &mut dyn crate::context::CpuContext, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
         // Hint has no operands; nothing to push.
         0
     }

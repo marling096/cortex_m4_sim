@@ -1,8 +1,9 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, Operand_resolver_two, OperandResolver, check_condition,
+    ArmOpcode, Executable, OperandResolver, check_condition,
 };
+use capstone::arch::arm::ArmOperandType;
 
 // ADR{cond} Rd, label
 pub struct OpAdr;
@@ -12,9 +13,8 @@ impl Executable for OpAdr {
             return data.size();
         }
 
-        // Use safe access to avoid panics if resolver failed to populate operands
-        let rd = data.transed_operands.get(0).copied().unwrap_or(0);
-        let address = data.transed_operands.get(1).copied().unwrap_or(0);
+        let rd = data.arm_operands.rd;
+        let address = resolve_adr_target(cpu, data);
 
         cpu.write_reg(rd, address);
 
@@ -25,13 +25,29 @@ impl Executable for OpAdr {
 pub struct OpAdrResolver;
 impl OperandResolver for OpAdrResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let (rd, label) = Operand_resolver_two(cpu, data);
+        let rd = match data.get_operand(0) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        data.arm_operands.rd = rd;
+        data.arm_operands.rn = 0;
+        data.arm_operands.op2 = data.get_operand(1);
 
-        data.transed_operands.reserve(2);
-        data.transed_operands.push(rd);
-        data.transed_operands.push(label);
+        rd
+    }
+}
 
-        label
+fn resolve_adr_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    match &data.arm_operands.op2 {
+        Some(op2) => match op2.op_type {
+            ArmOperandType::Imm(imm) => imm as u32,
+            ArmOperandType::Reg(r) => cpu.read_reg(data.resolve_reg(r)),
+            _ => 0,
+        },
+        None => 0,
     }
 }
 

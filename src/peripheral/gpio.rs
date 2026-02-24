@@ -28,16 +28,6 @@ impl Gpio {
             ..Default::default()
         }
     }
-
-    /// Helper to update IDR based on ODR for output pins,
-    /// or for external simulation to call to set input pins.
-    pub fn set_pin_level(&mut self, pin: usize, high: bool) {
-        if high {
-            self.idr |= 1 << pin;
-        } else {
-            self.idr &= !(1 << pin);
-        }
-    }
 }
 
 impl Peripheral for Gpio {
@@ -91,12 +81,12 @@ impl Peripheral for Gpio {
     }
 
     fn tick(&mut self) {
-        if (self.odr >> 13) & 1 != 0 {
-            println!("gpio c13  on");
-        } else {
-            if (self.odr >> 13) & 1 == 0 {
-                println!("gpio c13  off");
-            }
-        }
+        // if (self.odr >> 13) & 1 != 0 {
+        //     println!("gpio c13  on");
+        // } else {
+        //     if (self.odr >> 13) & 1 == 0 {
+        //         println!("gpio c13  off");
+        //     }
+        // }
     }
 }

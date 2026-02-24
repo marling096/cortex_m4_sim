@@ -1,9 +1,9 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, Opcode, Operand_resolver, OperandResolver, check_condition,
+    ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, check_condition,
 };
-use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmShift};
+use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
 pub struct Branch_builder;
 impl InstrBuilder for Branch_builder {
@@ -81,8 +81,7 @@ impl Executable for Op_B {
             return data.size();
         }
 
-        // B label (resolved by resolver into transed_operands)
-        let label = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
+        let label = resolve_branch_target(cpu, data);
         cpu.write_pc(label);
         0
     }
@@ -95,8 +94,7 @@ impl Executable for Op_Bl {
             return data.size();
         }
 
-        // BL label
-        let label = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
+        let label = resolve_branch_target(cpu, data);
         let pc = cpu.read_pc();
         let return_addr = pc;
         cpu.write_lr(return_addr | 1);
@@ -112,8 +110,7 @@ impl Executable for Op_Bx {
             return data.size();
         }
 
-        // BX Rm
-        let val = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
+        let val = resolve_branch_target(cpu, data);
         let target = val & !1;
         cpu.write_pc(target);
         0
@@ -127,8 +124,7 @@ impl Executable for Op_Blx {
             return data.size();
         }
 
-        // BLX Rm
-        let val = data.transed_operands.get(0).copied().unwrap_or_else(|| Operand_resolver(cpu, data));
+        let val = resolve_branch_target(cpu, data);
         let pc = cpu.read_pc();
         let insn_len = data.insn.len() as u32;
         let return_addr = pc.wrapping_sub_signed(4).wrapping_add(insn_len);
@@ -142,20 +138,27 @@ impl Executable for Op_Blx {
 
 pub struct OpBranchResolver;
 impl OperandResolver for OpBranchResolver {
-    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
-        let val = Operand_resolver(cpu, data);
-        data.transed_operands.reserve(1);
-        data.transed_operands.push(val);
-        val
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.op2 = data.get_operand(0);
+        0
     }
 }
 
 pub struct OpBxResolver;
 impl OperandResolver for OpBxResolver {
-    fn resolve(&self, cpu: &mut dyn CpuContext, data: &mut ArmOpcode) -> u32 {
-        let val = Operand_resolver(cpu, data);
-        data.transed_operands.reserve(1);
-        data.transed_operands.push(val);
-        val
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.op2 = data.get_operand(0);
+        0
+    }
+}
+
+fn resolve_branch_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    match &data.arm_operands.op2 {
+        Some(op) => match op.op_type {
+            ArmOperandType::Imm(imm) => imm as u32,
+            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)),
+            _ => 0,
+        },
+        None => 0,
     }
 }
