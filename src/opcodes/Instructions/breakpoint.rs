@@ -21,7 +21,7 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Bkpt,
+            exec: Op_Bkpt::execute,
             operand_resolver: &OpBkptResolver,
             adjust_cycles: None,
         },
@@ -33,7 +33,7 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Bkpt;
 impl Executable for Op_Bkpt {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         // BKPT may be unconditional but follow common pattern
         let imm = resolve_bkpt_imm(cpu, data);
         breakpoint_imm(cpu, imm);

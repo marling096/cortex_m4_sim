@@ -10,7 +10,7 @@ pub struct Opcode {
 
     pub cycles: CycleInfo,
 
-    pub exec: &'static dyn Executable,
+    pub exec: fn(&mut crate::cpu::Cpu, &ArmOpcode) -> u32,
     // pub operands: ArmOpcode<'a>,
     pub operand_resolver: &'static dyn OperandResolver,
     pub adjust_cycles: Option<CycleAdjustFn>,
@@ -23,7 +23,7 @@ impl Opcode {
         length: u32,
         cycles: CycleInfo,
 
-        exec: &'static dyn Executable,
+        exec: fn(&mut crate::cpu::Cpu, &ArmOpcode) -> u32,
         operand_resolver: &'static dyn OperandResolver,
         adjust_cycles: Option<CycleAdjustFn>,
     ) -> Opcode {
@@ -42,7 +42,7 @@ impl Opcode {
 }
 
 pub trait Executable {
-    fn execute(&self, cpu: &mut dyn crate::context::CpuContext, ops: &ArmOpcode) -> u32;
+    fn execute(cpu: &mut crate::cpu::Cpu, ops: &ArmOpcode) -> u32;
 }
 
 pub trait OperandResolver {
@@ -150,66 +150,6 @@ impl<'a> ArmOpcode<'a> {
         }
     }
 
-    pub fn trans_operands(&mut self) {
-        let start = Instant::now();
-        // 解构 self 以避免借用冲突
-        let detail = &self.detail;
-        let cs = &self.cs;
-
-        let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = detail.arch_detail() {
-            arm
-        } else {
-            panic!("ArmOpcode has invalid detail");
-        };
-
-        // Helper closure to resolve register to u32
-        let get_reg_val = |reg: capstone::RegId| -> Option<u32> {
-            if let Some(reg_name) = cs.reg_name(reg) {
-                if reg_name.starts_with('r') {
-                    if let Ok(reg_num) = reg_name[1..].parse::<u32>() {
-                        return Some(reg_num);
-                    }
-                } else if reg_name == "sp" {
-                    return Some(13);
-                } else if reg_name == "lr" {
-                    return Some(14);
-                } else if reg_name == "pc" {
-                    return Some(15);
-                }
-            }
-            None
-        };
-
-        self.transed_operands.clear();
-        for op in arch_detail.operands() {
-            match op.op_type {
-                ArmOperandType::Reg(reg) => {
-                    if let Some(reg_num) = get_reg_val(reg) {
-                        self.transed_operands.push(reg_num);
-                    }
-                }
-                ArmOperandType::Imm(val) => {
-                    self.transed_operands.push(val as u32);
-                }
-                ArmOperandType::Mem(mem) => {
-                    if let Some(reg_num) = get_reg_val(mem.base()) {
-                        self.transed_operands.push(reg_num);
-                    }
-                    if let Some(reg_num) = get_reg_val(mem.index()) {
-                        self.transed_operands.push(reg_num);
-                    }
-                    self.transed_operands.push(mem.disp() as u32);
-                }
-                ArmOperandType::Pimm(val) | ArmOperandType::Cimm(val) => {
-                    self.transed_operands.push(val as u32);
-                }
-                _ => {}
-            }
-        }
-        let duration = start.elapsed();
-        println!("ArmOpcode::trans_operands execution time: {:?}", duration);
-    }
-
     pub fn op_writer(&self) {
         // println!("op_str: {}", self.insn.op_str().unwrap_or(""));
     }
@@ -277,20 +217,16 @@ impl<'a> ArmOpcode<'a> {
     }
 }
 
-pub type Op2_ResolverFn = fn(&mut dyn CpuContext, &ArmOpcode) -> u32;
 pub struct ArmOperands {
     pub rd: u32,
     pub rn: u32,
     pub op2: Option<ArmOperand>,
-    pub op2_value: u32,
 
     pub mem_disp: i32,
     pub mem_has_index: bool,
     pub mem_writeback: bool,
     pub mem_post_index: bool,
     pub mem_post_imm: i32,
-
-    pub op2_resolver: Option<Op2_ResolverFn>,
 }
 impl ArmOperands {
     pub fn new() -> Self {
@@ -298,16 +234,13 @@ impl ArmOperands {
             rd: 0,
             rn: 0,
             op2: None,
-            op2_value: 0,
             mem_disp: 0,
             mem_has_index: false,
             mem_writeback: false,
             mem_post_index: false,
             mem_post_imm: 0,
-            op2_resolver: None,
         }
     }
-
 }
 
 pub fn UpdateApsr_N(cpu: &mut dyn crate::context::CpuContext, result: u32) {
@@ -381,7 +314,6 @@ pub fn check_condition(cpu: &dyn CpuContext, cc: ArmCC) -> bool {
     }
 }
 
-
 pub fn operand_resolver_multi_runtime(
     cpu: &mut dyn crate::context::CpuContext,
     data: &ArmOpcode,
@@ -442,53 +374,6 @@ pub fn operand_resolver_multi_runtime(
         (rt, addr)
     }
 }
-
-pub fn op2_imm_match(data: &ArmOpcode) -> bool {
-    let len = data.transed_operands.len();
-
-    // AND: 只允许 2 或 3 个 operand
-    if len != 2 && len != 3 {
-        return false;
-    }
-
-    // Operand2 在最后一位
-    let op2 = match data.get_operand(len - 1) {
-        Some(op) => op,
-        None => return false,
-    };
-
-    match &op2.op_type {
-        // Operand2 = immediate
-        ArmOperandType::Imm(_) => true,
-
-        // 其他一律非法
-        _ => false,
-    }
-}
-
-pub fn op2_reg_match(data: &ArmOpcode) -> bool {
-    let len = data.transed_operands.len();
-
-    // AND: 只允许 2 或 3 个 operand
-    if len != 2 && len != 3 {
-        return false;
-    }
-
-    // Operand2 在最后一位
-    let op2 = match data.get_operand(len - 1) {
-        Some(op) => op,
-        None => return false,
-    };
-
-    match &op2.op_type {
-        // Operand2 = register (with optional shift)
-        ArmOperandType::Reg(_) => true,
-
-        // 其他一律非法
-        _ => false,
-    }
-}
-
 
 //return (value after shift , carry)
 fn op_shift_match(op2: ArmOperand, val: u32, current_c: u8) -> (u32, u8) {
@@ -563,7 +448,10 @@ fn op_shift_match_by_shift(shift_kind: ArmShift, val: u32, current_c: u8) -> (u3
     }
 }
 
-pub fn resolve_op2_runtime(cpu: &mut dyn crate::context::CpuContext, data: &ArmOpcode) -> (u32, u8) {
+pub fn resolve_op2_runtime(
+    cpu: &mut dyn crate::context::CpuContext,
+    data: &ArmOpcode,
+) -> (u32, u8) {
     let current_c = ((cpu.read_apsr() >> 29) & 1) as u8;
     let Some(op2) = &data.arm_operands.op2 else {
         return (0, current_c);

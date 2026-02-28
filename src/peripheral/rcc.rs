@@ -1,4 +1,5 @@
 use crate::peripheral::peripheral::Peripheral;
+use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -140,7 +141,7 @@ impl Peripheral for Rcc {
         self.end
     }
 
-    fn read(&mut self, addr: u32) -> u32 {
+    fn read(&self, addr: u32) -> u32 {
         let offset = addr & 0xFF;
         match offset {
             0x00 => self.cr,
@@ -210,5 +211,56 @@ impl Peripheral for Rcc {
 
     fn tick(&mut self) {
         // RCC 通常不需要周期性 tick 行为
+    }
+
+    #[inline(always)]
+    fn needs_tick(&self) -> bool {
+        false
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rcc_hsi_enable_sets_ready_and_clock() {
+        let freq = Arc::new(AtomicU32::new(0));
+        let mut rcc = Rcc::new(0x4002_0000, 0x4002_1024, freq.clone());
+
+        rcc.write(0x4002_0000, 1 << 0);
+        rcc.write(0x4002_0004, 0);
+
+        assert_ne!(rcc.read(0x4002_0000) & (1 << 1), 0);
+        assert_eq!(freq.load(Ordering::Relaxed), 16_000_000);
+    }
+
+    #[test]
+    fn rcc_hse_enable_sets_ready_and_clock() {
+        let freq = Arc::new(AtomicU32::new(0));
+        let mut rcc = Rcc::new(0x4002_0000, 0x4002_1024, freq.clone());
+
+        rcc.write(0x4002_0000, (1 << 0) | (1 << 16));
+        rcc.write(0x4002_0004, 0b01);
+
+        assert_ne!(rcc.read(0x4002_0000) & (1 << 17), 0);
+        assert_eq!(freq.load(Ordering::Relaxed), 8_000_000);
+    }
+
+    #[test]
+    fn rcc_pll_clock_selection_updates_frequency() {
+        let freq = Arc::new(AtomicU32::new(0));
+        let mut rcc = Rcc::new(0x4002_0000, 0x4002_1024, freq.clone());
+
+        rcc.write(0x4002_0000, (1 << 0) | (1 << 24));
+        let pll_x4_cfg = (0b10) | (0b0010 << 18);
+        rcc.write(0x4002_0004, pll_x4_cfg);
+
+        assert_ne!(rcc.read(0x4002_0000) & (1 << 25), 0);
+        assert_eq!(freq.load(Ordering::Relaxed), 32_000_000);
     }
 }

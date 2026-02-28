@@ -1,4 +1,5 @@
 use crate::opcodes::Instructions::adr::AdrBuilder;
+use crate::opcodes::Instructions::bit_field::Bit_field_builder;
 use crate::opcodes::Instructions::bitop::Bitop_builder;
 use crate::opcodes::Instructions::branch::Branch_builder;
 use crate::opcodes::Instructions::breakpoint::Breakpoint_builder;
@@ -140,6 +141,7 @@ impl OpcodeTable {
 
     fn Instructions_builder(table: &mut HashMap<u16, Vec<Opcode>>) {
         let builders: Vec<Box<dyn InstrBuilder>> = vec![
+            Box::new(Bit_field_builder),
             Box::new(Bitop_builder),
             Box::new(Branch_builder),
             Box::new(Mov_builder),

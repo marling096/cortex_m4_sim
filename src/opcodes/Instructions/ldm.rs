@@ -8,7 +8,7 @@ use capstone::arch::arm::ArmOperandType;
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Ldm;
 impl Executable for Op_Ldm {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         ldm(cpu, data)
     }
 }
@@ -96,7 +96,7 @@ pub fn add_ldm_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &Op_Ldm,
+        exec: Op_Ldm::execute,
         operand_resolver: &OpLdm_resolver,
         adjust_cycles: None,
     }]

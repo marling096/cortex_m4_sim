@@ -25,4 +25,7 @@ pub trait CpuContext {
 
     fn read_apsr(&self) -> u32;
     fn write_apsr(&mut self, v: u32);
+
+    /// 若 val 是一个合法的 EXC_RETURN 值，执行异常返回并返回 true
+    fn try_exception_return(&mut self, val: u32) -> bool;
 }

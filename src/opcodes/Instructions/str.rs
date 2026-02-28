@@ -22,7 +22,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Str,
+            exec: Op_Str::execute,
             operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
@@ -35,7 +35,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Strb,
+            exec: Op_Strb::execute,
             operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
@@ -48,7 +48,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Strh,
+            exec: Op_Strh::execute,
             operand_resolver: &OpStrResolver,
             adjust_cycles: None,
         },
@@ -86,7 +86,7 @@ fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
 // --- STR ---
 pub struct Op_Str;
 impl Executable for Op_Str {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -102,7 +102,7 @@ impl Executable for Op_Str {
 
 pub struct Op_Strb;
 impl Executable for Op_Strb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -115,7 +115,7 @@ impl Executable for Op_Strb {
 
 pub struct Op_Strh;
 impl Executable for Op_Strh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

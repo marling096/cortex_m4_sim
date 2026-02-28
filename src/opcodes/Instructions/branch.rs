@@ -23,7 +23,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_B,
+            exec: Op_B::execute,
             operand_resolver: &OpBranchResolver,
             adjust_cycles: None,
         },
@@ -36,7 +36,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Bl,
+            exec: Op_Bl::execute,
             operand_resolver: &OpBranchResolver,
             adjust_cycles: None,
         },
@@ -49,7 +49,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Bx,
+            exec: Op_Bx::execute,
             operand_resolver: &OpBxResolver,
             adjust_cycles: None,
         },
@@ -62,7 +62,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Blx,
+            exec: Op_Blx::execute,
             operand_resolver: &OpBxResolver,
             adjust_cycles: None,
         },
@@ -76,7 +76,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
 
 pub struct Op_B;
 impl Executable for Op_B {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -89,7 +89,7 @@ impl Executable for Op_B {
 
 pub struct Op_Bl;
 impl Executable for Op_Bl {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -105,12 +105,15 @@ impl Executable for Op_Bl {
 
 pub struct Op_Bx;
 impl Executable for Op_Bx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
 
         let val = resolve_branch_target(cpu, data);
+        if cpu.try_exception_return(val) {
+            return 0;
+        }
         let target = val & !1;
         cpu.write_pc(target);
         0
@@ -119,7 +122,7 @@ impl Executable for Op_Bx {
 
 pub struct Op_Blx;
 impl Executable for Op_Blx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

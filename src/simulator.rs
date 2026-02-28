@@ -38,37 +38,20 @@ impl Simulator {
         ins: &Cpu_Instruction<'a>,
         current_pc: u32,
         profile_enabled: bool,
-        tick_peripheral: bool,
-    ) -> (Duration, Duration) {
+    ) -> (Duration, u32) {
         let exec_start = if profile_enabled {
             Some(Instant::now())
         } else {
             None
         };
-        self.cpu.step(&ins, current_pc);
+        let elapsed_cycles = self.cpu.step(&ins, current_pc);
         let exec_duration = if let Some(exec_start) = exec_start {
             exec_start.elapsed()
         } else {
             Duration::ZERO
         };
 
-        let peripheral_duration = if tick_peripheral {
-            let peripheral_start = if profile_enabled {
-                Some(Instant::now())
-            } else {
-                None
-            };
-            self.cpu.peripheral_step();
-            if let Some(peripheral_start) = peripheral_start {
-                peripheral_start.elapsed()
-            } else {
-                Duration::ZERO
-            }
-        } else {
-            Duration::ZERO
-        };
-
-        (exec_duration, peripheral_duration)
+        (exec_duration, elapsed_cycles)
     }
 
     pub fn sim_loop<'a>(&mut self, ins_table: Cpu_InstrTable<'a>) {
@@ -91,7 +74,7 @@ impl Simulator {
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
             .filter(|v| *v > 0)
-            .unwrap_or(if no_throttle { 8 } else { 1 });
+            .unwrap_or(1);
         let profile_enabled = !fast_mode;
         self.cpu.set_profiling_enabled(profile_enabled);
         println!(
@@ -123,11 +106,36 @@ impl Simulator {
     ) {
         let mut fetch_count: u32 = 0;
         let mut window_start = Instant::now();
-        let mut ticks_until_periph = peripheral_tick_batch;
-        let periph_is_pow2 = peripheral_tick_batch.is_power_of_two();
-        let periph_mask = peripheral_tick_batch.wrapping_sub(1);
-        let mut periph_counter = 0u32;
         let report_window_f64 = report_window as f64;
+        let trace_insn = std::env::var("SIM_TRACE_INSN")
+            .map(|v| v != "0")
+            .unwrap_or(false);
+        let trace_limit = std::env::var("SIM_TRACE_LIMIT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+        let mut trace_count: u64 = 0;
+        let mut trace_limit_reached = false;
+
+        macro_rules! trace_instruction {
+            ($pc:expr, $ins:expr) => {
+                if trace_insn && !trace_limit_reached {
+                    if trace_limit == 0 || trace_count < trace_limit {
+                        println!(
+                            "[TRACE] PC=0x{:08X} {} {}",
+                            $pc,
+                            $ins.data.mnemonic(),
+                            $ins.data.op_str()
+                        );
+                        trace_count += 1;
+                        if trace_limit != 0 && trace_count >= trace_limit {
+                            println!("[TRACE] limit reached: {}", trace_limit);
+                            trace_limit_reached = true;
+                        }
+                    }
+                }
+            };
+        }
 
         if no_throttle {
             if peripheral_tick_batch == 1 {
@@ -137,8 +145,85 @@ impl Simulator {
 
                     match ins_table.get(current_pc) {
                         Some(ins) => {
-                            self.cpu.step(ins, current_pc);
-                            self.cpu.peripheral_step();
+                            trace_instruction!(current_pc, ins);
+                            let elapsed_cycles = self.cpu.step(ins, current_pc);
+                            // println!("current ins: {}  Pc: 0x{:X}", ins.op.name, current_pc);
+                            self.cpu.peripheral_step_n(elapsed_cycles);
+
+                            fetch_count += 1;
+                            if fetch_count >= report_window {
+                                let elapsed_secs = window_start.elapsed().as_secs_f64();
+                                let _ = elapsed_secs;
+                                fetch_count = 0;
+                                window_start = Instant::now();
+                            }
+                        }
+                        None => {
+                            eprintln!(
+                                "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
+                                current_pc
+                            );
+                            break;
+                        }
+                    }
+                }
+            } else if peripheral_tick_batch.is_power_of_two() {
+                let mut pending_peripheral_cycles = 0u32;
+                loop {
+                    let current_pc = self.cpu.next_pc;
+                    self.cpu.prefetch_next_pc(current_pc);
+
+                    match ins_table.get(current_pc) {
+                        Some(ins) => {
+                            trace_instruction!(current_pc, ins);
+                            let elapsed_cycles = self.cpu.step(ins, current_pc);
+
+                            pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                            if pending_peripheral_cycles >= peripheral_tick_batch {
+                                self.cpu.peripheral_step_n(pending_peripheral_cycles);
+                                pending_peripheral_cycles = 0;
+                            }
+
+                            fetch_count += 1;
+                            if fetch_count >= report_window {
+                                let elapsed_secs = window_start.elapsed().as_secs_f64();
+                                if elapsed_secs > 0.0 {
+                                    let actual_freq_hz = report_window_f64 / elapsed_secs;
+                                    println!(
+                                        "Actual Execution Frequency ({} ins): {:.6} MHz",
+                                        report_window,
+                                        actual_freq_hz / 1_000_000.0
+                                    );
+                                }
+                                fetch_count = 0;
+                                window_start = Instant::now();
+                            }
+                        }
+                        None => {
+                            eprintln!(
+                                "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
+                                current_pc
+                            );
+                            break;
+                        }
+                    }
+                }
+            } else {
+                let mut pending_peripheral_cycles = 0u32;
+                loop {
+                    let current_pc = self.cpu.next_pc;
+                    self.cpu.prefetch_next_pc(current_pc);
+
+                    match ins_table.get(current_pc) {
+                        Some(ins) => {
+                            trace_instruction!(current_pc, ins);
+                            let elapsed_cycles = self.cpu.step(ins, current_pc);
+
+                            pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                            if pending_peripheral_cycles >= peripheral_tick_batch {
+                                self.cpu.peripheral_step_n(pending_peripheral_cycles);
+                                pending_peripheral_cycles = 0;
+                            }
 
                             fetch_count += 1;
                             if fetch_count >= report_window {
@@ -166,25 +251,75 @@ impl Simulator {
                 }
             }
 
+            return;
+        }
+
+        let machine_cycle = self.cpu.machine_cycle as u32;
+        if peripheral_tick_batch == 1 {
             loop {
+                let frequency = self.cpu.frequency.load(Ordering::Relaxed);
+                let nanos_per_tick = 1_000_000_000 / (frequency * machine_cycle);
+                let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
+                let loop_start = Instant::now();
+
                 let current_pc = self.cpu.next_pc;
                 self.cpu.prefetch_next_pc(current_pc);
 
                 match ins_table.get(current_pc) {
                     Some(ins) => {
-                        self.cpu.step(ins, current_pc);
+                        trace_instruction!(current_pc, ins);
+                        let elapsed_cycles = self.cpu.step(ins, current_pc);
+                        self.cpu.peripheral_step_n(elapsed_cycles);
 
-                        if periph_is_pow2 {
-                            periph_counter = periph_counter.wrapping_add(1);
-                            if (periph_counter & periph_mask) == 0 {
-                                self.cpu.peripheral_step();
+                        fetch_count += 1;
+                        if fetch_count >= report_window {
+                            let elapsed_secs = window_start.elapsed().as_secs_f64();
+                            if elapsed_secs > 0.0 {
+                                let actual_freq_hz = report_window_f64 / elapsed_secs;
+                                println!(
+                                    "Actual Execution Frequency ({} ins): {:.6} MHz",
+                                    report_window,
+                                    actual_freq_hz / 1_000_000.0
+                                );
                             }
-                        } else {
-                            ticks_until_periph -= 1;
-                            if ticks_until_periph == 0 {
-                                self.cpu.peripheral_step();
-                                ticks_until_periph = peripheral_tick_batch;
-                            }
+                            fetch_count = 0;
+                            window_start = Instant::now();
+                        }
+                    }
+                    None => {
+                        eprintln!(
+                            "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
+                            current_pc
+                        );
+                        break;
+                    }
+                }
+
+                let elapsed = loop_start.elapsed();
+                if elapsed < tick_duration {
+                    thread::sleep(tick_duration - elapsed);
+                }
+            }
+        } else if peripheral_tick_batch.is_power_of_two() {
+            let mut pending_peripheral_cycles = 0u32;
+            loop {
+                let frequency = self.cpu.frequency.load(Ordering::Relaxed);
+                let nanos_per_tick = 1_000_000_000 / (frequency * machine_cycle);
+                let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
+                let loop_start = Instant::now();
+
+                let current_pc = self.cpu.next_pc;
+                self.cpu.prefetch_next_pc(current_pc);
+
+                match ins_table.get(current_pc) {
+                    Some(ins) => {
+                        trace_instruction!(current_pc, ins);
+                        let elapsed_cycles = self.cpu.step(ins, current_pc);
+
+                        pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                        if pending_peripheral_cycles >= peripheral_tick_batch {
+                            self.cpu.peripheral_step_n(pending_peripheral_cycles);
+                            pending_peripheral_cycles = 0;
                         }
 
                         fetch_count += 1;
@@ -210,63 +345,62 @@ impl Simulator {
                         break;
                     }
                 }
-            }
-        }
 
-        let machine_cycle = self.cpu.machine_cycle as u32;
-        loop {
-            let frequency = self.cpu.frequency.load(Ordering::Relaxed);
-            let nanos_per_tick = 1_000_000_000 / (frequency * machine_cycle);
-            let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
-            let loop_start = Instant::now();
-
-            let current_pc = self.cpu.next_pc;
-            self.cpu.prefetch_next_pc(current_pc);
-
-            match ins_table.get(current_pc) {
-                Some(ins) => {
-                    self.cpu.step(ins, current_pc);
-
-                    if periph_is_pow2 {
-                        periph_counter = periph_counter.wrapping_add(1);
-                        if (periph_counter & periph_mask) == 0 {
-                            self.cpu.peripheral_step();
-                        }
-                    } else {
-                        ticks_until_periph -= 1;
-                        if ticks_until_periph == 0 {
-                            self.cpu.peripheral_step();
-                            ticks_until_periph = peripheral_tick_batch;
-                        }
-                    }
-
-                    fetch_count += 1;
-                    if fetch_count >= report_window {
-                        let elapsed_secs = window_start.elapsed().as_secs_f64();
-                        if elapsed_secs > 0.0 {
-                            let actual_freq_hz = report_window_f64 / elapsed_secs;
-                            println!(
-                                "Actual Execution Frequency ({} ins): {:.6} MHz",
-                                report_window,
-                                actual_freq_hz / 1_000_000.0
-                            );
-                        }
-                        fetch_count = 0;
-                        window_start = Instant::now();
-                    }
-                }
-                None => {
-                    eprintln!(
-                        "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
-                        current_pc
-                    );
-                    break;
+                let elapsed = loop_start.elapsed();
+                if elapsed < tick_duration {
+                    thread::sleep(tick_duration - elapsed);
                 }
             }
+        } else {
+            let mut pending_peripheral_cycles = 0u32;
+            loop {
+                let frequency = self.cpu.frequency.load(Ordering::Relaxed);
+                let nanos_per_tick = 1_000_000_000 / (frequency * machine_cycle);
+                let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
+                let loop_start = Instant::now();
 
-            let elapsed = loop_start.elapsed();
-            if elapsed < tick_duration {
-                thread::sleep(tick_duration - elapsed);
+                let current_pc = self.cpu.next_pc;
+                self.cpu.prefetch_next_pc(current_pc);
+
+                match ins_table.get(current_pc) {
+                    Some(ins) => {
+                        trace_instruction!(current_pc, ins);
+                        let elapsed_cycles = self.cpu.step(ins, current_pc);
+
+                        pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                        if pending_peripheral_cycles >= peripheral_tick_batch {
+                            self.cpu.peripheral_step_n(pending_peripheral_cycles);
+                            pending_peripheral_cycles = 0;
+                        }
+
+                        fetch_count += 1;
+                        if fetch_count >= report_window {
+                            let elapsed_secs = window_start.elapsed().as_secs_f64();
+                            if elapsed_secs > 0.0 {
+                                let actual_freq_hz = report_window_f64 / elapsed_secs;
+                                println!(
+                                    "Actual Execution Frequency ({} ins): {:.6} MHz",
+                                    report_window,
+                                    actual_freq_hz / 1_000_000.0
+                                );
+                            }
+                            fetch_count = 0;
+                            window_start = Instant::now();
+                        }
+                    }
+                    None => {
+                        eprintln!(
+                            "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
+                            current_pc
+                        );
+                        break;
+                    }
+                }
+
+                let elapsed = loop_start.elapsed();
+                if elapsed < tick_duration {
+                    thread::sleep(tick_duration - elapsed);
+                }
             }
         }
     }
@@ -302,7 +436,7 @@ impl Simulator {
         let mut max_prefetch = Duration::ZERO;
         let mut max_exec = Duration::ZERO;
         let mut max_peripheral = Duration::ZERO;
-        let mut pending_peripheral_ticks = 0u32;
+        let mut pending_peripheral_cycles = 0u32;
         let machine_cycle = self.cpu.machine_cycle as u32;
 
         loop {
@@ -340,13 +474,17 @@ impl Simulator {
 
             match fetched_ins {
                 Some(ins) => {
-                    pending_peripheral_ticks += 1;
-                    let do_peripheral_tick = pending_peripheral_ticks >= peripheral_tick_batch;
-                    let (exec_elapsed, peripheral_elapsed) =
-                        self.tick(ins, current_pc, true, do_peripheral_tick);
-                    if do_peripheral_tick {
-                        pending_peripheral_ticks = 0;
-                    }
+                    let (exec_elapsed, elapsed_cycles) = self.tick(ins, current_pc, true);
+                    pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+
+                    let peripheral_elapsed = if pending_peripheral_cycles >= peripheral_tick_batch {
+                        let peripheral_start = Instant::now();
+                        self.cpu.peripheral_step_n(pending_peripheral_cycles);
+                        pending_peripheral_cycles = 0;
+                        peripheral_start.elapsed()
+                    } else {
+                        Duration::ZERO
+                    };
                     exec_duration += exec_elapsed;
                     peripheral_duration += peripheral_elapsed;
                     max_exec = max_exec.max(exec_elapsed);
@@ -425,7 +563,7 @@ impl Simulator {
                         let stall_calls = cpu_profile.pipeline_stall_count;
 
                         println!(
-                            "ExecDetail: step {} exec {} stall {} | op.exec avg {:.3}us | update_pc avg {:.3}us | memR {} avg {:.3}us | memW {} avg {:.3}us",
+                            "ExecDetail: step {} exec {} stall {} | op.exec avg {:.3}us | update_pc avg {:.3}us | memR {} avg {:.3}us | memW {} avg {:.3}us | irq.check {} avg {:.3}us taken {} from_periph {} | hint.set {}",
                             step_calls,
                             exec_calls,
                             stall_calls,
@@ -435,6 +573,11 @@ impl Simulator {
                             avg_us(cpu_profile.mem_read_duration, cpu_profile.mem_read_count),
                             cpu_profile.mem_write_count,
                             avg_us(cpu_profile.mem_write_duration, cpu_profile.mem_write_count),
+                            cpu_profile.interrupt_check_calls,
+                            avg_us(cpu_profile.interrupt_check_duration, cpu_profile.interrupt_check_calls),
+                            cpu_profile.interrupt_taken_count,
+                            cpu_profile.interrupt_check_from_peripheral_count,
+                            cpu_profile.interrupt_hint_set_count,
                         );
 
                         let mut op_stats: Vec<(String, OpExecStat)> = self

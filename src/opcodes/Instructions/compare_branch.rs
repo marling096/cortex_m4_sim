@@ -23,7 +23,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Cbz,
+            exec: Op_Cbz::execute,
             operand_resolver: &OpCompareBranchResolver,
             adjust_cycles: None,
         },
@@ -36,7 +36,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Cbnz,
+            exec: Op_Cbnz::execute,
             operand_resolver: &OpCompareBranchResolver,
             adjust_cycles: None,
         },
@@ -48,7 +48,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cbz;
 impl Executable for Op_Cbz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -69,7 +69,7 @@ impl Executable for Op_Cbz {
 
 pub struct Op_Cbnz;
 impl Executable for Op_Cbnz {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

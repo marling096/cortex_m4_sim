@@ -24,7 +24,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Add,
+            exec: Op_Add::execute,
             operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
@@ -37,7 +37,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Adc,
+            exec: Op_Adc::execute,
             operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
@@ -50,7 +50,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Sub,
+            exec: Op_Sub::execute,
             operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
@@ -63,7 +63,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Sbc,
+            exec: Op_Sbc::execute,
             operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
@@ -76,7 +76,46 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Rsb,
+            exec: Op_Rsb::execute,
+            operand_resolver: &OpCalculateResolver,
+            adjust_cycles: None,
+        },
+        crate::opcodes::opcode::Opcode {
+            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MUL as u32,
+            name: "MUL".to_string(),
+            length: 32,
+            cycles: crate::opcodes::opcode::CycleInfo {
+                fetch_cycles: 1,
+                decode_cycles: 0,
+                execute_cycles: 1,
+            },
+            exec: Op_Mul::execute,
+            operand_resolver: &OpCalculateResolver,
+            adjust_cycles: None,
+        },
+        crate::opcodes::opcode::Opcode {
+            insnid: capstone::arch::arm::ArmInsn::ARM_INS_UDIV as u32,
+            name: "UDIV".to_string(),
+            length: 32,
+            cycles: crate::opcodes::opcode::CycleInfo {
+                fetch_cycles: 1,
+                decode_cycles: 0,
+                execute_cycles: 1,
+            },
+            exec: Op_Udiv::execute,
+            operand_resolver: &OpCalculateResolver,
+            adjust_cycles: None,
+        },
+        crate::opcodes::opcode::Opcode {
+            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MLS as u32,
+            name: "MLS".to_string(),
+            length: 32,
+            cycles: crate::opcodes::opcode::CycleInfo {
+                fetch_cycles: 1,
+                decode_cycles: 0,
+                execute_cycles: 1,
+            },
+            exec: Op_Mls::execute,
             operand_resolver: &OpCalculateResolver,
             adjust_cycles: None,
         },
@@ -113,7 +152,7 @@ impl OperandResolver for OpCalculateResolver {
 
 pub struct Op_Add;
 impl Executable for Op_Add {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -127,7 +166,7 @@ impl Executable for Op_Add {
 
 pub struct Op_Adc;
 impl Executable for Op_Adc {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -141,7 +180,7 @@ impl Executable for Op_Adc {
 
 pub struct Op_Sub;
 impl Executable for Op_Sub {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -157,7 +196,7 @@ impl Executable for Op_Sub {
 
 pub struct Op_Sbc;
 impl Executable for Op_Sbc {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -171,7 +210,7 @@ impl Executable for Op_Sbc {
 
 pub struct Op_Rsb;
 impl Executable for Op_Rsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -179,6 +218,55 @@ impl Executable for Op_Rsb {
         let rn = data.arm_operands.rn;
         let (op2, _) = resolve_op2_runtime(cpu, data);
         calculate_rsb_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
+    }
+}
+
+pub struct Op_Mul;
+impl Executable for Op_Mul {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
+        if !check_condition(cpu, data.condition()) {
+            return data.size();
+        }
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
+        calculate_mul_core(cpu, data, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
+    }
+}
+
+pub struct Op_Udiv;
+impl Executable for Op_Udiv {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
+        if !check_condition(cpu, data.condition()) {
+            return data.size();
+        }
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
+        calculate_udiv_core(cpu, rd, rn, op2);
+        if rd == 15 { 0 } else { data.size() }
+    }
+}
+
+pub struct Op_Mls;
+impl Executable for Op_Mls {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
+        if !check_condition(cpu, data.condition()) {
+            return data.size();
+        }
+        let rd = data.arm_operands.rd;
+        let rn = data.arm_operands.rn;
+        let (op2, _) = resolve_op2_runtime(cpu, data);
+        let ra = match data.get_operand(3) {
+            Some(op) => match op.op_type {
+                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                _ => 0,
+            },
+            None => 0,
+        };
+        calculate_mls_core(cpu, rd, rn, op2, ra);
         if rd == 15 { 0 } else { data.size() }
     }
 }
@@ -349,4 +437,34 @@ fn calculate_rsb_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u
 
         UpdateApsr_V(cpu, v);
     }
+}
+
+// === MUL ===
+
+fn calculate_mul_core(cpu: &mut dyn CpuContext, data: &ArmOpcode, rd: u32, rn: u32, op2_val: u32) {
+    let rn_val = cpu.read_reg(rn);
+    let result = rn_val.wrapping_mul(op2_val);
+    cpu.write_reg(rd, result);
+
+    if data.update_flags() {
+        UpdateApsr_Z(cpu, result);
+        UpdateApsr_N(cpu, result);
+    }
+}
+
+// === UDIV ===
+
+fn calculate_udiv_core(cpu: &mut dyn CpuContext, rd: u32, rn: u32, op2_val: u32) {
+    let rn_val = cpu.read_reg(rn);
+    let result = if op2_val == 0 { 0 } else { rn_val / op2_val };
+    cpu.write_reg(rd, result);
+}
+
+// === MLS ===
+
+fn calculate_mls_core(cpu: &mut dyn CpuContext, rd: u32, rn: u32, op2_val: u32, ra: u32) {
+    let rn_val = cpu.read_reg(rn);
+    let ra_val = cpu.read_reg(ra);
+    let result = ra_val.wrapping_sub(rn_val.wrapping_mul(op2_val));
+    cpu.write_reg(rd, result);
 }

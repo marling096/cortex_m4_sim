@@ -24,7 +24,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Asr,
+            exec: Op_Asr::execute,
             operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
@@ -37,7 +37,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Lsl,
+            exec: Op_Lsl::execute,
             operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
@@ -50,7 +50,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Lsr,
+            exec: Op_Lsr::execute,
             operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
@@ -63,7 +63,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ror,
+            exec: Op_Ror::execute,
             operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
@@ -76,7 +76,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Rrx,
+            exec: Op_Rrx::execute,
             operand_resolver: &OpShiftResolver,
             adjust_cycles: None,
         },
@@ -102,8 +102,18 @@ impl OperandResolver for OpShiftResolver {
         };
 
         data.arm_operands.rd = rd;
-        data.arm_operands.rn = rm;
-        data.arm_operands.op2 = data.get_operand(2);
+
+        let op2 = data.get_operand(2);
+        if op2.is_some() {
+            // 3-operand: LSLS Rd, Rm, Rs/imm  (Thumb T2/T3 or T1 with explicit shift)
+            data.arm_operands.rn = rm;   // Rm is the value to be shifted
+            data.arm_operands.op2 = op2; // Rs or imm is the shift amount
+        } else {
+            // 2-operand T1: LSLS Rd, Rs  →  Rd = Rd SHIFT Rs
+            // operand[0]=Rd (dest & source), operand[1]=Rs (shift amount)
+            data.arm_operands.rn = rd;   // source value is Rd itself
+            data.arm_operands.op2 = data.get_operand(1); // shift amount = operand[1]
+        }
         rd
     }
 }
@@ -115,7 +125,7 @@ impl OperandResolver for OpShiftResolver {
 
 pub struct Op_Asr;
 impl Executable for Op_Asr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -156,7 +166,7 @@ impl Executable for Op_Asr {
 
 pub struct Op_Lsl;
 impl Executable for Op_Lsl {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -188,7 +198,7 @@ impl Executable for Op_Lsl {
 
 pub struct Op_Lsr;
 impl Executable for Op_Lsr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -221,7 +231,7 @@ impl Executable for Op_Lsr {
 
 pub struct Op_Ror;
 impl Executable for Op_Ror {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -249,7 +259,7 @@ impl Executable for Op_Ror {
 
 pub struct Op_Rrx;
 impl Executable for Op_Rrx {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

@@ -1,5 +1,6 @@
 
 use crate::peripheral::peripheral::Peripheral;
+use std::any::Any;
 
 #[derive(Default)]
 pub struct Scb {
@@ -52,7 +53,7 @@ impl Peripheral for Scb {
         self.end
     }
 
-    fn read(&mut self, addr: u32) -> u32 {
+    fn read(&self, addr: u32) -> u32 {
         let offset = addr & 0xFF;
         match offset {
             0x00 => self.cpuid,
@@ -106,5 +107,52 @@ impl Peripheral for Scb {
 
     fn tick(&mut self) {
         // SCB usually doesn't need periodic tick
+    }
+
+    #[inline(always)]
+    fn needs_tick(&self) -> bool {
+        false
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scb_cpuid_is_read_only() {
+        let mut scb = Scb::new(0xE000_ED00, 0xE000_ED3C);
+        let cpuid = scb.read(0xE000_ED00);
+
+        scb.write(0xE000_ED00, 0xDEAD_BEEF);
+
+        assert_eq!(scb.read(0xE000_ED00), cpuid);
+    }
+
+    #[test]
+    fn scb_aircr_requires_vectkey() {
+        let mut scb = Scb::new(0xE000_ED00, 0xE000_ED3C);
+        let original = scb.read(0xE000_ED0C);
+
+        scb.write(0xE000_ED0C, 0x0000_0005);
+        assert_eq!(scb.read(0xE000_ED0C), original);
+
+        scb.write(0xE000_ED0C, 0x05FA_0005);
+        assert_eq!(scb.read(0xE000_ED0C), 0xFA05_0005);
+    }
+
+    #[test]
+    fn scb_general_registers_can_read_write() {
+        let mut scb = Scb::new(0xE000_ED00, 0xE000_ED3C);
+
+        scb.write(0xE000_ED08, 0x2000_0000);
+        scb.write(0xE000_ED10, 0x0000_0004);
+
+        assert_eq!(scb.read(0xE000_ED08), 0x2000_0000);
+        assert_eq!(scb.read(0xE000_ED10), 0x0000_0004);
     }
 }

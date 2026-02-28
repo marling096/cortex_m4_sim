@@ -8,7 +8,7 @@ use capstone::arch::arm::ArmOperandType;
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Stm;
 impl Executable for Op_Stm {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stm(cpu, data)
     }
 }
@@ -56,7 +56,7 @@ pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &Op_Stm,
+        exec: Op_Stm::execute,
         operand_resolver: &OpStm_resolver,
         adjust_cycles: None,
     }]

@@ -4,7 +4,7 @@ use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condi
 
 pub struct Op_It;
 impl Executable for Op_It {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -29,7 +29,7 @@ pub fn add_it_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &Op_It,
+        exec: Op_It::execute,
         operand_resolver: &OpItResolver,
         adjust_cycles: None,
     }]

@@ -1,4 +1,5 @@
 use crate::peripheral::peripheral::Peripheral;
+use std::any::Any;
 
 #[derive(Default)]
 pub struct Flash {
@@ -37,7 +38,7 @@ impl Peripheral for Flash {
         self.end
     }
 
-    fn read(&mut self, addr: u32) -> u32 {
+    fn read(&self, addr: u32) -> u32 {
         let offset = addr - self.start;
         match offset {
             0x00 => self.acr,
@@ -98,5 +99,56 @@ impl Peripheral for Flash {
 
     fn tick(&mut self) {
         // Handle flash operations delay if needed
+    }
+
+    #[inline(always)]
+    fn needs_tick(&self) -> bool {
+        false
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn flash_starts_locked() {
+        let mut flash = Flash::new(0x4002_2000, 0x4002_201C);
+        assert_ne!(flash.read(0x4002_2010) & 0x80, 0);
+    }
+
+    #[test]
+    fn flash_unlock_sequence_clears_lock_bit() {
+        let mut flash = Flash::new(0x4002_2000, 0x4002_201C);
+
+        flash.write(0x4002_2004, 0x4567_0123);
+        flash.write(0x4002_2004, 0xCDEF_89AB);
+
+        assert_eq!(flash.read(0x4002_2010) & 0x80, 0);
+    }
+
+    #[test]
+    fn flash_locked_cr_write_is_ignored() {
+        let mut flash = Flash::new(0x4002_2000, 0x4002_201C);
+        let original = flash.read(0x4002_2010);
+
+        flash.write(0x4002_2010, 0x0000_0001);
+
+        assert_eq!(flash.read(0x4002_2010), original);
+    }
+
+    #[test]
+    fn flash_unlocked_cr_write_applies() {
+        let mut flash = Flash::new(0x4002_2000, 0x4002_201C);
+        flash.write(0x4002_2004, 0x4567_0123);
+        flash.write(0x4002_2004, 0xCDEF_89AB);
+
+        flash.write(0x4002_2010, 0x0000_0012);
+
+        assert_eq!(flash.read(0x4002_2010), 0x0000_0012);
     }
 }

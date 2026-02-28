@@ -8,7 +8,7 @@ use capstone::arch::arm::ArmOperandType;
 // ADR{cond} Rd, label
 pub struct OpAdr;
 impl Executable for OpAdr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -68,7 +68,7 @@ pub fn add_adr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &OpAdr,
+        exec: OpAdr::execute,
         operand_resolver: &OpAdrResolver,
         adjust_cycles: None,
     }]

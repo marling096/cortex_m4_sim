@@ -20,7 +20,7 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Push,
+            exec: Op_Push::execute,
             operand_resolver: &OpStackResolver,
             adjust_cycles: None,
         },
@@ -33,7 +33,7 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Pop,
+            exec: Op_Pop::execute,
             operand_resolver: &OpStackResolver,
             adjust_cycles: None,
         },
@@ -44,14 +44,14 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // POP{cond} reglist
 pub struct Op_Push;
 impl Executable for Op_Push {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stack_push(cpu, data)
     }
 }
 
 pub struct Op_Pop;
 impl Executable for Op_Pop {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stack_pop(cpu, data)
     }
 }
@@ -86,17 +86,28 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     let mut sp = cpu.read_reg(13);
     // POP: full-descending stack, so pop is post-increment
     let regs: Vec<u32> = data.transed_operands.iter().copied().collect();
+    let mut pc_popped = false;
+    let mut pc_val = 0u32;
     for &r in &regs {
-        let mut val = cpu.read_mem(sp);
-        if r == 15 {
-            val &= !1;
-        }
-        cpu.write_reg(r, val);
+        let val = cpu.read_mem(sp);
         sp = sp.wrapping_add(4);
+        if r == 15 {
+            // 先更新 SP，再处理 PC/EXC_RETURN
+            pc_popped = true;
+            pc_val = val;
+        } else {
+            cpu.write_reg(r, val);
+        }
     }
-    // print!("SP:0x{:08X}\n", sp);
     cpu.write_reg(13, sp);
-    if regs.contains(&15) { 0 } else { data.size() }
+    if pc_popped {
+        // 如果弹出值是 EXC_RETURN，触发异常返回（不清除 Thumb bit）
+        if !cpu.try_exception_return(pc_val) {
+            cpu.write_reg(15, pc_val & !1);
+        }
+        return 0;
+    }
+    data.size()
 }
 
 pub struct OpStackResolver;

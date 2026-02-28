@@ -11,7 +11,7 @@ use capstone::arch::arm::ArmOperandType;
 
 pub struct Op_Tst;
 impl Executable for Op_Tst {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -31,7 +31,7 @@ impl Executable for Op_Tst {
 
 pub struct Op_Teq;
 impl Executable for Op_Teq {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -82,7 +82,7 @@ pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Tst,
+            exec: Op_Tst::execute,
             operand_resolver: &OpTst_resolver,
             adjust_cycles: None,
         },
@@ -95,7 +95,7 @@ pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Teq,
+            exec: Op_Teq::execute,
             operand_resolver: &OpTst_resolver,
             adjust_cycles: None,
         },

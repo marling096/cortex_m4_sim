@@ -11,7 +11,7 @@ use capstone::arch::arm::{ArmOperandType, ArmShift};
 // MVN{S}{cond} Rd, Operand2
 pub struct Op_Movs;
 impl Executable for Op_Movs {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -32,7 +32,7 @@ impl Executable for Op_Movs {
 
 pub struct Op_Mvns;
 impl Executable for Op_Mvns {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -86,7 +86,7 @@ pub fn add_movs_def() -> Vec<crate::opcodes::opcode::Opcode> {
             decode_cycles: 0,
             execute_cycles: 1,
         },
-        exec: &Op_Movs,
+        exec: Op_Movs::execute,
         operand_resolver: &OpMovsResolver,
         adjust_cycles: None,
     }]

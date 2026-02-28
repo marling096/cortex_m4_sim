@@ -25,7 +25,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_And,
+            exec: Op_And::execute,
             operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
@@ -38,7 +38,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Orr,
+            exec: Op_Orr::execute,
             operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
@@ -51,7 +51,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Eor,
+            exec: Op_Eor::execute,
             operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
@@ -64,7 +64,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Bic,
+            exec: Op_Bic::execute,
             operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
@@ -77,7 +77,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Orn,
+            exec: Op_Orn::execute,
             operand_resolver: &OpBitResolver,
             adjust_cycles: None,
         },
@@ -92,7 +92,7 @@ pub fn add_bitop_def() -> Vec<Opcode> {
 
 pub struct Op_And;
 impl Executable for Op_And {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -115,7 +115,7 @@ impl Executable for Op_And {
 
 pub struct Op_Orr;
 impl Executable for Op_Orr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -135,7 +135,7 @@ impl Executable for Op_Orr {
 
 pub struct Op_Bic;
 impl Executable for Op_Bic {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -156,7 +156,7 @@ impl Executable for Op_Bic {
 
 pub struct Op_Orn;
 impl Executable for Op_Orn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -177,7 +177,7 @@ impl Executable for Op_Orn {
 
 pub struct Op_Eor;
 impl Executable for Op_Eor {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

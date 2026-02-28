@@ -24,7 +24,7 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Mov,
+            exec: Op_Mov::execute,
             operand_resolver: &OpMovResolver,
             adjust_cycles: None,
         },
@@ -37,7 +37,7 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Mvn,
+            exec: Op_Mvn::execute,
             operand_resolver: &OpMovResolver,
             adjust_cycles: None,
         },
@@ -68,7 +68,7 @@ impl OperandResolver for OpMovResolver {
 
 pub struct Op_Mov;
 impl Executable for Op_Mov {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -89,7 +89,7 @@ impl Executable for Op_Mov {
 
 pub struct Op_Mvn;
 impl Executable for Op_Mvn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

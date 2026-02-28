@@ -24,7 +24,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Cmp,
+            exec: Op_Cmp::execute,
             operand_resolver: &OpCmpResolver,
             adjust_cycles: None,
         },
@@ -37,7 +37,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Cmn,
+            exec: Op_Cmn::execute,
             operand_resolver: &OpCmpResolver,
             adjust_cycles: None,
         },
@@ -49,7 +49,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cmp;
 impl Executable for Op_Cmp {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -62,7 +62,7 @@ impl Executable for Op_Cmp {
 
 pub struct Op_Cmn;
 impl Executable for Op_Cmn {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }

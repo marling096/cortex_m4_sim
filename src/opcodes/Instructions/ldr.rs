@@ -24,7 +24,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ldr,
+            exec: Op_Ldr::execute,
             operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
@@ -37,7 +37,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ldrb,
+            exec: Op_Ldrb::execute,
             operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
@@ -50,7 +50,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ldrsb,
+            exec: Op_Ldrsb::execute,
             operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
@@ -63,7 +63,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ldrh,
+            exec: Op_Ldrh::execute,
             operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
@@ -76,7 +76,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
                 decode_cycles: 0,
                 execute_cycles: 1,
             },
-            exec: &Op_Ldrsh,
+            exec: Op_Ldrsh::execute,
             operand_resolver: &OpLdrResolver,
             adjust_cycles: None,
         },
@@ -92,34 +92,58 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // opD{cond} Rt, Rt2, [Rn], #offset
 
 // Helpers for Memory Access
-fn read_u8(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
+#[inline(always)]
+fn read_u8(cpu: &mut crate::cpu::Cpu, addr: u32) -> u32 {
     let word = cpu.read_mem(addr & !3);
     let shift = (addr & 3) * 8;
     (word >> shift) & 0xFF
 }
 
-fn read_u16(cpu: &mut dyn CpuContext, addr: u32) -> u32 {
+#[inline(always)]
+fn read_u16(cpu: &mut crate::cpu::Cpu, addr: u32) -> u32 {
     let word = cpu.read_mem(addr & !3);
     let shift = (addr & 2) * 8;
     (word >> shift) & 0xFFFF
 }
 
 // --- Address Resolution Helpers ---
-fn operand_resolver_multi_cached(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> (u32, u32) {
-    if data.arm_operands.mem_has_index || data.arm_operands.mem_writeback {
+#[inline(always)]
+fn operand_resolver_multi_cached(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> (u32, u32) {
+    let ops = &data.arm_operands;
+
+    if ops.mem_has_index {
         return operand_resolver_multi_runtime(cpu, data);
     }
 
-    let rt = data.arm_operands.rd;
-    let base = cpu.read_reg(data.arm_operands.rn);
-    let addr = base.wrapping_add_signed(data.arm_operands.mem_disp);
+    operand_resolver_multi_cached_no_index(cpu, ops)
+}
+
+#[inline(always)]
+fn operand_resolver_multi_cached_no_index(
+    cpu: &mut crate::cpu::Cpu,
+    ops: &crate::opcodes::opcode::ArmOperands,
+) -> (u32, u32) {
+    let rt = ops.rd;
+
+    if !ops.mem_writeback {
+        let base = cpu.read_reg(ops.rn);
+        let addr = base.wrapping_add_signed(ops.mem_disp);
+        return (rt, addr);
+    }
+
+    let base = cpu.read_reg(ops.rn);
+    let addr = if ops.mem_post_index {
+        base.wrapping_add_signed(ops.mem_post_imm)
+    } else {
+        base.wrapping_add_signed(ops.mem_disp)
+    };
     (rt, addr)
 }
 
 // --- LDR ---
 pub struct Op_Ldr;
 impl Executable for Op_Ldr {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -135,7 +159,7 @@ impl Executable for Op_Ldr {
 
 pub struct Op_Ldrb;
 impl Executable for Op_Ldrb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -148,7 +172,7 @@ impl Executable for Op_Ldrb {
 
 pub struct Op_Ldrsb;
 impl Executable for Op_Ldrsb {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -162,7 +186,7 @@ impl Executable for Op_Ldrsb {
 
 pub struct Op_Ldrh;
 impl Executable for Op_Ldrh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -175,7 +199,7 @@ impl Executable for Op_Ldrh {
 
 pub struct Op_Ldrsh;
 impl Executable for Op_Ldrsh {
-    fn execute(&self, cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
+    fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
         }
@@ -205,6 +229,7 @@ impl OperandResolver for OpLdrResolver {
             ArmOperandType::Reg(r) => data.resolve_reg(r),
             _ => panic!("first operand is not a register"),
         };
+        data.arm_operands.op2 = Some(op_mem.clone());
 
         data.arm_operands.mem_has_index = false;
         data.arm_operands.mem_writeback = data.writeback();
@@ -229,5 +254,149 @@ impl OperandResolver for OpLdrResolver {
         }
 
         data.arm_operands.rd
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::context::CpuContext;
+    use crate::cpu::Cpu;
+    use crate::peripheral::bus::Bus;
+    use std::hint::black_box;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU32;
+    use std::time::Instant;
+
+    fn make_cpu() -> Cpu {
+        Cpu::new(Arc::new(AtomicU32::new(8_000_000)), 1, Bus::new(), Bus::new())
+    }
+
+    #[test]
+    fn operand_resolver_cached_non_writeback_uses_base_register_value() {
+        let mut cpu = make_cpu();
+        cpu.write_reg(2, 0x2000_0100);
+
+        let mut ops = crate::opcodes::opcode::ArmOperands::new();
+        ops.rd = 1;
+        ops.rn = 2;
+        ops.mem_has_index = false;
+        ops.mem_writeback = false;
+        ops.mem_post_index = false;
+        ops.mem_disp = 0x20;
+
+        let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops);
+        assert_eq!(rt, 1);
+        assert_eq!(addr, 0x2000_0120);
+    }
+
+    #[test]
+    fn operand_resolver_cached_writeback_pre_index_uses_mem_disp() {
+        let mut cpu = make_cpu();
+        cpu.write_reg(4, 0x2000_0200);
+
+        let mut ops = crate::opcodes::opcode::ArmOperands::new();
+        ops.rd = 3;
+        ops.rn = 4;
+        ops.mem_has_index = false;
+        ops.mem_writeback = true;
+        ops.mem_post_index = false;
+        ops.mem_disp = -0x10;
+
+        let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops);
+        assert_eq!(rt, 3);
+        assert_eq!(addr, 0x2000_01F0);
+    }
+
+    #[test]
+    fn operand_resolver_cached_writeback_post_index_uses_post_imm() {
+        let mut cpu = make_cpu();
+        cpu.write_reg(6, 0x2000_0300);
+
+        let mut ops = crate::opcodes::opcode::ArmOperands::new();
+        ops.rd = 5;
+        ops.rn = 6;
+        ops.mem_has_index = false;
+        ops.mem_writeback = true;
+        ops.mem_post_index = true;
+        ops.mem_post_imm = 0x24;
+        ops.mem_disp = -0x100;
+
+        let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops);
+        assert_eq!(rt, 5);
+        assert_eq!(addr, 0x2000_0324);
+    }
+
+    #[test]
+    fn perf_operand_resolver_cached_no_index() {
+        let loops = 1_000_000u64;
+        let mut cpu = make_cpu();
+        cpu.write_reg(2, 0x2000_0100);
+        cpu.write_reg(4, 0x2000_0200);
+        cpu.write_reg(6, 0x2000_0300);
+
+        let mut ops_non_wb = crate::opcodes::opcode::ArmOperands::new();
+        ops_non_wb.rd = 1;
+        ops_non_wb.rn = 2;
+        ops_non_wb.mem_writeback = false;
+        ops_non_wb.mem_disp = 0x20;
+
+        let mut ops_pre = crate::opcodes::opcode::ArmOperands::new();
+        ops_pre.rd = 3;
+        ops_pre.rn = 4;
+        ops_pre.mem_writeback = true;
+        ops_pre.mem_post_index = false;
+        ops_pre.mem_disp = -0x10;
+
+        let mut ops_post = crate::opcodes::opcode::ArmOperands::new();
+        ops_post.rd = 5;
+        ops_post.rn = 6;
+        ops_post.mem_writeback = true;
+        ops_post.mem_post_index = true;
+        ops_post.mem_post_imm = 0x24;
+
+        let start = Instant::now();
+        let mut checksum = 0u32;
+        for _ in 0..loops {
+            let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops_non_wb);
+            checksum ^= rt ^ addr;
+        }
+        let elapsed_non_wb = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops_pre);
+            checksum ^= rt ^ addr;
+        }
+        let elapsed_pre = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops_post);
+            checksum ^= rt ^ addr;
+        }
+        let elapsed_post = start.elapsed();
+
+        let to_ns_per_op = |d: std::time::Duration| d.as_nanos() as f64 / loops as f64;
+        println!(
+            "[perf][ldr] operand_resolver_multi_cached_no_index non_writeback: total={:?}, {:.2} ns/op",
+            elapsed_non_wb,
+            to_ns_per_op(elapsed_non_wb)
+        );
+        println!(
+            "[perf][ldr] operand_resolver_multi_cached_no_index writeback_pre_index: total={:?}, {:.2} ns/op",
+            elapsed_pre,
+            to_ns_per_op(elapsed_pre)
+        );
+        println!(
+            "[perf][ldr] operand_resolver_multi_cached_no_index writeback_post_index: total={:?}, {:.2} ns/op",
+            elapsed_post,
+            to_ns_per_op(elapsed_post)
+        );
+
+        black_box(checksum);
+        assert!(elapsed_non_wb.as_nanos() > 0);
+        assert!(elapsed_pre.as_nanos() > 0);
+        assert!(elapsed_post.as_nanos() > 0);
     }
 }
