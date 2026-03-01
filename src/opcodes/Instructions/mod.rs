@@ -1,5 +1,6 @@
 pub mod mov;
 pub mod bit_field;
+pub mod extend;
 pub mod branch;
 pub mod shift;
 pub mod cmp;
@@ -34,7 +35,7 @@ mod tests {
 
 	#[test]
 	fn all_instruction_definitions_are_buildable_and_valid() {
-        let groups: [(&str, Vec<crate::opcodes::opcode::Opcode>); 20] = [
+        let groups: [(&str, Vec<crate::opcodes::opcode::Opcode>); 21] = [
 			("adr", adr::add_adr_def()),
 			("bit_field", bit_field::add_bit_field_def()),
 			("bitop", bitop::add_bitop_def()),
@@ -43,6 +44,7 @@ mod tests {
 			("calculate", calculate::add_calculate_def()),
 			("cmp", cmp::add_cmp_def()),
 			("compare_branch", compare_branch::add_compare_branch_def()),
+			("extend", extend::add_extend_def()),
 			("hint", hint::add_Hint_def()),
 			("it", it::add_it_def()),
 			("ldm", ldm::add_ldm_def()),

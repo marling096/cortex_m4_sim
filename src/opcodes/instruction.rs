@@ -6,6 +6,7 @@ use crate::opcodes::Instructions::breakpoint::Breakpoint_builder;
 use crate::opcodes::Instructions::calculate::Calculate_builder;
 use crate::opcodes::Instructions::cmp::Cmp_builder;
 use crate::opcodes::Instructions::compare_branch::Compare_branch_builder;
+use crate::opcodes::Instructions::extend::Extend_builder;
 use crate::opcodes::Instructions::hint::Hint_builder;
 use crate::opcodes::Instructions::it::It_builder;
 use crate::opcodes::Instructions::ldm::Ldm_builder;
@@ -148,6 +149,7 @@ impl OpcodeTable {
             Box::new(Shiift_builder),
             Box::new(Cmp_builder),
             Box::new(Compare_branch_builder),
+            Box::new(Extend_builder),
             Box::new(Nop_builder),
             Box::new(Stack_builder),
             Box::new(Ldr_builder),

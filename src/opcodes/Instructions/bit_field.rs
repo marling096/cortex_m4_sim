@@ -90,6 +90,6 @@ fn calculate_ubfx_core(cpu: &mut dyn CpuContext, rd: u32, rn: u32, lsb: u32, wid
 		};
 		(rn_val >> lsb) & mask
 	};
-
+	println!("ubfx cal core: rn_val=0x{:08X}, result=0x{:08X}", rn_val, result);
 	cpu.write_reg(rd, result);
 }
