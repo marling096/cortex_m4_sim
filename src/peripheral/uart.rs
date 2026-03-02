@@ -99,6 +99,11 @@ impl Uart {
     }
 
     #[inline(always)]
+    pub fn tx_active(&self) -> bool {
+        self.tx_bits_left > 0 || !self.tx_pending.is_empty()
+    }
+
+    #[inline(always)]
     pub fn set_rx_line(&mut self, level: bool) {
         match self.rx_state {
             RxState::Idle => {

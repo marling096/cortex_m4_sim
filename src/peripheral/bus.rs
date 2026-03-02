@@ -16,6 +16,11 @@ pub struct Bus {
     /// 可产生 IRQ 的外设索引列表（通过 pending_irq() 非 None 判断）
     irq_indices: Vec<usize>,
     last_hit_index: Cell<usize>,
+    afio_index: Option<usize>,
+    usart1_index: Option<usize>,
+    requires_cycle_accurate_bridge_cached: bool,
+    last_usart1_tx_level: bool,
+    last_usart1_tx_level_valid: bool,
 }
 
 impl Bus {
@@ -32,11 +37,17 @@ impl Bus {
             active_tick_flags: Vec::new(),
             irq_indices: Vec::new(),
             last_hit_index: Cell::new(Self::INVALID_INDEX),
+            afio_index: None,
+            usart1_index: None,
+            requires_cycle_accurate_bridge_cached: false,
+            last_usart1_tx_level: true,
+            last_usart1_tx_level_valid: false,
         }
     }
 
     pub fn register_peripheral(&mut self, dev: Box<dyn Peripheral>) {
         let index = self.peripherals.len();
+        let start = dev.start();
 
         let tickable = dev.needs_tick();
         let active = tickable && dev.is_tick_active();
@@ -52,6 +63,15 @@ impl Bus {
         self.active_tick_flags.push(active);
 
         self.peripherals.push((dev.start(), dev.end(), dev));
+
+        if start == Self::AFIO_BASE {
+            self.afio_index = Some(index);
+        }
+        if start == Self::USART1_BASE {
+            self.usart1_index = Some(index);
+        }
+        self.requires_cycle_accurate_bridge_cached =
+            self.afio_index.is_some() && self.usart1_index.is_some();
     }
 
     #[inline(always)]
@@ -219,17 +239,14 @@ impl Bus {
             }
         }
 
-        self.drive_usart1_tx_via_afio();
-        self.bridge_gpio_via_afio();
-        self.sample_usart1_rx_via_afio();
+        self.process_uart_afio_bridge();
 
         has_event
     }
 
     #[inline(always)]
     fn requires_cycle_accurate_bridge(&self) -> bool {
-        self.find_peripheral_index(Self::AFIO_BASE).is_some()
-            && self.find_peripheral_index(Self::USART1_BASE).is_some()
+        self.requires_cycle_accurate_bridge_cached
     }
 
     #[inline(always)]
@@ -274,88 +291,89 @@ impl Bus {
         dev.as_any_mut().downcast_mut::<T>()
     }
 
-    /// 通过 AFIO 映射规则，将 USART1 TX 驱动到映射 GPIO 的 TX 引脚。
-    fn drive_usart1_tx_via_afio(&mut self) {
-        let (gpio_base, _rx_sense_pin, tx_drive_pin) = {
-            if let Some(afio) = self.get_peripheral_mut::<Afio>(Self::AFIO_BASE) {
-                afio.usart1_pin_mapping()
-            } else {
-                return;
-            }
+    /// 将 USART1 与 AFIO/GPIO 桥接处理合并为单一路径，减少每 tick 的重复查找与重复读写。
+    fn process_uart_afio_bridge(&mut self) {
+        let afio_index = if let Some(index) = self.afio_index {
+            index
+        } else {
+            return;
+        };
+        let usart_index = if let Some(index) = self.usart1_index {
+            index
+        } else {
+            return;
         };
 
-        let uart_tx_level = {
-            if let Some(uart) = self.get_peripheral_mut::<Uart>(Self::USART1_BASE) {
-                uart.tx_line_level()
-            } else {
-                return;
-            }
-        };
-
-        if let Some(gpio) = self.get_peripheral_mut::<Gpio>(gpio_base) {
-            gpio.set_odr_pin(tx_drive_pin, uart_tx_level);
-        }
-    }
-
-    /// 通过 AFIO 映射规则，从映射 GPIO 的 RX 引脚采样并送入 USART1 RX。
-    fn sample_usart1_rx_via_afio(&mut self) {
-        let (gpio_base, rx_sense_pin, tx_drive_pin, has_custom_bridge) = {
-            if let Some(afio) = self.get_peripheral_mut::<Afio>(Self::AFIO_BASE) {
+        let (gpio_base, rx_sense_pin, tx_drive_pin, custom_bridge) = {
+            if let Some(afio) = self.get_peripheral_mut_by_index::<Afio>(afio_index) {
                 let (gpio_base, rx_sense_pin, tx_drive_pin) = afio.usart1_pin_mapping();
                 (
                     gpio_base,
                     rx_sense_pin,
                     tx_drive_pin,
-                    afio.gpio_bridge_config().is_some(),
+                    afio.gpio_bridge_config(),
                 )
             } else {
                 return;
             }
         };
 
-        let gpio_rx_level = {
+        let (uart_tx_level, uart_tx_active) = {
+            if let Some(uart) = self.get_peripheral_mut_by_index::<Uart>(usart_index) {
+                (uart.tx_line_level(), uart.tx_active())
+            } else {
+                return;
+            }
+        };
+
+        let tx_line_changed = if self.last_usart1_tx_level_valid {
+            self.last_usart1_tx_level != uart_tx_level
+        } else {
+            true
+        };
+        self.last_usart1_tx_level = uart_tx_level;
+        self.last_usart1_tx_level_valid = true;
+
+        // 无自定义桥接且 UART TX 空闲时，不需要每 tick 做桥接处理。
+        if custom_bridge.is_none() && !uart_tx_active && !tx_line_changed {
+            return;
+        }
+
+        // UART TX -> 映射 GPIO TX
+        if uart_tx_active || tx_line_changed {
             if let Some(gpio) = self.get_peripheral_mut::<Gpio>(gpio_base) {
-                // 若未启用 AFIO 自定义桥接，则默认做 USART1 TX->RX 回送，避免 RX 悬空。
-                if !has_custom_bridge {
-                    let tx_level = gpio.read_odr_pin(tx_drive_pin);
-                    gpio.set_idr_pin(rx_sense_pin, tx_level);
+                gpio.set_odr_pin(tx_drive_pin, uart_tx_level);
+            }
+        }
+
+        // 自定义桥接（例如 PB0 -> PA10）优先；否则做默认 USART1 TX->RX 回送。
+        let gpio_rx_level = if let Some(bridge) = custom_bridge {
+            let level = {
+                if let Some(src_gpio) = self.get_peripheral_mut::<Gpio>(bridge.src_gpio_base) {
+                    src_gpio.read_odr_pin(bridge.src_pin)
+                } else {
+                    return;
                 }
+            };
+
+            if let Some(dst_gpio) = self.get_peripheral_mut::<Gpio>(bridge.dst_gpio_base) {
+                dst_gpio.set_idr_pin(bridge.dst_pin, level);
+            }
+
+            if let Some(gpio) = self.get_peripheral_mut::<Gpio>(gpio_base) {
                 gpio.read_idr_pin(rx_sense_pin)
             } else {
                 return;
             }
+        } else {
+            if let Some(gpio) = self.get_peripheral_mut::<Gpio>(gpio_base) {
+                gpio.set_idr_pin(rx_sense_pin, uart_tx_level);
+            }
+            uart_tx_level
         };
 
-        if let Some(uart) = self.get_peripheral_mut::<Uart>(Self::USART1_BASE) {
+        if let Some(uart) = self.get_peripheral_mut_by_index::<Uart>(usart_index) {
             uart.set_rx_line(gpio_rx_level);
-        }
-    }
-
-    /// 通过 AFIO 配置的桥接寄存器将一个 GPIO 输出引脚连接到另一个 GPIO 输入引脚。
-    /// 用于测试场景（例如 USART TX 回送到 RX）。
-    fn bridge_gpio_via_afio(&mut self) {
-        let bridge = {
-            if let Some(afio) = self.get_peripheral_mut::<Afio>(Self::AFIO_BASE) {
-                afio.gpio_bridge_config()
-            } else {
-                None
-            }
-        };
-
-        let Some(bridge) = bridge else {
-            return;
-        };
-
-        let level = {
-            if let Some(src_gpio) = self.get_peripheral_mut::<Gpio>(bridge.src_gpio_base) {
-                src_gpio.read_odr_pin(bridge.src_pin)
-            } else {
-                return;
-            }
-        };
-
-        if let Some(dst_gpio) = self.get_peripheral_mut::<Gpio>(bridge.dst_gpio_base) {
-            dst_gpio.set_idr_pin(bridge.dst_pin, level);
         }
     }
 }

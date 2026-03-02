@@ -79,9 +79,13 @@ impl Simulator {
         self.cpu.set_profiling_enabled(profile_enabled);
         println!(
             "Simulator mode: {} | throttle: {} | periph batch: {}",
-            if fast_mode { "FAST (profiling off)" } else { "PROFILE" }
-            ,if no_throttle { "OFF" } else { "ON" }
-            ,peripheral_tick_batch
+            if fast_mode {
+                "FAST (profiling off)"
+            } else {
+                "PROFILE"
+            },
+            if no_throttle { "OFF" } else { "ON" },
+            peripheral_tick_batch
         );
 
         if profile_enabled {
@@ -153,7 +157,14 @@ impl Simulator {
                             fetch_count += 1;
                             if fetch_count >= report_window {
                                 let elapsed_secs = window_start.elapsed().as_secs_f64();
-                                let _ = elapsed_secs;
+                                if elapsed_secs > 0.0 {
+                                    let actual_freq_hz = report_window_f64 / elapsed_secs;
+                                    println!(
+                                        "Actual Execution Frequency ({} ins): {:.6} MHz",
+                                        report_window,
+                                        actual_freq_hz / 1_000_000.0
+                                    );
+                                }
                                 fetch_count = 0;
                                 window_start = Instant::now();
                             }
@@ -178,7 +189,8 @@ impl Simulator {
                             trace_instruction!(current_pc, ins);
                             let elapsed_cycles = self.cpu.step(ins, current_pc);
 
-                            pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                            pending_peripheral_cycles =
+                                pending_peripheral_cycles.saturating_add(elapsed_cycles);
                             if pending_peripheral_cycles >= peripheral_tick_batch {
                                 self.cpu.peripheral_step_n(pending_peripheral_cycles);
                                 pending_peripheral_cycles = 0;
@@ -219,7 +231,8 @@ impl Simulator {
                             trace_instruction!(current_pc, ins);
                             let elapsed_cycles = self.cpu.step(ins, current_pc);
 
-                            pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                            pending_peripheral_cycles =
+                                pending_peripheral_cycles.saturating_add(elapsed_cycles);
                             if pending_peripheral_cycles >= peripheral_tick_batch {
                                 self.cpu.peripheral_step_n(pending_peripheral_cycles);
                                 pending_peripheral_cycles = 0;
@@ -316,7 +329,8 @@ impl Simulator {
                         trace_instruction!(current_pc, ins);
                         let elapsed_cycles = self.cpu.step(ins, current_pc);
 
-                        pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                        pending_peripheral_cycles =
+                            pending_peripheral_cycles.saturating_add(elapsed_cycles);
                         if pending_peripheral_cycles >= peripheral_tick_batch {
                             self.cpu.peripheral_step_n(pending_peripheral_cycles);
                             pending_peripheral_cycles = 0;
@@ -367,7 +381,8 @@ impl Simulator {
                         trace_instruction!(current_pc, ins);
                         let elapsed_cycles = self.cpu.step(ins, current_pc);
 
-                        pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                        pending_peripheral_cycles =
+                            pending_peripheral_cycles.saturating_add(elapsed_cycles);
                         if pending_peripheral_cycles >= peripheral_tick_batch {
                             self.cpu.peripheral_step_n(pending_peripheral_cycles);
                             pending_peripheral_cycles = 0;
@@ -413,7 +428,6 @@ impl Simulator {
         report_window: u32,
         min_calls_for_top: u64,
     ) {
-
         fn avg_us(duration: Duration, n: u64) -> f64 {
             if n == 0 {
                 0.0
@@ -475,7 +489,8 @@ impl Simulator {
             match fetched_ins {
                 Some(ins) => {
                     let (exec_elapsed, elapsed_cycles) = self.tick(ins, current_pc, true);
-                    pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                    pending_peripheral_cycles =
+                        pending_peripheral_cycles.saturating_add(elapsed_cycles);
 
                     let peripheral_elapsed = if pending_peripheral_cycles >= peripheral_tick_batch {
                         let peripheral_start = Instant::now();
@@ -574,7 +589,10 @@ impl Simulator {
                             cpu_profile.mem_write_count,
                             avg_us(cpu_profile.mem_write_duration, cpu_profile.mem_write_count),
                             cpu_profile.interrupt_check_calls,
-                            avg_us(cpu_profile.interrupt_check_duration, cpu_profile.interrupt_check_calls),
+                            avg_us(
+                                cpu_profile.interrupt_check_duration,
+                                cpu_profile.interrupt_check_calls
+                            ),
                             cpu_profile.interrupt_taken_count,
                             cpu_profile.interrupt_check_from_peripheral_count,
                             cpu_profile.interrupt_hint_set_count,
@@ -609,21 +627,25 @@ impl Simulator {
                         });
 
                         if !op_stats.is_empty() {
-                            let top_n = op_stats.len().min(3);
+                            let top_n = 5usize;
                             println!("ExecTop{} Slow Mnemonic:", top_n);
-                            for (idx, (mnemonic, stat)) in op_stats.iter().take(top_n).enumerate() {
-                                let avg = avg_us(stat.total_duration, stat.calls);
-                                let max = stat.max_duration.as_secs_f64() * 1_000_000.0;
-                                let total = stat.total_duration.as_secs_f64() * 1_000_000.0;
-                                println!(
-                                    "  {}. {} calls {} total {:.3}us avg {:.3}us max {:.3}us",
-                                    idx + 1,
-                                    mnemonic,
-                                    stat.calls,
-                                    total,
-                                    avg,
-                                    max
-                                );
+                            for idx in 0..top_n {
+                                if let Some((mnemonic, stat)) = op_stats.get(idx) {
+                                    let avg = avg_us(stat.total_duration, stat.calls);
+                                    let max = stat.max_duration.as_secs_f64() * 1_000_000.0;
+                                    let total = stat.total_duration.as_secs_f64() * 1_000_000.0;
+                                    println!(
+                                        "  {}. {} calls {} total {:.3}us avg {:.3}us max {:.3}us",
+                                        idx + 1,
+                                        mnemonic,
+                                        stat.calls,
+                                        total,
+                                        avg,
+                                        max
+                                    );
+                                } else {
+                                    println!("  {}. -", idx + 1);
+                                }
                             }
                         } else {
                             println!(
