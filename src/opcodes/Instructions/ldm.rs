@@ -1,9 +1,10 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, OperandResolver, check_condition,
+    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
+    reg_list_contains, resolve_multi_reg_operands,
 };
-use capstone::arch::arm::ArmOperandType;
+use capstone::arch::arm::{ArmOperand, ArmReg};
 
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Ldm;
@@ -17,33 +18,19 @@ pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         return data.size();
     }
 
-    // Collect operands into a Vec so we can index them
-    let operands: Vec<_> = data.operands().collect();
-    let base_reg = operands.get(0).expect("missing base register");
-    let reg_list = &operands[1..];
+    if data.transed_operands.is_empty() {
+        return data.size();
+    }
 
-    let base_reg_id = match base_reg.op_type {
-        ArmOperandType::Reg(reg_id) => data.resolve_reg(reg_id),
-        _ => panic!("Expected base register"),
-    };
-
-    let reg_list_id = reg_list
-        .iter()
-        .filter_map(|op| {
-            if let ArmOperandType::Reg(reg_id) = op.op_type {
-                Some(data.resolve_reg(reg_id))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<u32>>();
+    let base_reg_id = data.transed_operands[0];
+    let reg_list_id = &data.transed_operands[1..];
 
     let base_addr = cpu.read_reg(base_reg_id);
 
     let mut addr = base_addr;
-    for reg_id in &reg_list_id {
+    for &reg_id in reg_list_id {
         let value = cpu.read_mem(addr);
-        cpu.write_reg(*reg_id, value);
+        cpu.write_reg(reg_id, value);
         addr = addr.wrapping_add(4);
     }
 
@@ -51,32 +38,26 @@ pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         cpu.write_reg(base_reg_id, addr);
     }
 
-    if reg_list_id.contains(&15) {
+    if reg_list_id.iter().any(|&r| r == 15) {
         0
     } else {
         data.size()
     }
 }
 
+fn adjust_ldm_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
+    let reg_count = count_reg_operands(operands).saturating_sub(1);
+    let mut execute = 1u32.saturating_add(reg_count);
+    if reg_list_contains(operands, ArmReg::ARM_REG_PC as u16, true) {
+        execute = execute.saturating_add(1);
+    }
+    cycles.execute_cycles = execute;
+}
+
 pub struct OpLdm_resolver;
 impl OperandResolver for OpLdm_resolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let operands: Vec<_> = data.operands().collect();
-        let base_reg = operands.get(0).expect("missing base register");
-
-        if let capstone::arch::arm::ArmOperandType::Reg(reg_id) = base_reg.op_type {
-            let base = data.resolve_reg(reg_id);
-            data.transed_operands.reserve(operands.len());
-            data.transed_operands.push(base);
-            for op in &operands[1..] {
-                if let capstone::arch::arm::ArmOperandType::Reg(r) = op.op_type {
-                    data.transed_operands.push(data.resolve_reg(r));
-                }
-            }
-            base
-        } else {
-            panic!("Expected base register");
-        }
+        resolve_multi_reg_operands(data, true)
     }
 }
 
@@ -98,6 +79,6 @@ pub fn add_ldm_def() -> Vec<crate::opcodes::opcode::Opcode> {
         },
         exec: Op_Ldm::execute,
         operand_resolver: &OpLdm_resolver,
-        adjust_cycles: None,
+        adjust_cycles: Some(adjust_ldm_cycles),
     }]
 }

@@ -243,6 +243,70 @@ impl ArmOperands {
     }
 }
 
+pub fn resolve_multi_reg_operands(data: &mut ArmOpcode, with_base_reg: bool) -> u32 {
+    let operands: Vec<_> = data.operands().collect();
+    data.transed_operands.clear();
+
+    let mut reg_count = 0u32;
+    let mut base_captured = !with_base_reg;
+
+    for op in operands {
+        match op.op_type {
+            ArmOperandType::Reg(reg_id) => {
+                let reg = data.resolve_reg(reg_id);
+                if with_base_reg && !base_captured {
+                    data.transed_operands.push(reg);
+                    base_captured = true;
+                } else {
+                    data.transed_operands.push(reg);
+                    reg_count = reg_count.saturating_add(1);
+                }
+            }
+            _ if with_base_reg && !base_captured => {
+                panic!("Expected base register");
+            }
+            _ => {}
+        }
+    }
+
+    if with_base_reg {
+        if !base_captured {
+            panic!("missing base register");
+        }
+        if data.transed_operands.len() > 1 {
+            data.transed_operands[1..].sort_unstable();
+        }
+    } else {
+        data.transed_operands.sort_unstable();
+        reg_count = data.transed_operands.len() as u32;
+    }
+
+    reg_count
+}
+
+pub fn count_reg_operands(operands: &[ArmOperand]) -> u32 {
+    operands
+        .iter()
+        .filter(|op| matches!(op.op_type, ArmOperandType::Reg(_)))
+        .count() as u32
+}
+
+pub fn reg_list_contains(operands: &[ArmOperand], reg: u16, skip_first_reg: bool) -> bool {
+    let mut skipped = !skip_first_reg;
+    for op in operands {
+        if let ArmOperandType::Reg(reg_id) = op.op_type {
+            if !skipped {
+                skipped = true;
+                continue;
+            }
+            if reg_id.0 == reg {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn UpdateApsr_N(cpu: &mut dyn crate::context::CpuContext, result: u32) {
     // N = bit31 of result
     let mut apsr = cpu.read_apsr();

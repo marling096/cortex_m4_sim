@@ -42,27 +42,27 @@ impl Gpio {
     /// `pin_mask`：关注的引脚位掩码（可同时监视多个引脚）
     #[inline(always)]
     fn notify_odr_change(&mut self, pin_mask: u32) {
-        let changed = (self.odr ^ self.odr_shadow) & pin_mask;
-        if changed == 0 {
-            return;
-        }
-        self.changed_pins_latch |= changed;
-        // 对每个变化的引脚逐位报告
-        let mut bits = changed;
-        while bits != 0 {
-            let pin = bits.trailing_zeros();
-            let new_level = (self.odr >> pin) & 1;
-            self.toggle_count += 1;
-            println!(
-                "[GPIO 0x{:08X}] pin {:>2} -> {} (toggle #{})",
-                self.start,
-                pin,
-                if new_level == 1 { "HIGH" } else { "LOW " },
-                self.toggle_count,
-            );
-            bits &= bits - 1;
-        }
-        self.odr_shadow = self.odr;
+        // let changed = (self.odr ^ self.odr_shadow) & pin_mask;
+        // if changed == 0 {
+        //     return;
+        // }
+        // self.changed_pins_latch |= changed;
+        // // 对每个变化的引脚逐位报告
+        // let mut bits = changed;
+        // while bits != 0 {
+        //     let pin = bits.trailing_zeros();
+        //     let new_level = (self.odr >> pin) & 1;
+        //     self.toggle_count += 1;
+        //     // println!(
+        //     //     "[GPIO 0x{:08X}] pin {:>2} -> {} (toggle #{})",
+        //     //     self.start,
+        //     //     pin,
+        //     //     if new_level == 1 { "HIGH" } else { "LOW " },
+        //     //     self.toggle_count,
+        //     // );
+        //     bits &= bits - 1;
+        // }
+        // self.odr_shadow = self.odr;
     }
 
     #[inline(always)]
@@ -169,7 +169,7 @@ impl Peripheral for Gpio {
             0x08 => { /* IDR is read-only */ }
             0x0C => {
                 self.odr = val;
-                self.notify_odr_change(1 << 13);
+                // self.notify_odr_change(1 << 13);
             }
             0x10 => {
                 self.bsrr = val;
@@ -177,14 +177,14 @@ impl Peripheral for Gpio {
                 let set = val & 0xFFFF;
                 let reset = (val >> 16) & 0xFFFF;
                 self.odr = (self.odr & !reset) | set;
-                self.notify_odr_change(1 << 13);
+                // self.notify_odr_change(1 << 13);
             }
             0x14 => {
                 self.brr = val;
                 // Bits 0-15: reset
                 let reset = val & 0xFFFF;
                 self.odr &= !reset;
-                self.notify_odr_change(1 << 13);
+                // self.notify_odr_change(1 << 13);
             }
             0x18 => {
                 self.lckr = val;

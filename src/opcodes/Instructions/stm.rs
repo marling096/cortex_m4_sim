@@ -1,9 +1,10 @@
 use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, Executable, OperandResolver, check_condition,
+    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
+    resolve_multi_reg_operands,
 };
-use capstone::arch::arm::ArmOperandType;
+use capstone::arch::arm::ArmOperand;
 
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Stm;
@@ -17,18 +18,17 @@ pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     if !check_condition(cpu, data.condition()) {
         return data.size();
     }
-    // Use transed_operands populated by resolver: [base, rlist...]
-    let base_reg_id = data.transed_operands.get(0).copied().unwrap_or(0);
-    let reg_list_ids = if data.transed_operands.len() > 1 {
-        data.transed_operands[1..].to_vec()
-    } else {
-        Vec::new()
-    };
+    if data.transed_operands.is_empty() {
+        return data.size();
+    }
+
+    let base_reg_id = data.transed_operands[0];
+    let reg_list_ids = &data.transed_operands[1..];
 
     let base_addr = cpu.read_reg(base_reg_id);
     let mut addr = base_addr;
-    for reg_id in &reg_list_ids {
-        let value = cpu.read_reg(*reg_id);
+    for &reg_id in reg_list_ids {
+        let value = cpu.read_reg(reg_id);
         cpu.write_mem(addr, value);
         addr = addr.wrapping_add(4);
     }
@@ -58,28 +58,18 @@ pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
         },
         exec: Op_Stm::execute,
         operand_resolver: &OpStm_resolver,
-        adjust_cycles: None,
+        adjust_cycles: Some(adjust_stm_cycles),
     }]
+}
+
+fn adjust_stm_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
+    let reg_count = count_reg_operands(operands).saturating_sub(1);
+    cycles.execute_cycles = 1u32.saturating_add(reg_count);
 }
 
 pub struct OpStm_resolver;
 impl OperandResolver for OpStm_resolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let operands: Vec<_> = data.operands().collect();
-        let base_reg = operands.get(0).expect("missing base register");
-
-        if let ArmOperandType::Reg(reg_id) = base_reg.op_type {
-            let base = data.resolve_reg(reg_id);
-            data.transed_operands.reserve(operands.len());
-            data.transed_operands.push(base);
-            for op in &operands[1..] {
-                if let ArmOperandType::Reg(r) = op.op_type {
-                    data.transed_operands.push(data.resolve_reg(r));
-                }
-            }
-            base
-        } else {
-            panic!("Expected base register");
-        }
+        resolve_multi_reg_operands(data, true)
     }
 }

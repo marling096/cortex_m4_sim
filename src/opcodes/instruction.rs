@@ -51,6 +51,10 @@ impl<'a> Cpu_InstrTable<'a> {
     
     pub fn add_instruction(&mut self, mut instr: Cpu_Instruction<'a>) {
         instr.op.operand_resolver.resolve(&mut instr.data);
+        if let Some(adjust_cycles) = instr.op.adjust_cycles {
+            let operands: Vec<_> = instr.data.operands().collect();
+            adjust_cycles(&mut instr.op.cycles, &operands);
+        }
         self.table.insert(instr.data.address(), instr);
     }
 

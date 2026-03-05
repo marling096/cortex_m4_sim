@@ -37,6 +37,8 @@ pub struct Cpu {
     interrupt_check_hint: bool,
     interrupt_hint_source: u8,
     pending_ppb_event_drain: bool,
+    peripheral_schedule_dirty: bool,
+    peripheral_next_due_cycle: u64,
     ppb_nvic_index: Option<usize>,
     ppb_systick_index: Option<usize>,
 }
@@ -314,6 +316,8 @@ impl Cpu {
             interrupt_check_hint: true,
             interrupt_hint_source: Self::HINT_SRC_OTHER,
             pending_ppb_event_drain: false,
+            peripheral_schedule_dirty: true,
+            peripheral_next_due_cycle: 0,
             ppb_nvic_index,
             ppb_systick_index,
         }
@@ -356,6 +360,8 @@ impl Cpu {
         self.interrupt_check_hint = true;
         self.interrupt_hint_source = Self::HINT_SRC_OTHER;
         self.pending_ppb_event_drain = false;
+        self.peripheral_schedule_dirty = true;
+        self.peripheral_next_due_cycle = 0;
     }
 
     #[inline(always)]
@@ -807,12 +813,18 @@ impl Cpu {
         }
 
         if Self::in_range(addr, Self::PERIPH_BASE, Self::PERIPH_LAST) {
-            self.peripheral_bus.write32(addr, val);
+            let schedule_changed = self.peripheral_bus.write32(addr, val);
+            if schedule_changed {
+                self.peripheral_schedule_dirty = true;
+            }
             return;
         }
 
         if Self::in_range(addr, Self::PPB_BASE, Self::PPB_LAST) {
-            self.ppb.write32(addr, val);
+            let schedule_changed = self.ppb.write32(addr, val);
+            if schedule_changed {
+                self.peripheral_schedule_dirty = true;
+            }
             if Self::is_interrupt_related_ppb_write(addr) {
                 self.set_interrupt_check_hint(Self::HINT_SRC_OTHER);
             }
@@ -926,6 +938,56 @@ impl Cpu {
         if has_peripheral_event || has_ppb_event {
             self.set_interrupt_check_hint(Self::HINT_SRC_PERIPHERAL);
         }
+    }
+
+    #[inline(always)]
+    pub fn next_peripheral_event_in_cycles(&self) -> Option<u32> {
+        let tick_mask = self.peripheral_tick_mask;
+        if tick_mask == 0 {
+            return None;
+        }
+
+        let peripheral_next = if (tick_mask & 1) != 0 {
+            self.peripheral_bus.next_event_in_cycles()
+        } else {
+            None
+        };
+
+        let ppb_next = if (tick_mask & 2) != 0 {
+            self.ppb.next_event_in_cycles()
+        } else {
+            None
+        };
+
+        match (peripheral_next, ppb_next) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn take_and_clear_peripheral_schedule_dirty(&mut self) -> bool {
+        let dirty = self.peripheral_schedule_dirty;
+        self.peripheral_schedule_dirty = false;
+        dirty
+    }
+
+    #[inline(always)]
+    pub fn refresh_peripheral_due_cycle(&mut self, system_cycles: u64, max_lag_cycles: u32) {
+        let max_lag = max_lag_cycles.max(1);
+        let next_delta = self
+            .next_peripheral_event_in_cycles()
+            .unwrap_or(max_lag)
+            .max(1)
+            .min(max_lag);
+        self.peripheral_next_due_cycle = system_cycles.saturating_add(next_delta as u64);
+    }
+
+    #[inline(always)]
+    pub fn peripheral_due_cycle(&self) -> u64 {
+        self.peripheral_next_due_cycle
     }
 
     /// 收集 peripheral_bus 上各外设挂起的 IRQ，通过 NVIC ISPR 寄存器触发中断。

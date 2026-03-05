@@ -135,7 +135,8 @@ impl Peripheral for SysTick {
             return;
         }
 
-        for _ in 0..cycles {
+        let mut remain = cycles;
+        while remain > 0 {
             let cvr = self.cvr.get();
             if cvr == 0 {
                 let reload = self.rvr.get();
@@ -144,15 +145,18 @@ impl Peripheral for SysTick {
                 } else {
                     self.cvr.set(reload);
                 }
+                remain -= 1;
                 continue;
             }
 
-            let dec = cvr - 1;
-            self.cvr.set(dec);
-
-            if dec == 0 {
-                self.on_wrap_event();
+            if remain < cvr {
+                self.cvr.set(cvr - remain);
+                return;
             }
+
+            remain -= cvr;
+            self.cvr.set(0);
+            self.on_wrap_event();
         }
     }
 

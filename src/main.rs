@@ -24,7 +24,7 @@ use crate::peripheral::uart::Uart;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_path = "uart.axf";
+    let input_path = "io_toggle.axf";
     let output_path = "disassembly_detail.asm";
 
     let (_result, cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =

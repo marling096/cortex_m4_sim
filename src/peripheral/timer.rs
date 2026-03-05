@@ -470,6 +470,21 @@ impl Peripheral for GeneralTimer {
         self.is_enabled()
     }
 
+    #[inline(always)]
+    fn next_event_in_cycles(&self) -> Option<u32> {
+        if !self.is_enabled() {
+            return None;
+        }
+
+        let div = self.psc_shadow.get().wrapping_add(1);
+        if div == 0 {
+            return Some(1);
+        }
+
+        let psc_cnt = self.psc_cnt.get() % div;
+        Some(div.saturating_sub(psc_cnt).max(1))
+    }
+
     // ---- IRQ 接口（供 Bus::drain_pending_irqs 调用）----
 
     #[inline(always)]

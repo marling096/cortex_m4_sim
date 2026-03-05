@@ -22,7 +22,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Ldr::execute,
             operand_resolver: &OpLdrResolver,
@@ -35,7 +35,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Ldrb::execute,
             operand_resolver: &OpLdrResolver,
@@ -48,7 +48,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Ldrsb::execute,
             operand_resolver: &OpLdrResolver,
@@ -61,7 +61,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Ldrh::execute,
             operand_resolver: &OpLdrResolver,
@@ -74,7 +74,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             cycles: crate::opcodes::opcode::CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Ldrsh::execute,
             operand_resolver: &OpLdrResolver,

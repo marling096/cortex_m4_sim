@@ -21,7 +21,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_B::execute,
             operand_resolver: &OpBranchResolver,
@@ -34,7 +34,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Bl::execute,
             operand_resolver: &OpBranchResolver,
@@ -47,7 +47,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Bx::execute,
             operand_resolver: &OpBxResolver,
@@ -60,7 +60,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Blx::execute,
             operand_resolver: &OpBxResolver,

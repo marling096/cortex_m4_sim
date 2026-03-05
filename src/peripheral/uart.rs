@@ -214,6 +214,20 @@ impl Peripheral for Uart {
         true
     }
 
+    #[inline(always)]
+    fn is_tick_active(&self) -> bool {
+        self.tx_active()
+    }
+
+    #[inline(always)]
+    fn next_event_in_cycles(&self) -> Option<u32> {
+        if self.tx_active() {
+            Some(1)
+        } else {
+            Some(u32::MAX)
+        }
+    }
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
