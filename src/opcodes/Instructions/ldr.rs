@@ -266,7 +266,10 @@ mod tests {
     use super::*;
     use crate::context::CpuContext;
     use crate::cpu::Cpu;
+    use crate::opcodes::opcode::ArmOpcode;
     use crate::peripheral::bus::Bus;
+    use capstone::arch;
+    use capstone::prelude::*;
     use std::hint::black_box;
     use std::sync::Arc;
     use std::sync::atomic::AtomicU32;
@@ -274,6 +277,20 @@ mod tests {
 
     fn make_cpu() -> Cpu {
         Cpu::new(Arc::new(AtomicU32::new(8_000_000)), 1, Bus::new(), Bus::new())
+    }
+
+    fn make_thumb_capstone() -> Capstone {
+        Capstone::new()
+            .arm()
+            .mode(arch::arm::ArchMode::Thumb)
+            .extra_mode([arch::arm::ArchExtraMode::MClass].iter().copied())
+            .detail(true)
+            .build()
+            .expect("failed to create capstone for ldr perf test")
+    }
+
+    fn ns_per_op(elapsed: std::time::Duration, loops: u64) -> f64 {
+        elapsed.as_nanos() as f64 / loops as f64
     }
 
     #[test]
@@ -404,5 +421,142 @@ mod tests {
         assert!(elapsed_non_wb.as_nanos() > 0);
         assert!(elapsed_pre.as_nanos() > 0);
         assert!(elapsed_post.as_nanos() > 0);
+    }
+
+    #[test]
+    fn perf_ldr_execute_step_breakdown() {
+        let loops = 1_000_000u64;
+
+        let cs = make_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x00, 0x48], 0x0800_0100)
+            .expect("failed to disassemble sample ldr instruction");
+        let insn = insns
+            .iter()
+            .next()
+            .expect("sample bytes produced no instruction");
+
+        let mut data = ArmOpcode::new(&cs, &insn).expect("failed to build ArmOpcode for ldr sample");
+        OpLdrResolver.resolve(&mut data);
+
+        let mut cpu = make_cpu();
+        cpu.write_apsr(0);
+
+        let base_reg = data.arm_operands.rn;
+        let test_base = 0x2000_0101u32;
+        cpu.write_reg(base_reg, test_base);
+
+        let resolver_addr = test_base.wrapping_add_signed(data.arm_operands.mem_disp);
+        let aligned_addr = resolver_addr & !3;
+        cpu.write_mem(aligned_addr, 0xA5A5_1234);
+
+        let mut checksum = 0u32;
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let cond_ok = check_condition(&cpu, data.condition());
+            checksum ^= cond_ok as u32;
+        }
+        let elapsed_condition = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let (rt, addr) = operand_resolver_multi_cached(&mut cpu, &data);
+            checksum ^= rt ^ addr;
+        }
+        let elapsed_resolver = start.elapsed();
+
+        let mut addr_for_align = resolver_addr | 0x2;
+        let start = Instant::now();
+        for _ in 0..loops {
+            addr_for_align = black_box(addr_for_align.wrapping_add(1));
+            let addr = addr_for_align & !3;
+            checksum ^= addr;
+        }
+        let elapsed_align = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let val = cpu.read_mem(aligned_addr);
+            checksum ^= val;
+        }
+        let elapsed_read = start.elapsed();
+
+        let rt = data.arm_operands.rd;
+        let start = Instant::now();
+        for i in 0..loops {
+            let val = 0x1234_0000u32 ^ i as u32;
+            cpu.write_reg(rt, val);
+            checksum ^= cpu.read_reg(rt);
+        }
+        let elapsed_write = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let ret = if rt == 15 { 0 } else { data.size() };
+            checksum ^= ret;
+        }
+        let elapsed_ret = start.elapsed();
+
+        let start = Instant::now();
+        for _ in 0..loops {
+            let ret = Op_Ldr::execute(&mut cpu, &data);
+            checksum ^= ret;
+        }
+        let elapsed_full = start.elapsed();
+
+        let full_ns = ns_per_op(elapsed_full, loops);
+        let pct_of_full = |d: std::time::Duration| {
+            if full_ns <= f64::EPSILON {
+                0.0
+            } else {
+                ns_per_op(d, loops) / full_ns * 100.0
+            }
+        };
+
+        println!(
+            "[perf][ldr][execute-steps] condition_check: total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_condition,
+            ns_per_op(elapsed_condition, loops),
+            pct_of_full(elapsed_condition)
+        );
+        println!(
+            "[perf][ldr][execute-steps] operand_resolver_multi_cached: total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_resolver,
+            ns_per_op(elapsed_resolver, loops),
+            pct_of_full(elapsed_resolver)
+        );
+        println!(
+            "[perf][ldr][execute-steps] align_addr(addr & !3): total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_align,
+            ns_per_op(elapsed_align, loops),
+            pct_of_full(elapsed_align)
+        );
+        println!(
+            "[perf][ldr][execute-steps] read_mem: total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_read,
+            ns_per_op(elapsed_read, loops),
+            pct_of_full(elapsed_read)
+        );
+        println!(
+            "[perf][ldr][execute-steps] write_reg: total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_write,
+            ns_per_op(elapsed_write, loops),
+            pct_of_full(elapsed_write)
+        );
+        println!(
+            "[perf][ldr][execute-steps] return_value_select: total={:?}, {:.2} ns/op ({:.1}%)",
+            elapsed_ret,
+            ns_per_op(elapsed_ret, loops),
+            pct_of_full(elapsed_ret)
+        );
+        println!(
+            "[perf][ldr][execute-steps] full_execute: total={:?}, {:.2} ns/op",
+            elapsed_full,
+            full_ns
+        );
+
+        black_box(checksum);
+        assert!(elapsed_full.as_nanos() > 0);
     }
 }
