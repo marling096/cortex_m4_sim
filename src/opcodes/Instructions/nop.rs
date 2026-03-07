@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 use crate::opcodes::instruction::{InstrBuilder};
 
@@ -30,6 +30,7 @@ pub fn add_nop_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // NOP{cond}
 pub struct Op_Nop;
 impl Executable for Op_Nop {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

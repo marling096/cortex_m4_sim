@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
@@ -9,6 +9,7 @@ use capstone::arch::arm::{ArmOperand, ArmReg};
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Ldm;
 impl Executable for Op_Ldm {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         ldm(cpu, data)
     }

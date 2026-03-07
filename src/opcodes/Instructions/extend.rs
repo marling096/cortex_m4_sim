@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
 	ArmOpcode, Executable, OperandResolver, check_condition, resolve_op2_runtime,
@@ -71,6 +71,7 @@ impl OperandResolver for OpExtendResolver {
 
 pub struct Op_Uxtb;
 impl Executable for Op_Uxtb {
+	#[inline(always)]
 	fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
 		if !check_condition(cpu, data.condition()) {
 			return data.size();
@@ -87,6 +88,7 @@ impl Executable for Op_Uxtb {
 
 pub struct Op_Uxth;
 impl Executable for Op_Uxth {
+	#[inline(always)]
 	fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
 		if !check_condition(cpu, data.condition()) {
 			return data.size();

@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -87,11 +87,12 @@ pub fn add_bitop_def() -> Vec<Opcode> {
 // AND, ORR, EOR, BIC, and ORN
 // op{S}{cond} {Rd,} Rn, Operand2
 // Operand2 can be a:
-// • Constant
-// • Register with optional shift
+// 鈥?Constant
+// 鈥?Register with optional shift
 
 pub struct Op_And;
 impl Executable for Op_And {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -115,6 +116,7 @@ impl Executable for Op_And {
 
 pub struct Op_Orr;
 impl Executable for Op_Orr {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -135,6 +137,7 @@ impl Executable for Op_Orr {
 
 pub struct Op_Bic;
 impl Executable for Op_Bic {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -156,6 +159,7 @@ impl Executable for Op_Bic {
 
 pub struct Op_Orn;
 impl Executable for Op_Orn {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -177,6 +181,7 @@ impl Executable for Op_Orn {
 
 pub struct Op_Eor;
 impl Executable for Op_Eor {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

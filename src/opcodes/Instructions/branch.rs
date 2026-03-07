@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, check_condition,
@@ -76,6 +76,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
 
 pub struct Op_B;
 impl Executable for Op_B {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -89,6 +90,7 @@ impl Executable for Op_B {
 
 pub struct Op_Bl;
 impl Executable for Op_Bl {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -105,6 +107,7 @@ impl Executable for Op_Bl {
 
 pub struct Op_Bx;
 impl Executable for Op_Bx {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -122,6 +125,7 @@ impl Executable for Op_Bx {
 
 pub struct Op_Blx;
 impl Executable for Op_Blx {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

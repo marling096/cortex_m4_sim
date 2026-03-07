@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -11,6 +11,7 @@ use capstone::arch::arm::ArmOperandType;
 
 pub struct Op_Tst;
 impl Executable for Op_Tst {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -31,6 +32,7 @@ impl Executable for Op_Tst {
 
 pub struct Op_Teq;
 impl Executable for Op_Teq {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

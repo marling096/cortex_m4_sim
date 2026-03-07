@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
@@ -152,6 +152,7 @@ impl OperandResolver for OpCalculateResolver {
 
 pub struct Op_Add;
 impl Executable for Op_Add {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -166,6 +167,7 @@ impl Executable for Op_Add {
 
 pub struct Op_Adc;
 impl Executable for Op_Adc {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -180,6 +182,7 @@ impl Executable for Op_Adc {
 
 pub struct Op_Sub;
 impl Executable for Op_Sub {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -196,6 +199,7 @@ impl Executable for Op_Sub {
 
 pub struct Op_Sbc;
 impl Executable for Op_Sbc {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -210,6 +214,7 @@ impl Executable for Op_Sbc {
 
 pub struct Op_Rsb;
 impl Executable for Op_Rsb {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -224,6 +229,7 @@ impl Executable for Op_Rsb {
 
 pub struct Op_Mul;
 impl Executable for Op_Mul {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -238,6 +244,7 @@ impl Executable for Op_Mul {
 
 pub struct Op_Udiv;
 impl Executable for Op_Udiv {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -252,6 +259,7 @@ impl Executable for Op_Udiv {
 
 pub struct Op_Mls;
 impl Executable for Op_Mls {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

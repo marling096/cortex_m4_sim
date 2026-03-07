@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -49,6 +49,7 @@ pub fn add_cmp_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cmp;
 impl Executable for Op_Cmp {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -62,6 +63,7 @@ impl Executable for Op_Cmp {
 
 pub struct Op_Cmn;
 impl Executable for Op_Cmn {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

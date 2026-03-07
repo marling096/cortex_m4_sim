@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
@@ -28,6 +28,7 @@ pub fn add_Hint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // Hint{cond}
 pub struct Op_Hint;
 impl Executable for Op_Hint {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

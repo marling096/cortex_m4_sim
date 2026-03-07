@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
@@ -9,6 +9,7 @@ use capstone::arch::arm::ArmOperand;
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Stm;
 impl Executable for Op_Stm {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stm(cpu, data)
     }

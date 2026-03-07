@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
@@ -147,6 +147,7 @@ fn operand_resolver_multi_cached_no_index(
 // --- LDR ---
 pub struct Op_Ldr;
 impl Executable for Op_Ldr {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -163,6 +164,7 @@ impl Executable for Op_Ldr {
 
 pub struct Op_Ldrb;
 impl Executable for Op_Ldrb {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -176,6 +178,7 @@ impl Executable for Op_Ldrb {
 
 pub struct Op_Ldrsb;
 impl Executable for Op_Ldrsb {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -190,6 +193,7 @@ impl Executable for Op_Ldrsb {
 
 pub struct Op_Ldrh;
 impl Executable for Op_Ldrh {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -203,6 +207,7 @@ impl Executable for Op_Ldrh {
 
 pub struct Op_Ldrsh;
 impl Executable for Op_Ldrsh {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

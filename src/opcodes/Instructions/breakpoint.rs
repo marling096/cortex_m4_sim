@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver};
 use crate::opcodes::instruction::{InstrBuilder};
 use capstone::arch::arm::ArmOperandType;
@@ -33,6 +33,7 @@ pub fn add_breakpoint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Bkpt;
 impl Executable for Op_Bkpt {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         // BKPT may be unconditional but follow common pattern
         let imm = resolve_bkpt_imm(cpu, data);

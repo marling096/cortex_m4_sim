@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
@@ -62,6 +62,7 @@ fn adjust_pop_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
 // POP{cond} reglist
 pub struct Op_Push;
 impl Executable for Op_Push {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stack_push(cpu, data)
     }
@@ -69,6 +70,7 @@ impl Executable for Op_Push {
 
 pub struct Op_Pop;
 impl Executable for Op_Pop {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         stack_pop(cpu, data)
     }
@@ -110,7 +112,7 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
         let val = cpu.read_mem(sp);
         sp = sp.wrapping_add(4);
         if r == 15 {
-            // 先更新 SP，再处理 PC/EXC_RETURN
+            // 鍏堟洿鏂?SP锛屽啀澶勭悊 PC/EXC_RETURN
             pc_popped = true;
             pc_val = val;
         } else {
@@ -119,7 +121,7 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
     cpu.write_reg(13, sp);
     if pc_popped {
-        // 如果弹出值是 EXC_RETURN，触发异常返回（不清除 Thumb bit）
+        // 濡傛灉寮瑰嚭鍊兼槸 EXC_RETURN锛岃Е鍙戝紓甯歌繑鍥烇紙涓嶆竻闄?Thumb bit锛?
         if !cpu.try_exception_return(pc_val) {
             cpu.write_reg(15, pc_val & !1);
         }

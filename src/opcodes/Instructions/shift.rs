@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -109,7 +109,7 @@ impl OperandResolver for OpShiftResolver {
             data.arm_operands.rn = rm;   // Rm is the value to be shifted
             data.arm_operands.op2 = op2; // Rs or imm is the shift amount
         } else {
-            // 2-operand T1: LSLS Rd, Rs  →  Rd = Rd SHIFT Rs
+            // 2-operand T1: LSLS Rd, Rs  鈫? Rd = Rd SHIFT Rs
             // operand[0]=Rd (dest & source), operand[1]=Rs (shift amount)
             data.arm_operands.rn = rd;   // source value is Rd itself
             data.arm_operands.op2 = data.get_operand(1); // shift amount = operand[1]
@@ -125,6 +125,7 @@ impl OperandResolver for OpShiftResolver {
 
 pub struct Op_Asr;
 impl Executable for Op_Asr {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -166,6 +167,7 @@ impl Executable for Op_Asr {
 
 pub struct Op_Lsl;
 impl Executable for Op_Lsl {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -198,6 +200,7 @@ impl Executable for Op_Lsl {
 
 pub struct Op_Lsr;
 impl Executable for Op_Lsr {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -231,6 +234,7 @@ impl Executable for Op_Lsr {
 
 pub struct Op_Ror;
 impl Executable for Op_Ror {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -259,6 +263,7 @@ impl Executable for Op_Ror {
 
 pub struct Op_Rrx;
 impl Executable for Op_Rrx {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();

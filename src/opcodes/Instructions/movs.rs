@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -11,6 +11,7 @@ use capstone::arch::arm::{ArmOperandType, ArmShift};
 // MVN{S}{cond} Rd, Operand2
 pub struct Op_Movs;
 impl Executable for Op_Movs {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
@@ -32,6 +33,7 @@ impl Executable for Op_Movs {
 
 pub struct Op_Mvns;
 impl Executable for Op_Mvns {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
         if !check_condition(cpu, data.condition()) {
             return data.size();
