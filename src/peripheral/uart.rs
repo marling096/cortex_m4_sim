@@ -61,7 +61,7 @@ impl Uart {
         if !self.tx_enabled() {
             return;
         }
-        println!("[uart] push_tx_byte: 0x{:02X} ('{}')\n", byte, if (0x20..=0x7e).contains(&byte) { byte as char } else { '.' });
+        // println!("[uart] push_tx_byte: 0x{:02X} ('{}')\n", byte, if (0x20..=0x7e).contains(&byte) { byte as char } else { '.' });
         self.tx_bytes.push(byte);
         self.tx_pending.push_back(byte);
         self.dr = byte as u32;
@@ -135,7 +135,7 @@ impl Uart {
                     } else {
                         '.'
                     };
-                    println!("[usart-rx] byte=0x{byte:02X} ('{display}')");
+                    // println!("[usart-rx] byte=0x{byte:02X} ('{display}')");
                 }
                 self.rx_state = RxState::Idle;
             }
@@ -178,7 +178,7 @@ impl Peripheral for Uart {
                 let _ = val;
             }
             0x04 => {
-                println!("rx original value: 0x{:08X}", val);
+                // println!("rx original value: 0x{:08X}", val);
                 self.push_tx_byte((val & 0xFF) as u8);
             }
             0x08 => {

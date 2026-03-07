@@ -399,42 +399,42 @@ pub fn operand_resolver_multi_runtime(
     let writeback = data.writeback();
     let post_index = op3.is_some();
 
-    if !writeback {
-        let addr = match op2.op_type {
-            ArmOperandType::Mem(mem) => {
-                let base = cpu.read_reg(data.resolve_reg(mem.base()));
+    let (base_reg, base_val, disp, index_offset) = match op2.op_type {
+        ArmOperandType::Mem(mem) => {
+            let base_reg = data.resolve_reg(mem.base());
+            let base_val = cpu.read_reg(base_reg);
+            let disp = mem.disp();
+            let index_offset = if mem.index() != capstone::RegId::INVALID_REG {
+                let val = cpu.read_reg(data.resolve_reg(mem.index()));
+                let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
+                let (r2_val, _carry) = op_shift_match_by_shift(op2.shift, val, current_c);
+                r2_val
+            } else {
+                0
+            };
+            (base_reg, base_val, disp, index_offset)
+        }
+        _ => panic!("operand2 is not a memory operand"),
+    };
 
-                let disp = mem.disp();
-                if mem.index() != capstone::RegId::INVALID_REG {
-                    let val = cpu.read_reg(data.resolve_reg(mem.index()));
-                    let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
-                    let (r2_val, _carry) = op_shift_match_by_shift(op2.shift, val, current_c);
-                    base.wrapping_add(r2_val)
-                } else {
-                    base.wrapping_add_signed(disp)
-                }
-            }
-            _ => panic!("operand2 is not a memory operand"),
+    let pre_offset = index_offset.wrapping_add_signed(disp);
+    if !writeback {
+        return (rt, base_val.wrapping_add(pre_offset));
+    }
+
+    if post_index {
+        let post_offset = match op3.expect("missing post-index offset").op_type {
+            ArmOperandType::Imm(imm) => imm as u32,
+            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)),
+            _ => panic!("third operand is not an immediate/register"),
         };
+        let addr = base_val;
+        let new_base = base_val.wrapping_add(post_offset);
+        cpu.write_reg(base_reg, new_base);
         (rt, addr)
     } else {
-        let addr = match op2.op_type {
-            ArmOperandType::Mem(mem) => {
-                let base = data.resolve_reg(mem.base());
-                let disp = mem.disp();
-                if post_index {
-                    let op3 = op3.expect("missing post-index immediate");
-                    let op3_offset = match op3.op_type {
-                        ArmOperandType::Imm(imm) => imm,
-                        _ => panic!("third operand is not an immediate"),
-                    };
-                    base.wrapping_add_signed(op3_offset)
-                } else {
-                    base.wrapping_add_signed(disp)
-                }
-            }
-            _ => panic!("operand2 is not a memory operand"),
-        };
+        let addr = base_val.wrapping_add(pre_offset);
+        cpu.write_reg(base_reg, addr);
         (rt, addr)
     }
 }

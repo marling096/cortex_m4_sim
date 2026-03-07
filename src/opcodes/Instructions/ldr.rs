@@ -132,12 +132,16 @@ fn operand_resolver_multi_cached_no_index(
     }
 
     let base = cpu.read_reg(ops.rn);
-    let addr = if ops.mem_post_index {
-        base.wrapping_add_signed(ops.mem_post_imm)
+    if ops.mem_post_index {
+        // Post-indexed addressing uses the old base for access, then updates base.
+        let new_base = base.wrapping_add_signed(ops.mem_post_imm);
+        cpu.write_reg(ops.rn, new_base);
+        (rt, base)
     } else {
-        base.wrapping_add_signed(ops.mem_disp)
-    };
-    (rt, addr)
+        let addr = base.wrapping_add_signed(ops.mem_disp);
+        cpu.write_reg(ops.rn, addr);
+        (rt, addr)
+    }
 }
 
 // --- LDR ---
@@ -306,6 +310,7 @@ mod tests {
         let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops);
         assert_eq!(rt, 3);
         assert_eq!(addr, 0x2000_01F0);
+        assert_eq!(cpu.read_reg(4), 0x2000_01F0);
     }
 
     #[test]
@@ -324,7 +329,8 @@ mod tests {
 
         let (rt, addr) = operand_resolver_multi_cached_no_index(&mut cpu, &ops);
         assert_eq!(rt, 5);
-        assert_eq!(addr, 0x2000_0324);
+        assert_eq!(addr, 0x2000_0300);
+        assert_eq!(cpu.read_reg(6), 0x2000_0324);
     }
 
     #[test]

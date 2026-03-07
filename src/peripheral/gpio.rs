@@ -42,27 +42,27 @@ impl Gpio {
     /// `pin_mask`：关注的引脚位掩码（可同时监视多个引脚）
     #[inline(always)]
     fn notify_odr_change(&mut self, pin_mask: u32) {
-        // let changed = (self.odr ^ self.odr_shadow) & pin_mask;
-        // if changed == 0 {
-        //     return;
-        // }
-        // self.changed_pins_latch |= changed;
-        // // 对每个变化的引脚逐位报告
-        // let mut bits = changed;
-        // while bits != 0 {
-        //     let pin = bits.trailing_zeros();
-        //     let new_level = (self.odr >> pin) & 1;
-        //     self.toggle_count += 1;
-        //     // println!(
-        //     //     "[GPIO 0x{:08X}] pin {:>2} -> {} (toggle #{})",
-        //     //     self.start,
-        //     //     pin,
-        //     //     if new_level == 1 { "HIGH" } else { "LOW " },
-        //     //     self.toggle_count,
-        //     // );
-        //     bits &= bits - 1;
-        // }
-        // self.odr_shadow = self.odr;
+        let changed = (self.odr ^ self.odr_shadow) & pin_mask;
+        if changed == 0 {
+            return;
+        }
+        self.changed_pins_latch |= changed;
+        // 对每个变化的引脚逐位报告
+        let mut bits = changed;
+        while bits != 0 {
+            let pin = bits.trailing_zeros();
+            let new_level = (self.odr >> pin) & 1;
+            self.toggle_count += 1;
+            println!(
+                "[GPIO 0x{:08X}] pin {:>2} -> {} (toggle #{})",
+                self.start,
+                pin,
+                if new_level == 1 { "HIGH" } else { "LOW " },
+                self.toggle_count,
+            );
+            bits &= bits - 1;
+        }
+        self.odr_shadow = self.odr;
     }
 
     #[inline(always)]
