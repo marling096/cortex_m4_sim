@@ -149,7 +149,7 @@ pub struct Op_Ldr;
 impl Executable for Op_Ldr {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, mut addr) = operand_resolver_multi_cached(cpu, data);
@@ -166,7 +166,7 @@ pub struct Op_Ldrb;
 impl Executable for Op_Ldrb {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_cached(cpu, data);
@@ -180,7 +180,7 @@ pub struct Op_Ldrsb;
 impl Executable for Op_Ldrsb {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_cached(cpu, data);
@@ -195,7 +195,7 @@ pub struct Op_Ldrh;
 impl Executable for Op_Ldrh {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_cached(cpu, data);
@@ -209,7 +209,7 @@ pub struct Op_Ldrsh;
 impl Executable for Op_Ldrsh {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_cached(cpu, data);
@@ -223,6 +223,7 @@ impl Executable for Op_Ldrsh {
 pub struct OpLdrResolver;
 impl OperandResolver for OpLdrResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         let arch_detail = if let capstone::arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
             arm
         } else {

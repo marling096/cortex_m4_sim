@@ -51,7 +51,7 @@ pub struct Op_Cmp;
 impl Executable for Op_Cmp {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rn = data.arm_operands.rn;
@@ -65,7 +65,7 @@ pub struct Op_Cmn;
 impl Executable for Op_Cmn {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rn = data.arm_operands.rn;
@@ -85,6 +85,7 @@ impl OperandResolver for OpCmpResolver {
             },
             None => 0,
         };
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rn = rn;
         data.arm_operands.op2 = data.get_operand(1);
         rn

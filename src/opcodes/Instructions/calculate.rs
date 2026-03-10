@@ -140,6 +140,7 @@ impl OperandResolver for OpCalculateResolver {
             },
             None => rd,
         };
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rd = rd;
         data.arm_operands.rn = rn;
         data.arm_operands.op2 = data.get_operand(2).or_else(|| data.get_operand(1));
@@ -154,7 +155,7 @@ pub struct Op_Add;
 impl Executable for Op_Add {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -169,7 +170,7 @@ pub struct Op_Adc;
 impl Executable for Op_Adc {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -184,7 +185,7 @@ pub struct Op_Sub;
 impl Executable for Op_Sub {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -201,7 +202,7 @@ pub struct Op_Sbc;
 impl Executable for Op_Sbc {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -216,7 +217,7 @@ pub struct Op_Rsb;
 impl Executable for Op_Rsb {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -231,7 +232,7 @@ pub struct Op_Mul;
 impl Executable for Op_Mul {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -246,7 +247,7 @@ pub struct Op_Udiv;
 impl Executable for Op_Udiv {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -261,7 +262,7 @@ pub struct Op_Mls;
 impl Executable for Op_Mls {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;

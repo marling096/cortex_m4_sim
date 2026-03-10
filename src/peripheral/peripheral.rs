@@ -34,6 +34,7 @@ pub trait Peripheral: Send {
         true
     }
 
+    #[inline(always)]
     /// 返回待处理的 IRQ 编号（0-based, 对应 NVIC 中断线），None 表示无中断
     fn pending_irq(&self) -> Option<u32> {
         None
@@ -50,6 +51,11 @@ pub trait Peripheral: Send {
     #[inline(always)]
     fn next_event_in_cycles(&self) -> Option<u32> {
         None
+    }
+
+    #[inline(always)]
+    fn next_tick_cycle(&self) -> Option<u32> {
+        self.next_event_in_cycles()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any;

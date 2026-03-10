@@ -6,7 +6,7 @@ pub struct Op_It;
 impl Executable for Op_It {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         // IT sets the following instruction's condition in Thumb; emulator treats as no-op
@@ -38,7 +38,8 @@ pub fn add_it_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpItResolver;
 impl OperandResolver for OpItResolver {
-    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         // IT has no runtime operands for this emulator
         0
     }

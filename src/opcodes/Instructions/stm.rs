@@ -16,7 +16,7 @@ impl Executable for Op_Stm {
 }
 
 pub fn stm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-    if !check_condition(cpu, data.condition()) {
+    if !check_condition(cpu, data.arm_operands.condition) {
         return data.size();
     }
     if data.transed_operands.is_empty() {

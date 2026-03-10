@@ -1,6 +1,7 @@
 mod context;
 mod cpu;
 mod disassembler;
+mod jit_engine;
 mod opcodes;
 mod peripheral;
 mod simulator;
@@ -9,6 +10,7 @@ mod perf_tests;
 
 use crate::cpu::Cpu;
 use crate::disassembler::disassemble_from_reset_handler;
+use crate::jit_engine::table::JitInstructionTableBuilder;
 use crate::opcodes::instruction::{Cpu_InstrTable, Cpu_Instruction, OpcodeTable};
 use crate::opcodes::opcode::ArmOpcode;
 use crate::peripheral::bus::Bus;
@@ -24,7 +26,7 @@ use crate::peripheral::uart::Uart;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_path = "uart_loop.axf";
+    let input_path = "uart_helloworld.axf";
     let output_path = "disassembly_detail.asm";
 
     let (_result, cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =
@@ -60,6 +62,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Building instruction table finished. Opitimizing...");
         instr_table.optimize();
         instr_table
+    };
+    let jit_instr_table = {
+        let mut builder = JitInstructionTableBuilder::new();
+        for insns in &all_insns_storage {
+            builder.extend_disassembly(&opcode_table, &cs, insns.iter())?;
+        }
+        builder.build()
     };
 
 
@@ -107,7 +116,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let cpu = Cpu::new(shared_freq, 1, bus, ppb);
     let mut simulator = simulator::Simulator::new(cpu);
     simulator.sim_reset(dcw_data, initial_sp, reset_handler_ptr);
-    simulator.sim_loop(cpu_instr_table);
+    simulator.sim_loop(cpu_instr_table, jit_instr_table)?;
 
     Ok(())
 }

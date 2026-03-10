@@ -48,6 +48,7 @@ fn breakpoint_imm(_cpu: &mut dyn CpuContext, imm: u32) {
 pub struct OpBkptResolver;
 impl OperandResolver for OpBkptResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         data.arm_operands.op2 = data.get_operand(0);
         0
     }

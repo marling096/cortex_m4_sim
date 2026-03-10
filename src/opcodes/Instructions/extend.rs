@@ -62,6 +62,7 @@ impl OperandResolver for OpExtendResolver {
 			None => 0,
 		};
 
+		data.arm_operands.condition = data.condition();
 		data.arm_operands.rd = rd;
 		data.arm_operands.rn = rn;
 		data.arm_operands.op2 = data.get_operand(1);
@@ -73,7 +74,7 @@ pub struct Op_Uxtb;
 impl Executable for Op_Uxtb {
 	#[inline(always)]
 	fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-		if !check_condition(cpu, data.condition()) {
+		if !check_condition(cpu, data.arm_operands.condition) {
 			return data.size();
 		}
 
@@ -90,7 +91,7 @@ pub struct Op_Uxth;
 impl Executable for Op_Uxth {
 	#[inline(always)]
 	fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-		if !check_condition(cpu, data.condition()) {
+		if !check_condition(cpu, data.arm_operands.condition) {
 			return data.size();
 		}
 

@@ -71,7 +71,7 @@ pub trait MatchFn {
 }
 pub type CycleAdjustFn = fn(&mut CycleInfo, &[ArmOperand]);
 
-use capstone::arch::arm::{ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
+use capstone::arch::arm::{ArmInsn, ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
 use capstone::{Insn, InsnDetail};
 
 /// 封装了 ARM 指令及其详细信息的结构体
@@ -212,12 +212,27 @@ impl<'a> ArmOpcode<'a> {
     }
 
     pub fn it_mask(&self) -> u8 {
-        // self.arm_detail().it_mask()
-        0
+        if self.id() != ArmInsn::ARM_INS_IT as u32 {
+            return 0;
+        }
+
+        self.insn.bytes().first().map(|byte| byte & 0x0F).unwrap_or(0)
+    }
+
+    pub fn it_following_count(&self) -> u8 {
+        let mask = self.it_mask();
+        if mask == 0 {
+            return 0;
+        }
+
+        (4u32.saturating_sub(mask.trailing_zeros())) as u8
     }
 }
 
 pub struct ArmOperands {
+
+    pub condition: ArmCC,
+
     pub rd: u32,
     pub rn: u32,
     pub op2: Option<ArmOperand>,
@@ -231,6 +246,7 @@ pub struct ArmOperands {
 impl ArmOperands {
     pub fn new() -> Self {
         ArmOperands {
+            condition: ArmCC::ARM_CC_AL,
             rd: 0,
             rn: 0,
             op2: None,
@@ -244,6 +260,7 @@ impl ArmOperands {
 }
 
 pub fn resolve_multi_reg_operands(data: &mut ArmOpcode, with_base_reg: bool) -> u32 {
+    data.arm_operands.condition = data.condition();
     let operands: Vec<_> = data.operands().collect();
     data.transed_operands.clear();
 

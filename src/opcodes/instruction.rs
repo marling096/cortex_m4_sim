@@ -126,6 +126,17 @@ impl<'a> Cpu_InstrTable<'a> {
         self.fast_table = fast_table;
         println!("Instruction table optimized: Base=0x{:08X}, Size={}, Entries moved to fast lookup.", self.fast_base, size);
     }
+
+    pub fn iter_entries(&self) -> impl Iterator<Item = (u32, &Cpu_Instruction<'a>)> + '_ {
+        let fast_base = self.fast_base;
+        let fast_iter = self.fast_table.iter().enumerate().filter_map(move |(index, entry)| {
+            entry
+                .as_ref()
+                .map(|instr| (fast_base.wrapping_add((index as u32) << 1), instr))
+        });
+
+        fast_iter.chain(self.table.iter().map(|(addr, instr)| (*addr, instr)))
+    }
 }
 
 

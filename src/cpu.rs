@@ -83,14 +83,15 @@ impl Cpu_pipeline {
 }
 
 impl CpuContext for Cpu {
+    #[inline(always)]
     fn read_mem(&self, addr: u32) -> u32 {
         self.read32(addr)
     }
-
+    #[inline(always)]
     fn write_mem(&mut self, addr: u32, val: u32) {
         self.write32(addr, val);
     }
-
+    #[inline(always)]
     fn read_reg(&self, r: u32) -> u32 {
         // match r {
         //     13 => {
@@ -109,7 +110,7 @@ impl CpuContext for Cpu {
         // }
         self.registers.reg[r as usize]
     }
-
+    #[inline(always)]
     fn write_reg(&mut self, r: u32, v: u32) {
         // match r {
         //     13 => {
@@ -128,14 +129,15 @@ impl CpuContext for Cpu {
         // }
         self.registers.reg[r as usize] = v;
     }
+    #[inline(always)]
     fn read_gpr(&self, r: u32) -> u32 {
         self.registers.reg[r as usize]
     }
-
+    #[inline(always)]
     fn write_gpr(&mut self, r: u32, v: u32) {
         self.registers.reg[r as usize] = v;
     }
-
+    #[inline(always)]
     fn read_msp(&self, _r: u32) -> u32 {
         if self.registers.is_msp {
             self.registers.reg[13]
@@ -143,6 +145,7 @@ impl CpuContext for Cpu {
             0 // TODO: handle banked MSP
         }
     }
+    #[inline(always)]
     fn write_msp(&mut self, v: u32) {
         if self.registers.is_msp {
             self.registers.reg[13] = v;
@@ -150,7 +153,7 @@ impl CpuContext for Cpu {
             // TODO: handle banked MSP
         }
     }
-
+    #[inline(always)]
     fn read_psp(&self, _r: u32) -> u32 {
         if !self.registers.is_msp {
             self.registers.reg[13]
@@ -158,7 +161,7 @@ impl CpuContext for Cpu {
             0 // TODO: handle banked PSP
         }
     }
-
+    #[inline(always)]
     fn write_psp(&mut self, v: u32) {
         if !self.registers.is_msp {
             self.registers.reg[13] = v;
@@ -166,38 +169,39 @@ impl CpuContext for Cpu {
             // TODO: handle banked PSP
         }
     }
-
+    #[inline(always)]
     fn read_sp(&self) -> u32 {
         self.registers.reg[13]
     }
-
+    #[inline(always)]
     fn write_sp(&mut self, v: u32) {
         self.registers.reg[13] = v;
     }
-
+    #[inline(always)]
     fn read_lr(&self, _r: u32) -> u32 {
         self.registers.reg[14]
     }
-
+    #[inline(always)]
     fn write_lr(&mut self, v: u32) {
         self.registers.reg[14] = v;
     }
-
+    #[inline(always)]
     fn read_pc(&self) -> u32 {
         self.registers.reg[15]
     }
-
+    #[inline(always)]
     fn write_pc(&mut self, pc: u32) {
         self.registers.reg[15] = pc;
     }
-
+    #[inline(always)]
     fn read_apsr(&self) -> u32 {
         self.registers.apsr
     }
+    #[inline(always)]
     fn write_apsr(&mut self, v: u32) {
         self.registers.apsr = v;
     }
-
+    #[inline(always)]
     fn try_exception_return(&mut self, val: u32) -> bool {
         Cpu::try_exception_return(self, val)
     }
@@ -761,30 +765,59 @@ impl Cpu {
         panic!("Memory Write Error: Unmapped address 0x{:08X}", addr);
     }
 
-    // changed: make step take &mut self and avoid borrow conflicts
     #[inline(always)]
-    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) -> u32 {
+    pub fn begin_step(&mut self) -> Option<u32> {
         if self.pending_ppb_event_drain {
             self.drain_interrupt_events();
             self.pending_ppb_event_drain = false;
         }
         if self.interrupt_check_hint && self.try_take_interrupt() {
-            return 1;
+            return Some(1);
         }
 
         if self.Cpu_pipeline.remain_cycles > 0 {
             self.Cpu_pipeline.remain_cycles -= 1;
-            return 1;
+            return Some(1);
         }
 
-        let pc_update = (ins.op.exec)(&mut *self, &ins.data);
+        None
+    }
+
+    #[inline(always)]
+    pub fn finish_step_cycles(
+        &mut self,
+        execute_cycles: u32,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
         self.update_pc_with_current(current_pc, pc_update);
 
-        self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
+        self.Cpu_pipeline.remain_cycles = execute_cycles.saturating_sub(1);
         if self.interrupt_check_hint {
             self.try_take_interrupt();
         }
         1
+    }
+
+    #[inline(always)]
+    pub fn finish_step<'a>(
+        &mut self,
+        ins: &Cpu_Instruction<'a>,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
+        self.finish_step_cycles(ins.op.cycles.execute_cycles, current_pc, pc_update)
+    }
+
+    // changed: make step take &mut self and avoid borrow conflicts
+    #[inline(always)]
+    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) -> u32 {
+        if let Some(cycles) = self.begin_step() {
+            return cycles;
+        }
+
+        let pc_update = (ins.op.exec)(&mut *self, &ins.data);
+        self.finish_step(ins, current_pc, pc_update)
     }
 
     #[inline(always)]

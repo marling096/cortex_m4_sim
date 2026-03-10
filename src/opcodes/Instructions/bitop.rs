@@ -94,7 +94,7 @@ pub struct Op_And;
 impl Executable for Op_And {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -118,7 +118,7 @@ pub struct Op_Orr;
 impl Executable for Op_Orr {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -139,7 +139,7 @@ pub struct Op_Bic;
 impl Executable for Op_Bic {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -161,7 +161,7 @@ pub struct Op_Orn;
 impl Executable for Op_Orn {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -183,7 +183,7 @@ pub struct Op_Eor;
 impl Executable for Op_Eor {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -228,6 +228,7 @@ impl OperandResolver for OpBitResolver {
             }
         }
 
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rd = rd;
         data.arm_operands.rn = rn;
         data.arm_operands.op2 = ops.last().cloned();

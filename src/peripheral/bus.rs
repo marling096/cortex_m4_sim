@@ -14,6 +14,7 @@ pub struct Bus {
     tickable_flags: Vec<bool>,
     active_tick_flags: Vec<bool>,
     next_tick_due_cycles: Vec<u32>,
+    cached_next_tick_cycle: u32,
     /// 可产生 IRQ 的外设索引列表（通过 pending_irq() 非 None 判断）
     irq_indices: Vec<usize>,
     last_hit_index: Cell<usize>,
@@ -39,6 +40,7 @@ impl Bus {
             tickable_flags: Vec::new(),
             active_tick_flags: Vec::new(),
             next_tick_due_cycles: Vec::new(),
+            cached_next_tick_cycle: u32::MAX,
             irq_indices: Vec::new(),
             last_hit_index: Cell::new(Self::INVALID_INDEX),
             afio_index: None,
@@ -68,6 +70,32 @@ impl Bus {
         pending
     }
 
+    #[inline(always)]
+    fn normalize_next_tick_cycle(dev: &dyn Peripheral) -> u32 {
+        match dev.next_tick_cycle() {
+            Some(v) => v.max(1),
+            None => u32::MAX,
+        }
+    }
+
+    #[inline(always)]
+    fn refresh_cached_next_tick_cycle(&mut self) {
+        let mut next_tick_cycle = u32::MAX;
+
+        for &index in &self.active_tick_indices {
+            if index >= self.next_tick_due_cycles.len() {
+                continue;
+            }
+
+            let due = self.next_tick_due_cycles[index];
+            if due < next_tick_cycle {
+                next_tick_cycle = due;
+            }
+        }
+
+        self.cached_next_tick_cycle = next_tick_cycle;
+    }
+
     pub fn register_peripheral(&mut self, dev: Box<dyn Peripheral>) {
         let index = self.peripherals.len();
         let start = dev.start();
@@ -86,14 +114,14 @@ impl Bus {
         self.active_tick_flags.push(active);
 
         let next_due = if active {
-            match dev.next_event_in_cycles() {
-                Some(v) => v.max(1),
-                None => u32::MAX,
-            }
+            Self::normalize_next_tick_cycle(&*dev)
         } else {
             u32::MAX
         };
         self.next_tick_due_cycles.push(next_due);
+        if next_due < self.cached_next_tick_cycle {
+            self.cached_next_tick_cycle = next_due;
+        }
 
         self.peripherals.push((dev.start(), dev.end(), dev));
 
@@ -120,10 +148,7 @@ impl Bus {
         if active_now {
             let due = {
                 let (_, _, dev) = &self.peripherals[index];
-                match dev.next_event_in_cycles() {
-                    Some(v) => v.max(1),
-                    None => u32::MAX,
-                }
+                Self::normalize_next_tick_cycle(&**dev)
             };
             self.next_tick_due_cycles[index] = due;
         } else {
@@ -135,6 +160,8 @@ impl Bus {
         } else if let Some(pos) = self.active_tick_indices.iter().position(|&i| i == index) {
             self.active_tick_indices.swap_remove(pos);
         }
+
+        self.refresh_cached_next_tick_cycle();
     }
 
     /// 注册可产生 IRQ 的外设索引（注册后 drain_pending_irqs 才会检查它）
@@ -230,10 +257,7 @@ impl Bus {
                 if tickable {
                     active_now = dev.is_tick_active();
                     next_due = if active_now {
-                        match dev.next_event_in_cycles() {
-                            Some(v) => v.max(1),
-                            None => u32::MAX,
-                        }
+                        Self::normalize_next_tick_cycle(&**dev)
                     } else {
                         u32::MAX
                     };
@@ -247,6 +271,7 @@ impl Bus {
                 } else {
                     u32::MAX
                 };
+                self.refresh_cached_next_tick_cycle();
                 schedule_changed = true;
             }
             if self.is_bridge_related_write(index, addr) {
@@ -272,16 +297,7 @@ impl Bus {
         let mut remaining = cycles;
 
         while remaining > 0 {
-            let mut next_due = u32::MAX;
-            for &index in &self.active_tick_indices {
-                if index >= self.next_tick_due_cycles.len() {
-                    continue;
-                }
-                let due = self.next_tick_due_cycles[index];
-                if due < next_due {
-                    next_due = due;
-                }
-            }
+            let next_due = self.cached_next_tick_cycle;
 
             if next_due == u32::MAX {
                 if self.take_bridge_event_pending() {
@@ -298,6 +314,9 @@ impl Bus {
                             self.next_tick_due_cycles[index] = due.saturating_sub(remaining);
                         }
                     }
+                }
+                if self.cached_next_tick_cycle != u32::MAX {
+                    self.cached_next_tick_cycle = self.cached_next_tick_cycle.saturating_sub(remaining);
                 }
                 if self.take_bridge_event_pending() {
                     self.process_uart_afio_bridge();
@@ -323,6 +342,7 @@ impl Bus {
             }
 
             if fired.is_empty() {
+                self.refresh_cached_next_tick_cycle();
                 break;
             }
 
@@ -348,10 +368,7 @@ impl Bus {
                     if self.tickable_flags[index] {
                         active_now = dev.is_tick_active();
                         next_due_for_dev = if active_now {
-                            match dev.next_event_in_cycles() {
-                                Some(v) => v.max(1),
-                                None => u32::MAX,
-                            }
+                            Self::normalize_next_tick_cycle(&**dev)
                         } else {
                             u32::MAX
                         };
@@ -368,6 +385,8 @@ impl Bus {
                 }
             }
 
+            self.refresh_cached_next_tick_cycle();
+
             if uart_fired || self.take_bridge_event_pending() {
                 self.process_uart_afio_bridge();
             }
@@ -378,21 +397,11 @@ impl Bus {
 
     #[inline(always)]
     pub fn next_event_in_cycles(&self) -> Option<u32> {
-        let mut min_cycles: Option<u32> = None;
-        for &index in &self.active_tick_indices {
-            if index >= self.next_tick_due_cycles.len() {
-                continue;
-            }
-            let next = self.next_tick_due_cycles[index];
-            if next == u32::MAX {
-                continue;
-            }
-            min_cycles = Some(match min_cycles {
-                Some(current) => current.min(next),
-                None => next,
-            });
+        if self.cached_next_tick_cycle == u32::MAX {
+            None
+        } else {
+            Some(self.cached_next_tick_cycle)
         }
-        min_cycles
     }
 
     pub fn get_peripheral_mut<T: Any>(&mut self, start_addr: u32) -> Option<&mut T> {
@@ -650,7 +659,7 @@ mod tests {
         // 等价固件循环体：
         // if (Serial_GetRxFlag()) { RxData = Serial_GetRxData(); Serial_SendByte(RxData); }
         // Delay_us(10)
-        let mut firmware_step = |bus: &mut Bus| {
+        let firmware_step = |bus: &mut Bus| {
             if (bus.read32(USART_SR_ADDR) & RXNE) != 0 {
                 let rx_data = (bus.read32(USART_DR_ADDR) & 0xFF) as u8;
                 println!("[FW] RX=0x{:02X} '{}'", rx_data, rx_data as char);
@@ -698,7 +707,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unmapped read32")]
     fn bus_panics_on_unmapped_read() {
-        let mut bus = Bus::new();
+        let bus = Bus::new();
         let _ = bus.read32(0x5000_0000);
     }
 
@@ -719,5 +728,24 @@ mod tests {
         let value = bus.read32(0x4000_0000);
 
         assert_eq!(value, 2);
+    }
+
+    #[test]
+    fn bus_cached_next_event_updates_after_uart_write_and_ticks() {
+        const USART1_BASE: u32 = 0x4001_3800;
+
+        let mut bus = Bus::new();
+        bus.register_peripheral(Box::new(Uart::new(USART1_BASE, USART1_BASE + 0x3FF)));
+
+        assert_eq!(bus.next_event_in_cycles(), None);
+
+        bus.write32(USART1_BASE + 0x04, b'A' as u32);
+        assert_eq!(bus.next_event_in_cycles(), Some(1));
+
+        bus.tick();
+        assert_eq!(bus.next_event_in_cycles(), Some(1));
+
+        bus.tick_n(16);
+        assert_eq!(bus.next_event_in_cycles(), None);
     }
 }

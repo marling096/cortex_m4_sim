@@ -77,7 +77,7 @@ impl Executable for Op_Pop {
 }
 
 fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-    if !check_condition(cpu, data.condition()) {
+    if !check_condition(cpu, data.arm_operands.condition) {
         return data.size();
     }
     data.op_writer();
@@ -99,7 +99,7 @@ fn stack_push(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
 }
 
 fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-    if !check_condition(cpu, data.condition()) {
+    if !check_condition(cpu, data.arm_operands.condition) {
         return data.size();
     }
 

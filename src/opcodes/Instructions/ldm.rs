@@ -15,7 +15,7 @@ impl Executable for Op_Ldm {
     }
 }
 pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
-    if !check_condition(cpu, data.condition()) {
+    if !check_condition(cpu, data.arm_operands.condition) {
         return data.size();
     }
 

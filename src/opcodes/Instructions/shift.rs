@@ -101,6 +101,7 @@ impl OperandResolver for OpShiftResolver {
             None => 0,
         };
 
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rd = rd;
 
         let op2 = data.get_operand(2);
@@ -127,7 +128,7 @@ pub struct Op_Asr;
 impl Executable for Op_Asr {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -169,7 +170,7 @@ pub struct Op_Lsl;
 impl Executable for Op_Lsl {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -202,7 +203,7 @@ pub struct Op_Lsr;
 impl Executable for Op_Lsr {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -236,7 +237,7 @@ pub struct Op_Ror;
 impl Executable for Op_Ror {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
@@ -265,7 +266,7 @@ pub struct Op_Rrx;
 impl Executable for Op_Rrx {
     #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let rd = data.arm_operands.rd;
