@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use capstone::arch::arm::{ArmOperandType, ArmShift};
 use capstone::prelude::*;
 use object::{Object, ObjectSection, ObjectSymbol, SectionKind};

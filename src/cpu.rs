@@ -1,9 +1,8 @@
-use std::cell::RefCell;
-use std::collections::BTreeMap;
+#![allow(dead_code, non_camel_case_types, non_snake_case, private_interfaces)]
+
 use std::vec;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
-use std::time::Instant;
 
 use crate::context::CpuContext;
 use crate::opcodes::instruction::Cpu_Instruction;
@@ -30,13 +29,12 @@ pub struct Cpu {
 
     peripheral_tick_mask: u8,
 
-    exec_profile: RefCell<CpuExecProfile>,
-    exec_op_stats: RefCell<BTreeMap<String, OpExecStat>>,
-    profiling_enabled: bool,
     exception_stack: Vec<u32>,
     interrupt_check_hint: bool,
     interrupt_hint_source: u8,
     pending_ppb_event_drain: bool,
+    peripheral_schedule_dirty: bool,
+    peripheral_next_due_cycle: u64,
     ppb_nvic_index: Option<usize>,
     ppb_systick_index: Option<usize>,
 }
@@ -87,57 +85,61 @@ impl Cpu_pipeline {
 }
 
 impl CpuContext for Cpu {
+    #[inline(always)]
     fn read_mem(&self, addr: u32) -> u32 {
         self.read32(addr)
     }
-
+    #[inline(always)]
     fn write_mem(&mut self, addr: u32, val: u32) {
         self.write32(addr, val);
     }
-
+    #[inline(always)]
     fn read_reg(&self, r: u32) -> u32 {
-        match r {
-            13 => {
-                // SP
-                self.registers.reg[13]
-            }
-            14 => {
-                // LR
-                self.registers.reg[14]
-            }
-            15 => {
-                // PC
-                self.registers.reg[15]
-            }
-            _ => self.registers.reg[r as usize],
-        }
+        // match r {
+        //     13 => {
+        //         // SP
+        //         self.registers.reg[13]
+        //     }
+        //     14 => {
+        //         // LR
+        //         self.registers.reg[14]
+        //     }
+        //     15 => {
+        //         // PC
+        //         self.registers.reg[15]
+        //     }
+        //     _ => self.registers.reg[r as usize],
+        // }
+        self.registers.reg[r as usize]
     }
-
+    #[inline(always)]
     fn write_reg(&mut self, r: u32, v: u32) {
-        match r {
-            13 => {
-                // SP
-                self.registers.reg[13] = v;
-            }
-            14 => {
-                // LR
-                self.registers.reg[14] = v;
-            }
-            15 => {
-                // PC
-                self.registers.reg[15] = v;
-            }
-            _ => self.registers.reg[r as usize] = v,
-        }
+        // match r {
+        //     13 => {
+        //         // SP
+        //         self.registers.reg[13] = v;
+        //     }
+        //     14 => {
+        //         // LR
+        //         self.registers.reg[14] = v;
+        //     }
+        //     15 => {
+        //         // PC
+        //         self.registers.reg[15] = v;
+        //     }
+        //     _ => self.registers.reg[r as usize] = v,
+        // }
+        self.registers.reg[r as usize] = v;
     }
+    #[inline(always)]
     fn read_gpr(&self, r: u32) -> u32 {
         self.registers.reg[r as usize]
     }
-
+    #[inline(always)]
     fn write_gpr(&mut self, r: u32, v: u32) {
         self.registers.reg[r as usize] = v;
     }
-
+    #[inline(always)]
     fn read_msp(&self, _r: u32) -> u32 {
         if self.registers.is_msp {
             self.registers.reg[13]
@@ -145,6 +147,7 @@ impl CpuContext for Cpu {
             0 // TODO: handle banked MSP
         }
     }
+    #[inline(always)]
     fn write_msp(&mut self, v: u32) {
         if self.registers.is_msp {
             self.registers.reg[13] = v;
@@ -152,7 +155,7 @@ impl CpuContext for Cpu {
             // TODO: handle banked MSP
         }
     }
-
+    #[inline(always)]
     fn read_psp(&self, _r: u32) -> u32 {
         if !self.registers.is_msp {
             self.registers.reg[13]
@@ -160,7 +163,7 @@ impl CpuContext for Cpu {
             0 // TODO: handle banked PSP
         }
     }
-
+    #[inline(always)]
     fn write_psp(&mut self, v: u32) {
         if !self.registers.is_msp {
             self.registers.reg[13] = v;
@@ -168,44 +171,48 @@ impl CpuContext for Cpu {
             // TODO: handle banked PSP
         }
     }
-
+    #[inline(always)]
     fn read_sp(&self) -> u32 {
         self.registers.reg[13]
     }
-
+    #[inline(always)]
     fn write_sp(&mut self, v: u32) {
         self.registers.reg[13] = v;
     }
-
+    #[inline(always)]
     fn read_lr(&self, _r: u32) -> u32 {
         self.registers.reg[14]
     }
-
+    #[inline(always)]
     fn write_lr(&mut self, v: u32) {
         self.registers.reg[14] = v;
     }
-
+    #[inline(always)]
     fn read_pc(&self) -> u32 {
         self.registers.reg[15]
     }
-
+    #[inline(always)]
     fn write_pc(&mut self, pc: u32) {
         self.registers.reg[15] = pc;
     }
-
+    #[inline(always)]
     fn read_apsr(&self) -> u32 {
         self.registers.apsr
     }
+    #[inline(always)]
     fn write_apsr(&mut self, v: u32) {
         self.registers.apsr = v;
     }
-
+    #[inline(always)]
     fn try_exception_return(&mut self, val: u32) -> bool {
         Cpu::try_exception_return(self, val)
     }
 }
 
 impl Cpu {
+    const JIT_REG_BASE_OFFSET: usize = std::mem::offset_of!(Cpu, registers)
+        + std::mem::offset_of!(Registers, reg);
+
     const FLASH_ALIAS_BASE: u32 = 0x0000_0000;
     const FLASH_ALIAS_LAST: u32 = 0x0007_FFFF;
     const FLASH_BASE: u32 = 0x0800_0000;
@@ -233,16 +240,21 @@ impl Cpu {
     const HINT_SRC_PERIPHERAL: u8 = 2;
 
     #[inline(always)]
+    pub(crate) fn jit_reg_base_offset() -> i32 {
+        Self::JIT_REG_BASE_OFFSET as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_reg_offset(reg: u32) -> i32 {
+        (Self::JIT_REG_BASE_OFFSET + reg as usize * std::mem::size_of::<u32>()) as i32
+    }
+
+    #[inline(always)]
     fn set_interrupt_check_hint(&mut self, source: u8) {
-        let was_disabled = !self.interrupt_check_hint;
         self.interrupt_check_hint = true;
 
         if source == Self::HINT_SRC_PERIPHERAL || self.interrupt_hint_source == Self::HINT_SRC_NONE {
             self.interrupt_hint_source = source;
-        }
-
-        if was_disabled && self.profiling_enabled {
-            self.exec_profile.borrow_mut().interrupt_hint_set_count += 1;
         }
     }
 
@@ -279,7 +291,7 @@ impl Cpu {
         }
     }
 
-    pub fn new(frequency: Arc<AtomicU32>, machine_cycle: u8, peripheral_bus: Bus, mut ppb: Bus) -> Cpu {
+    pub fn new(frequency: Arc<AtomicU32>, machine_cycle: u8, peripheral_bus: Bus, ppb: Bus) -> Cpu {
         let mut peripheral_tick_mask = 0u8;
         if peripheral_bus.has_tickables() {
             peripheral_tick_mask |= 1;
@@ -307,41 +319,30 @@ impl Cpu {
             peripheral_bus,
             ppb,
             peripheral_tick_mask,
-            exec_profile: RefCell::new(CpuExecProfile::default()),
-            exec_op_stats: RefCell::new(BTreeMap::new()),
-            profiling_enabled: false,
             exception_stack: Vec::new(),
             interrupt_check_hint: true,
             interrupt_hint_source: Self::HINT_SRC_OTHER,
             pending_ppb_event_drain: false,
+            peripheral_schedule_dirty: true,
+            peripheral_next_due_cycle: 0,
             ppb_nvic_index,
             ppb_systick_index,
         }
     }
 
-    pub fn set_profiling_enabled(&mut self, enabled: bool) {
-        self.profiling_enabled = enabled;
-        if !enabled {
-            *self.exec_profile.borrow_mut() = CpuExecProfile::default();
-            self.exec_op_stats.borrow_mut().clear();
-        }
+    pub fn set_profiling_enabled(&mut self, _enabled: bool) {
     }
 
     pub fn is_profiling_enabled(&self) -> bool {
-        self.profiling_enabled
+        false
     }
 
     pub fn take_exec_profile(&mut self) -> CpuExecProfile {
-        let snapshot = *self.exec_profile.borrow();
-        *self.exec_profile.borrow_mut() = CpuExecProfile::default();
-        snapshot
+        CpuExecProfile::default()
     }
 
     pub fn take_exec_op_stats(&mut self) -> Vec<(String, OpExecStat)> {
-        let mut stats = self.exec_op_stats.borrow_mut();
-        let snapshot = stats.iter().map(|(mnemonic, stat)| (mnemonic.clone(), *stat)).collect();
-        stats.clear();
-        snapshot
+        Vec::new()
     }
 
     pub fn reset_handler(&mut self, reset_vector: u32) {
@@ -356,6 +357,8 @@ impl Cpu {
         self.interrupt_check_hint = true;
         self.interrupt_hint_source = Self::HINT_SRC_OTHER;
         self.pending_ppb_event_drain = false;
+        self.peripheral_schedule_dirty = true;
+        self.peripheral_next_due_cycle = 0;
     }
 
     #[inline(always)]
@@ -371,12 +374,10 @@ impl Cpu {
     fn push_stack_word(&mut self, value: u32) {
         let new_sp = self.registers.reg[13].wrapping_sub(4);
         self.registers.reg[13] = new_sp;
-        if !self.profiling_enabled {
-            if Self::in_range(new_sp, Self::RAM_BASE, Self::RAM_LAST) {
-                let offset = (new_sp - Self::RAM_BASE) as usize;
-                Self::write_u32_le_unchecked(&mut self.ram, offset, value);
-                return;
-            }
+        if Self::in_range(new_sp, Self::RAM_BASE, Self::RAM_LAST) {
+            let offset = (new_sp - Self::RAM_BASE) as usize;
+            Self::write_u32_le_unchecked(&mut self.ram, offset, value);
+            return;
         }
         self.write32(new_sp, value);
     }
@@ -393,10 +394,6 @@ impl Cpu {
         pc: u32,
         xpsr: u32,
     ) -> bool {
-        if self.profiling_enabled {
-            return false;
-        }
-
         let sp = self.registers.reg[13];
         let new_sp = sp.wrapping_sub(32);
         if !Self::in_range(new_sp, Self::RAM_BASE, Self::RAM_LAST) {
@@ -423,7 +420,7 @@ impl Cpu {
     #[inline(always)]
     fn pop_stack_word(&mut self) -> u32 {
         let sp = self.registers.reg[13];
-        let value = if !self.profiling_enabled && Self::in_range(sp, Self::RAM_BASE, Self::RAM_LAST) {
+        let value = if Self::in_range(sp, Self::RAM_BASE, Self::RAM_LAST) {
             let offset = (sp - Self::RAM_BASE) as usize;
             Self::read_u32_le_unchecked(&self.ram, offset)
         } else {
@@ -435,10 +432,6 @@ impl Cpu {
 
     #[inline(always)]
     fn pop_exception_frame_fast(&mut self) -> Option<(u32, u32, u32, u32, u32, u32, u32, u32)> {
-        if self.profiling_enabled {
-            return None;
-        }
-
         let sp = self.registers.reg[13];
         if !Self::in_range(sp, Self::RAM_BASE, Self::RAM_LAST) {
             return None;
@@ -634,28 +627,7 @@ impl Cpu {
             return false;
         }
 
-        if !self.profiling_enabled {
-            return self.try_take_interrupt_inner();
-        }
-
-        {
-            let mut profile = self.exec_profile.borrow_mut();
-            profile.interrupt_check_calls += 1;
-            if self.interrupt_hint_source == Self::HINT_SRC_PERIPHERAL {
-                profile.interrupt_check_from_peripheral_count += 1;
-            }
-        }
-        let start = Instant::now();
-        let taken = self.try_take_interrupt_inner();
-        let elapsed = start.elapsed();
-
-        let mut profile = self.exec_profile.borrow_mut();
-        profile.interrupt_check_duration += elapsed;
-        if taken {
-            profile.interrupt_taken_count += 1;
-        }
-
-        taken
+        self.try_take_interrupt_inner()
 
     }
 
@@ -709,33 +681,13 @@ impl Cpu {
 
     #[inline(always)]
     fn read32(&self, addr: u32) -> u32 {
-        if !self.profiling_enabled {
-            return self.read32_inner(addr);
-        }
-
-        let start = Instant::now();
-        let value = self.read32_inner(addr);
-        let elapsed = start.elapsed();
-        let mut profile = self.exec_profile.borrow_mut();
-        profile.mem_read_count += 1;
-        profile.mem_read_duration += elapsed;
-        value
+        self.read32_inner(addr)
     }
 
     /// 核心写入函数：处理不同区域的写入权限
     #[inline(always)]
     fn write32(&mut self, addr: u32, val: u32) {
-        if !self.profiling_enabled {
-            self.write32_inner(addr, val);
-            return;
-        }
-
-        let start = Instant::now();
         self.write32_inner(addr, val);
-        let elapsed = start.elapsed();
-        let mut profile = self.exec_profile.borrow_mut();
-        profile.mem_write_count += 1;
-        profile.mem_write_duration += elapsed;
     }
 
     #[inline(always)]
@@ -807,12 +759,18 @@ impl Cpu {
         }
 
         if Self::in_range(addr, Self::PERIPH_BASE, Self::PERIPH_LAST) {
-            self.peripheral_bus.write32(addr, val);
+            let schedule_changed = self.peripheral_bus.write32(addr, val);
+            if schedule_changed {
+                self.peripheral_schedule_dirty = true;
+            }
             return;
         }
 
         if Self::in_range(addr, Self::PPB_BASE, Self::PPB_LAST) {
-            self.ppb.write32(addr, val);
+            let schedule_changed = self.ppb.write32(addr, val);
+            if schedule_changed {
+                self.peripheral_schedule_dirty = true;
+            }
             if Self::is_interrupt_related_ppb_write(addr) {
                 self.set_interrupt_check_hint(Self::HINT_SRC_OTHER);
             }
@@ -822,74 +780,74 @@ impl Cpu {
         panic!("Memory Write Error: Unmapped address 0x{:08X}", addr);
     }
 
-    // changed: make step take &mut self and avoid borrow conflicts
     #[inline(always)]
-    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) -> u32 {
+    pub fn begin_step(&mut self) -> Option<u32> {
         if self.pending_ppb_event_drain {
             self.drain_interrupt_events();
             self.pending_ppb_event_drain = false;
         }
         if self.interrupt_check_hint && self.try_take_interrupt() {
-            return 1;
+            return Some(1);
         }
-
-        if !self.profiling_enabled {
-            if self.Cpu_pipeline.remain_cycles > 0 {
-                self.Cpu_pipeline.remain_cycles -= 1;
-                return 1;
-            }
-
-            let pc_update = (ins.op.exec)(&mut *self, &ins.data);
-            self.update_pc_with_current(current_pc, pc_update);
-            self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
-            if self.interrupt_check_hint {
-                self.try_take_interrupt();
-            }
-            return 1;
-        }
-
-        self.exec_profile.borrow_mut().step_calls += 1;
 
         if self.Cpu_pipeline.remain_cycles > 0 {
             self.Cpu_pipeline.remain_cycles -= 1;
-            self.exec_profile.borrow_mut().pipeline_stall_count += 1;
-            return 1;
-        }
-        self.exec_profile.borrow_mut().execute_calls += 1;
-
-        let op_start = Instant::now();
-        let pc_update = (ins.op.exec)(&mut *self, &ins.data);
-        let op_elapsed = op_start.elapsed();
-        self.exec_profile.borrow_mut().op_exec_duration += op_elapsed;
-        {
-            let mnemonic = ins.data.mnemonic();
-            let mut stats = self.exec_op_stats.borrow_mut();
-            if let Some(entry) = stats.get_mut(mnemonic) {
-                entry.calls += 1;
-                entry.total_duration += op_elapsed;
-                entry.max_duration = entry.max_duration.max(op_elapsed);
-            } else {
-                stats.insert(
-                    mnemonic.to_string(),
-                    OpExecStat {
-                        calls: 1,
-                        total_duration: op_elapsed,
-                        max_duration: op_elapsed,
-                    },
-                );
-            }
+            return Some(1);
         }
 
-        let update_start = Instant::now();
+        None
+    }
+
+    #[inline(always)]
+    pub fn finish_step_cycles(
+        &mut self,
+        execute_cycles: u32,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
         self.update_pc_with_current(current_pc, pc_update);
-        let update_elapsed = update_start.elapsed();
-        self.exec_profile.borrow_mut().update_pc_duration += update_elapsed;
 
-        self.Cpu_pipeline.remain_cycles = ins.op.cycles.execute_cycles.saturating_sub(1);
+        self.Cpu_pipeline.remain_cycles = execute_cycles.saturating_sub(1);
         if self.interrupt_check_hint {
             self.try_take_interrupt();
         }
         1
+    }
+
+    #[inline(always)]
+    pub fn finish_block_step_cycles(
+        &mut self,
+        execute_cycles: u32,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
+        self.update_pc_with_current(current_pc, pc_update);
+        if pc_update != 0 {
+            self.write_pc(self.next_pc);
+        }
+        self.Cpu_pipeline.remain_cycles = 0;
+        execute_cycles.max(1)
+    }
+
+    #[inline(always)]
+    pub fn finish_step<'a>(
+        &mut self,
+        ins: &Cpu_Instruction<'a>,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
+        self.finish_step_cycles(ins.op.cycles.execute_cycles, current_pc, pc_update)
+    }
+
+    // changed: make step take &mut self and avoid borrow conflicts
+    #[inline(always)]
+    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) -> u32 {
+        if let Some(cycles) = self.begin_step() {
+            return cycles;
+        }
+
+        let pc_update = (ins.op.exec)(&mut *self, &ins.data);
+        self.finish_step(ins, current_pc, pc_update)
     }
 
     #[inline(always)]
@@ -926,6 +884,56 @@ impl Cpu {
         if has_peripheral_event || has_ppb_event {
             self.set_interrupt_check_hint(Self::HINT_SRC_PERIPHERAL);
         }
+    }
+
+    #[inline(always)]
+    pub fn next_peripheral_event_in_cycles(&self) -> Option<u32> {
+        let tick_mask = self.peripheral_tick_mask;
+        if tick_mask == 0 {
+            return None;
+        }
+
+        let peripheral_next = if (tick_mask & 1) != 0 {
+            self.peripheral_bus.next_event_in_cycles()
+        } else {
+            None
+        };
+
+        let ppb_next = if (tick_mask & 2) != 0 {
+            self.ppb.next_event_in_cycles()
+        } else {
+            None
+        };
+
+        match (peripheral_next, ppb_next) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn take_and_clear_peripheral_schedule_dirty(&mut self) -> bool {
+        let dirty = self.peripheral_schedule_dirty;
+        self.peripheral_schedule_dirty = false;
+        dirty
+    }
+
+    #[inline(always)]
+    pub fn refresh_peripheral_due_cycle(&mut self, system_cycles: u64, max_lag_cycles: u32) {
+        let max_lag = max_lag_cycles.max(1);
+        let next_delta = self
+            .next_peripheral_event_in_cycles()
+            .unwrap_or(max_lag)
+            .max(1)
+            .min(max_lag);
+        self.peripheral_next_due_cycle = system_cycles.saturating_add(next_delta as u64);
+    }
+
+    #[inline(always)]
+    pub fn peripheral_due_cycle(&self) -> u64 {
+        self.peripheral_next_due_cycle
     }
 
     /// 收集 peripheral_bus 上各外设挂起的 IRQ，通过 NVIC ISPR 寄存器触发中断。

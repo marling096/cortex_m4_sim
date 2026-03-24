@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
@@ -11,8 +11,9 @@ use capstone::arch::arm::ArmOperandType;
 
 pub struct Op_Tst;
 impl Executable for Op_Tst {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -31,8 +32,9 @@ impl Executable for Op_Tst {
 
 pub struct Op_Teq;
 impl Executable for Op_Teq {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -52,6 +54,7 @@ impl Executable for Op_Teq {
 pub struct OpTst_resolver;
 impl OperandResolver for OpTst_resolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+
         let rn = match data.get_operand(0) {
             Some(op) => match op.op_type {
                 ArmOperandType::Reg(r) => data.resolve_reg(r),
@@ -59,6 +62,7 @@ impl OperandResolver for OpTst_resolver {
             },
             None => 0,
         };
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rn = rn;
         data.arm_operands.op2 = data.get_operand(1);
         rn

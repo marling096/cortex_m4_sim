@@ -71,7 +71,7 @@ pub trait MatchFn {
 }
 pub type CycleAdjustFn = fn(&mut CycleInfo, &[ArmOperand]);
 
-use capstone::arch::arm::{ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
+use capstone::arch::arm::{ArmInsn, ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
 use capstone::{Insn, InsnDetail};
 
 /// 封装了 ARM 指令及其详细信息的结构体
@@ -177,7 +177,7 @@ impl<'a> ArmOpcode<'a> {
         self.insn.op_str().unwrap_or("")
     }
 
-    fn arm_detail(&self) -> ArmInsnDetail {
+    fn arm_detail(&self) -> ArmInsnDetail<'_> {
         if let arch::ArchDetail::ArmDetail(arm) = self.detail.arch_detail() {
             arm
         } else {
@@ -212,12 +212,38 @@ impl<'a> ArmOpcode<'a> {
     }
 
     pub fn it_mask(&self) -> u8 {
-        // self.arm_detail().it_mask()
-        0
+        if self.id() != ArmInsn::ARM_INS_IT as u32 {
+            return 0;
+        }
+
+        self.insn.bytes().first().map(|byte| byte & 0x0F).unwrap_or(0)
+    }
+
+    pub fn it_following_count(&self) -> u8 {
+        let mask = self.it_mask();
+        if mask == 0 {
+            return 0;
+        }
+
+        (4u32.saturating_sub(mask.trailing_zeros())) as u8
+    }
+
+    pub fn writes_reg(&self, reg: u32) -> bool {
+        self.detail
+            .regs_write()
+            .iter()
+            .any(|reg_id| self.resolve_reg(*reg_id) == reg)
+    }
+
+    pub fn writes_pc(&self) -> bool {
+        self.writes_reg(15)
     }
 }
 
 pub struct ArmOperands {
+
+    pub condition: ArmCC,
+
     pub rd: u32,
     pub rn: u32,
     pub op2: Option<ArmOperand>,
@@ -231,6 +257,7 @@ pub struct ArmOperands {
 impl ArmOperands {
     pub fn new() -> Self {
         ArmOperands {
+            condition: ArmCC::ARM_CC_AL,
             rd: 0,
             rn: 0,
             op2: None,
@@ -241,6 +268,71 @@ impl ArmOperands {
             mem_post_imm: 0,
         }
     }
+}
+
+pub fn resolve_multi_reg_operands(data: &mut ArmOpcode, with_base_reg: bool) -> u32 {
+    data.arm_operands.condition = data.condition();
+    let operands: Vec<_> = data.operands().collect();
+    data.transed_operands.clear();
+
+    let mut reg_count = 0u32;
+    let mut base_captured = !with_base_reg;
+
+    for op in operands {
+        match op.op_type {
+            ArmOperandType::Reg(reg_id) => {
+                let reg = data.resolve_reg(reg_id);
+                if with_base_reg && !base_captured {
+                    data.transed_operands.push(reg);
+                    base_captured = true;
+                } else {
+                    data.transed_operands.push(reg);
+                    reg_count = reg_count.saturating_add(1);
+                }
+            }
+            _ if with_base_reg && !base_captured => {
+                panic!("Expected base register");
+            }
+            _ => {}
+        }
+    }
+
+    if with_base_reg {
+        if !base_captured {
+            panic!("missing base register");
+        }
+        if data.transed_operands.len() > 1 {
+            data.transed_operands[1..].sort_unstable();
+        }
+    } else {
+        data.transed_operands.sort_unstable();
+        reg_count = data.transed_operands.len() as u32;
+    }
+
+    reg_count
+}
+
+pub fn count_reg_operands(operands: &[ArmOperand]) -> u32 {
+    operands
+        .iter()
+        .filter(|op| matches!(op.op_type, ArmOperandType::Reg(_)))
+        .count() as u32
+}
+
+pub fn reg_list_contains(operands: &[ArmOperand], reg: u16, skip_first_reg: bool) -> bool {
+    let mut skipped = !skip_first_reg;
+    for op in operands {
+        if let ArmOperandType::Reg(reg_id) = op.op_type {
+            if !skipped {
+                skipped = true;
+                continue;
+            }
+            if reg_id.0 == reg {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub fn UpdateApsr_N(cpu: &mut dyn crate::context::CpuContext, result: u32) {
@@ -314,6 +406,14 @@ pub fn check_condition(cpu: &dyn CpuContext, cc: ArmCC) -> bool {
     }
 }
 
+pub fn runtime_read_reg(cpu: &dyn CpuContext, data: &ArmOpcode<'_>, reg: u32) -> u32 {
+    if reg == 15 {
+        data.address().wrapping_add(4)
+    } else {
+        cpu.read_reg(reg)
+    }
+}
+
 pub fn operand_resolver_multi_runtime(
     cpu: &mut dyn crate::context::CpuContext,
     data: &ArmOpcode,
@@ -335,42 +435,42 @@ pub fn operand_resolver_multi_runtime(
     let writeback = data.writeback();
     let post_index = op3.is_some();
 
-    if !writeback {
-        let addr = match op2.op_type {
-            ArmOperandType::Mem(mem) => {
-                let base = cpu.read_reg(data.resolve_reg(mem.base()));
+    let (base_reg, base_val, disp, index_offset) = match op2.op_type {
+        ArmOperandType::Mem(mem) => {
+            let base_reg = data.resolve_reg(mem.base());
+            let base_val = runtime_read_reg(cpu, data, base_reg);
+            let disp = mem.disp();
+            let index_offset = if mem.index() != capstone::RegId::INVALID_REG {
+                let val = runtime_read_reg(cpu, data, data.resolve_reg(mem.index()));
+                let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
+                let (r2_val, _carry) = op_shift_match_by_shift(op2.shift, val, current_c);
+                r2_val
+            } else {
+                0
+            };
+            (base_reg, base_val, disp, index_offset)
+        }
+        _ => panic!("operand2 is not a memory operand"),
+    };
 
-                let disp = mem.disp();
-                if mem.index() != capstone::RegId::INVALID_REG {
-                    let val = cpu.read_reg(data.resolve_reg(mem.index()));
-                    let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
-                    let (r2_val, _carry) = op_shift_match_by_shift(op2.shift, val, current_c);
-                    base.wrapping_add(r2_val)
-                } else {
-                    base.wrapping_add_signed(disp)
-                }
-            }
-            _ => panic!("operand2 is not a memory operand"),
+    let pre_offset = index_offset.wrapping_add_signed(disp);
+    if !writeback {
+        return (rt, base_val.wrapping_add(pre_offset));
+    }
+
+    if post_index {
+        let post_offset = match op3.expect("missing post-index offset").op_type {
+            ArmOperandType::Imm(imm) => imm as u32,
+            ArmOperandType::Reg(reg) => runtime_read_reg(cpu, data, data.resolve_reg(reg)),
+            _ => panic!("third operand is not an immediate/register"),
         };
+        let addr = base_val;
+        let new_base = base_val.wrapping_add(post_offset);
+        cpu.write_reg(base_reg, new_base);
         (rt, addr)
     } else {
-        let addr = match op2.op_type {
-            ArmOperandType::Mem(mem) => {
-                let base = data.resolve_reg(mem.base());
-                let disp = mem.disp();
-                if post_index {
-                    let op3 = op3.expect("missing post-index immediate");
-                    let op3_offset = match op3.op_type {
-                        ArmOperandType::Imm(imm) => imm,
-                        _ => panic!("third operand is not an immediate"),
-                    };
-                    base.wrapping_add_signed(op3_offset)
-                } else {
-                    base.wrapping_add_signed(disp)
-                }
-            }
-            _ => panic!("operand2 is not a memory operand"),
-        };
+        let addr = base_val.wrapping_add(pre_offset);
+        cpu.write_reg(base_reg, addr);
         (rt, addr)
     }
 }
@@ -459,10 +559,50 @@ pub fn resolve_op2_runtime(
 
     match op2.op_type {
         ArmOperandType::Reg(reg) => {
-            let value = cpu.read_reg(data.resolve_reg(reg));
+            let value = runtime_read_reg(cpu, data, data.resolve_reg(reg));
             op_shift_match(op2.clone(), value, current_c)
         }
         ArmOperandType::Imm(imm) => (imm as u32, current_c),
         _ => (0, current_c),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use capstone::arch;
+
+    fn build_thumb_capstone() -> Capstone {
+        Capstone::new()
+            .arm()
+            .mode(arch::arm::ArchMode::Thumb)
+            .extra_mode([arch::arm::ArchExtraMode::MClass].iter().copied())
+            .detail(true)
+            .build()
+            .expect("failed to create capstone")
+    }
+
+    #[test]
+    fn arm_opcode_detects_written_pc_from_detail() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x87, 0x46], 0x0800_0000)
+            .expect("failed to disassemble");
+        let insn = insns.iter().next().expect("missing instruction");
+        let opcode = ArmOpcode::new(&cs, insn).expect("failed to decode arm opcode");
+
+        assert!(opcode.writes_pc());
+    }
+
+    #[test]
+    fn arm_opcode_ignores_non_pc_writes_from_detail() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let insn = insns.iter().next().expect("missing instruction");
+        let opcode = ArmOpcode::new(&cs, insn).expect("failed to decode arm opcode");
+
+        assert!(!opcode.writes_pc());
     }
 }

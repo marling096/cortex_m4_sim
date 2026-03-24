@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub trait CpuContext {
     fn read_reg(&self, r: u32) -> u32;
     fn write_reg(&mut self, r: u32, v: u32);

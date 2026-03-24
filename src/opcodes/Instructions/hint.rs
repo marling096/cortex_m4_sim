@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
@@ -28,8 +28,9 @@ pub fn add_Hint_def() -> Vec<crate::opcodes::opcode::Opcode> {
 // Hint{cond}
 pub struct Op_Hint;
 impl Executable for Op_Hint {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         // hint is treated as a no-op
@@ -39,7 +40,8 @@ impl Executable for Op_Hint {
 
 pub struct OpHintResolver;
 impl OperandResolver for OpHintResolver {
-    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         // Hint has no operands; nothing to push.
         0
     }

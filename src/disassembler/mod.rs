@@ -6,6 +6,7 @@ use std::io::Write;
 mod parser;
 mod writer;
 
+#[allow(unused_imports)]
 pub use parser::{disassemble_from_reset_handler, parse_axf_file, DisassemblyResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

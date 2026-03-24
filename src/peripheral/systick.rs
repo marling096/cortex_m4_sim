@@ -18,6 +18,7 @@ pub struct SysTick {
     pub calib: Cell<u32>, // 校准值寄存器
     pub interrupt_pending: Cell<bool>,
     pub interrupt_event: Cell<bool>,
+    next_tick_cycle: Cell<Option<u32>>,
 }
 
 impl SysTick {
@@ -31,9 +32,28 @@ impl SysTick {
             calib: Cell::new(0),
             interrupt_pending: Cell::new(false),
             interrupt_event: Cell::new(false),
+            next_tick_cycle: Cell::new(None),
         }
     }
-    fn Sys_enableflag(&self) -> bool {
+
+    #[inline(always)]
+    fn refresh_next_tick_cycle(&self) {
+        let next_tick_cycle = if !self.sys_enable_flag() {
+            None
+        } else {
+            let cvr = self.cvr.get();
+            let reload = self.rvr.get();
+            Some(if cvr == 0 {
+                reload.wrapping_add(1).max(1)
+            } else {
+                cvr.max(1)
+            })
+        };
+
+        self.next_tick_cycle.set(next_tick_cycle);
+    }
+
+    fn sys_enable_flag(&self) -> bool {
         self.csr.get() & SYST_CSR_ENABLE != 0
     }
 
@@ -105,9 +125,11 @@ impl Peripheral for SysTick {
                 if !was_enabled && is_enabled && self.cvr.get() == 0 {
                     self.cvr.set(self.rvr.get()); // 启用时 CVR 自动加载
                 }
+                self.refresh_next_tick_cycle();
             }
             0x04 => {
                 self.rvr.set(val & 0xFFFFFF); // 24位
+                self.refresh_next_tick_cycle();
             }
             0x08 => {
                 // 写入任意值都会清除当前值和 COUNTFLAG
@@ -118,6 +140,7 @@ impl Peripheral for SysTick {
                     self.interrupt_pending.set(false);
                     self.interrupt_event.set(true);
                 }
+                self.refresh_next_tick_cycle();
             }
             _ => {}
         }
@@ -131,11 +154,13 @@ impl Peripheral for SysTick {
             return;
         }
 
-        if !self.Sys_enableflag() {
+        if !self.sys_enable_flag() {
+            self.refresh_next_tick_cycle();
             return;
         }
 
-        for _ in 0..cycles {
+        let mut remain = cycles;
+        while remain > 0 {
             let cvr = self.cvr.get();
             if cvr == 0 {
                 let reload = self.rvr.get();
@@ -144,16 +169,22 @@ impl Peripheral for SysTick {
                 } else {
                     self.cvr.set(reload);
                 }
+                remain -= 1;
                 continue;
             }
 
-            let dec = cvr - 1;
-            self.cvr.set(dec);
-
-            if dec == 0 {
-                self.on_wrap_event();
+            if remain < cvr {
+                self.cvr.set(cvr - remain);
+                self.refresh_next_tick_cycle();
+                return;
             }
+
+            remain -= cvr;
+            self.cvr.set(0);
+            self.on_wrap_event();
         }
+
+        self.refresh_next_tick_cycle();
     }
 
     #[inline(always)]
@@ -163,7 +194,7 @@ impl Peripheral for SysTick {
 
     #[inline(always)]
     fn is_tick_active(&self) -> bool {
-        self.Sys_enableflag()
+        self.sys_enable_flag()
     }
 
     #[inline(always)]
@@ -173,16 +204,12 @@ impl Peripheral for SysTick {
 
     #[inline(always)]
     fn next_event_in_cycles(&self) -> Option<u32> {
-        if !self.Sys_enableflag() {
-            return None;
-        }
-        let cvr = self.cvr.get();
-        let reload = self.rvr.get();
-        if cvr == 0 {
-            Some(reload.wrapping_add(1))
-        } else {
-            Some(cvr)
-        }
+        self.next_tick_cycle.get()
+    }
+
+    #[inline(always)]
+    fn next_tick_cycle(&self) -> Option<u32> {
+        self.next_tick_cycle.get()
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {

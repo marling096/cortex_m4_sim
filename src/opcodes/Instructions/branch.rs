@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, check_condition,
@@ -21,7 +21,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_B::execute,
             operand_resolver: &OpBranchResolver,
@@ -34,7 +34,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Bl::execute,
             operand_resolver: &OpBranchResolver,
@@ -47,7 +47,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Bx::execute,
             operand_resolver: &OpBxResolver,
@@ -60,7 +60,7 @@ pub fn add_branch_def() -> Vec<Opcode> {
             cycles: CycleInfo {
                 fetch_cycles: 1,
                 decode_cycles: 0,
-                execute_cycles: 1,
+                execute_cycles: 2,
             },
             exec: Op_Blx::execute,
             operand_resolver: &OpBxResolver,
@@ -76,8 +76,9 @@ pub fn add_branch_def() -> Vec<Opcode> {
 
 pub struct Op_B;
 impl Executable for Op_B {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -89,8 +90,9 @@ impl Executable for Op_B {
 
 pub struct Op_Bl;
 impl Executable for Op_Bl {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -105,8 +107,9 @@ impl Executable for Op_Bl {
 
 pub struct Op_Bx;
 impl Executable for Op_Bx {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -122,8 +125,9 @@ impl Executable for Op_Bx {
 
 pub struct Op_Blx;
 impl Executable for Op_Blx {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -142,6 +146,7 @@ impl Executable for Op_Blx {
 pub struct OpBranchResolver;
 impl OperandResolver for OpBranchResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         data.arm_operands.op2 = data.get_operand(0);
         0
     }
@@ -150,6 +155,7 @@ impl OperandResolver for OpBranchResolver {
 pub struct OpBxResolver;
 impl OperandResolver for OpBxResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         data.arm_operands.op2 = data.get_operand(0);
         0
     }

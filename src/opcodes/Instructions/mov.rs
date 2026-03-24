@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
     UpdateApsr_Z, check_condition,
@@ -59,6 +59,7 @@ impl OperandResolver for OpMovResolver {
             None => 0,
         };
 
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rd = rd;
         data.arm_operands.rn = 0;
         data.arm_operands.op2 = data.get_operand(1);
@@ -68,8 +69,9 @@ impl OperandResolver for OpMovResolver {
 
 pub struct Op_Mov;
 impl Executable for Op_Mov {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -89,8 +91,9 @@ impl Executable for Op_Mov {
 
 pub struct Op_Mvn;
 impl Executable for Op_Mvn {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 

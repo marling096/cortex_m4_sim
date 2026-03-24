@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 use capstone::arch::arm::ArmOperandType;
@@ -43,6 +43,7 @@ impl OperandResolver for OpBitFieldResolver {
 			},
 			None => 0,
 		};
+		data.arm_operands.condition = data.condition();
 		data.arm_operands.rd = rd;
 		data.arm_operands.rn = rn;
 		rd
@@ -51,8 +52,9 @@ impl OperandResolver for OpBitFieldResolver {
 
 pub struct Op_Ubfx;
 impl Executable for Op_Ubfx {
+	#[inline(always)]
 	fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-		if !check_condition(cpu, data.condition()) {
+		if !check_condition(cpu, data.arm_operands.condition) {
 			return data.size();
 		}
 
@@ -90,6 +92,6 @@ fn calculate_ubfx_core(cpu: &mut dyn CpuContext, rd: u32, rn: u32, lsb: u32, wid
 		};
 		(rn_val >> lsb) & mask
 	};
-	println!("ubfx cal core: rn_val=0x{:08X}, result=0x{:08X}", rn_val, result);
+	// println!("ubfx cal core: rn_val=0x{:08X}, result=0x{:08X}", rn_val, result);
 	cpu.write_reg(rd, result);
 }

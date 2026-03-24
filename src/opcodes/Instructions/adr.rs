@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition,
@@ -8,8 +8,9 @@ use capstone::arch::arm::{ArmOperandType, ArmReg};
 // ADR{cond} Rd, label
 pub struct OpAdr;
 impl Executable for OpAdr {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -32,6 +33,7 @@ impl OperandResolver for OpAdrResolver {
             },
             None => 0,
         };
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rd = rd;
         data.arm_operands.rn = 0;
         data.arm_operands.op2 = data.get_operand(1);

@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
@@ -86,8 +86,9 @@ fn write_u16(cpu: &mut dyn CpuContext, addr: u32, val: u32) {
 // --- STR ---
 pub struct Op_Str;
 impl Executable for Op_Str {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, mut addr) = operand_resolver_multi_runtime(cpu, data);
@@ -102,8 +103,9 @@ impl Executable for Op_Str {
 
 pub struct Op_Strb;
 impl Executable for Op_Strb {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
@@ -115,8 +117,9 @@ impl Executable for Op_Strb {
 
 pub struct Op_Strh;
 impl Executable for Op_Strh {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
         let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
@@ -128,7 +131,8 @@ impl Executable for Op_Strh {
 
 pub struct OpStrResolver;
 impl OperandResolver for OpStrResolver {
-    fn resolve(&self, _data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         0
     }
 }

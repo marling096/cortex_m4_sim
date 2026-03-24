@@ -1,4 +1,4 @@
-use crate::context::CpuContext;
+﻿use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition,
@@ -48,8 +48,9 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct Op_Cbz;
 impl Executable for Op_Cbz {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -69,8 +70,9 @@ impl Executable for Op_Cbz {
 
 pub struct Op_Cbnz;
 impl Executable for Op_Cbnz {
+    #[inline(always)]
     fn execute(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) -> u32 {
-        if !check_condition(cpu, data.condition()) {
+        if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
 
@@ -90,6 +92,7 @@ impl Executable for Op_Cbnz {
 pub struct OpCompareBranchResolver;
 impl OperandResolver for OpCompareBranchResolver {
     fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+        data.arm_operands.condition = data.condition();
         data.arm_operands.rn = match data.get_operand(0) {
             Some(op) => match op.op_type {
                 ArmOperandType::Reg(r) => data.resolve_reg(r),

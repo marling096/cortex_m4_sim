@@ -28,6 +28,7 @@ pub struct Uart {
     rx_line_prev: bool,
     rx_state: RxState,
     rx_fifo: VecDeque<u8>,
+    next_tick_cycle: Option<u32>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -47,8 +48,18 @@ impl Uart {
             cr1: CR1_UE | CR1_TE,
             tx_line: true,
             rx_line_prev: true,
+            next_tick_cycle: None,
             ..Default::default()
         }
+    }
+
+    #[inline(always)]
+    fn refresh_next_tick_cycle(&mut self) {
+        self.next_tick_cycle = if self.tx_active() {
+            Some(1)
+        } else {
+            None
+        };
     }
 
     #[inline(always)]
@@ -70,6 +81,7 @@ impl Uart {
 
         // print!("{}", byte as char);
         let _ = io::stdout().flush();
+        self.refresh_next_tick_cycle();
     }
 
     #[inline(always)]
@@ -86,6 +98,8 @@ impl Uart {
             self.tx_line = true;
             self.sr |= SR_TC;
         }
+
+        self.refresh_next_tick_cycle();
     }
 
     #[inline(always)]
@@ -130,12 +144,7 @@ impl Uart {
                     self.rx_fifo.push_back(byte);
                     self.sr |= SR_RXNE;
                     self.dr = byte as u32;
-                    let display = if (0x20..=0x7e).contains(&byte) {
-                        byte as char
-                    } else {
-                        '.'
-                    };
-                    println!("[usart-rx] byte=0x{byte:02X} ('{display}')");
+                    println!("[usart-rx] byte=0x{byte:02X}");
                 }
                 self.rx_state = RxState::Idle;
             }
@@ -178,7 +187,7 @@ impl Peripheral for Uart {
                 let _ = val;
             }
             0x04 => {
-                println!("rx original value: 0x{:08X}", val);
+   
                 self.push_tx_byte((val & 0xFF) as u8);
             }
             0x08 => {
@@ -186,6 +195,7 @@ impl Peripheral for Uart {
             }
             0x0C => {
                 self.cr1 = val;
+                self.refresh_next_tick_cycle();
             }
             _ => {}
         }
@@ -207,11 +217,27 @@ impl Peripheral for Uart {
         }
 
         self.sr |= SR_TXE;
+        self.refresh_next_tick_cycle();
     }
 
     #[inline(always)]
     fn needs_tick(&self) -> bool {
         true
+    }
+
+    #[inline(always)]
+    fn is_tick_active(&self) -> bool {
+        self.tx_active()
+    }
+
+    #[inline(always)]
+    fn next_event_in_cycles(&self) -> Option<u32> {
+        self.next_tick_cycle
+    }
+
+    #[inline(always)]
+    fn next_tick_cycle(&self) -> Option<u32> {
+        self.next_tick_cycle
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -236,4 +262,5 @@ mod tests {
         uart.push_from_gpio(b'B');
         assert_eq!(uart.take_tx_bytes(), vec![b'B']);
     }
+
 }

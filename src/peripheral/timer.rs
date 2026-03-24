@@ -90,6 +90,7 @@ pub struct GeneralTimer {
 
     /// 中断待处理标志（已触发但尚未被 CPU 读取）
     interrupt_pending: Cell<bool>,
+    next_tick_cycle: Cell<Option<u32>>,
 }
 
 impl GeneralTimer {
@@ -122,7 +123,25 @@ impl GeneralTimer {
             psc_shadow: Cell::new(0),
             arr_shadow: Cell::new(0), // 与 arr 保持一致
             interrupt_pending: Cell::new(false),
+            next_tick_cycle: Cell::new(None),
         }
+    }
+
+    #[inline(always)]
+    fn refresh_next_tick_cycle(&self) {
+        let next_tick_cycle = if !self.is_enabled() {
+            None
+        } else {
+            let div = self.psc_shadow.get().wrapping_add(1);
+            if div == 0 {
+                Some(1)
+            } else {
+                let psc_cnt = self.psc_cnt.get() % div;
+                Some(div.saturating_sub(psc_cnt).max(1))
+            }
+        };
+
+        self.next_tick_cycle.set(next_tick_cycle);
     }
 
     // ---- 便捷访问器 ----
@@ -370,6 +389,8 @@ impl Peripheral for GeneralTimer {
             0x4C => self.dmar.set(val),
             _ => {}
         }
+
+        self.refresh_next_tick_cycle();
     }
 
     /// 每个定时器输入时钟周期调用一次。
@@ -384,6 +405,7 @@ impl Peripheral for GeneralTimer {
         }
 
         if !self.is_enabled() {
+            self.refresh_next_tick_cycle();
             return;
         }
 
@@ -391,6 +413,7 @@ impl Peripheral for GeneralTimer {
         let psc_shadow = self.psc_shadow.get();
         let div = psc_shadow.wrapping_add(1);
         if div == 0 {
+            self.refresh_next_tick_cycle();
             return;
         }
 
@@ -401,6 +424,7 @@ impl Peripheral for GeneralTimer {
         self.psc_cnt.set(new_psc_cnt);
 
         if cnt_steps == 0 {
+            self.refresh_next_tick_cycle();
             return;
         }
 
@@ -415,6 +439,7 @@ impl Peripheral for GeneralTimer {
                 let end_cnt = start_cnt.saturating_add(cnt_steps);
                 self.cnt.set(end_cnt);
                 self.set_cc_flags_batch(start_cnt, end_cnt, arr, false, 0, false);
+                self.refresh_next_tick_cycle();
                 return;
             }
 
@@ -432,6 +457,7 @@ impl Peripheral for GeneralTimer {
                 self.cr1.set(cr1);
                 self.cnt.set(0);
             }
+            self.refresh_next_tick_cycle();
             return;
         }
 
@@ -440,6 +466,7 @@ impl Peripheral for GeneralTimer {
             let end_cnt = start_cnt.saturating_sub(cnt_steps);
             self.cnt.set(end_cnt);
             self.set_cc_flags_batch(start_cnt, end_cnt, arr, false, 0, true);
+            self.refresh_next_tick_cycle();
             return;
         }
 
@@ -458,6 +485,8 @@ impl Peripheral for GeneralTimer {
             self.cr1.set(cr1);
             self.cnt.set(arr);
         }
+
+        self.refresh_next_tick_cycle();
     }
 
     #[inline(always)]
@@ -468,6 +497,16 @@ impl Peripheral for GeneralTimer {
     #[inline(always)]
     fn is_tick_active(&self) -> bool {
         self.is_enabled()
+    }
+
+    #[inline(always)]
+    fn next_event_in_cycles(&self) -> Option<u32> {
+        self.next_tick_cycle.get()
+    }
+
+    #[inline(always)]
+    fn next_tick_cycle(&self) -> Option<u32> {
+        self.next_tick_cycle.get()
     }
 
     // ---- IRQ 接口（供 Bus::drain_pending_irqs 调用）----
@@ -671,7 +710,7 @@ mod tests {
 
     #[test]
     fn pending_irq_returns_irq_num_when_pending() {
-        let mut t = make_tim2(); // irq_num=28
+        let t = make_tim2(); // irq_num=28
         t.interrupt_pending.set(true);
         assert_eq!(t.pending_irq(), Some(28));
     }
