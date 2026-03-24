@@ -1,7 +1,9 @@
 use capstone::arch::arm::ArmInsn;
 use cranelift::prelude::*;
 
-use crate::jit_engine::clif::instructions::{InsDef, check_cc};
+use crate::jit_engine::clif::instructions::{
+    InsDef, emit_pc_update_for_rd, emit_read_reg, emit_write_reg, with_cc,
+};
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
 
@@ -42,7 +44,7 @@ impl InsDef for LdrDef {
     }
 
     fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-        emit_load(lowering, insn, LoadKind::Word);
+        emit_load(lowering, insn, LoadKind::Word)
     }
 }
 
@@ -62,7 +64,7 @@ impl InsDef for LdrbDef {
     }
 
     fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-        emit_load(lowering, insn, LoadKind::Byte);
+        emit_load(lowering, insn, LoadKind::Byte)
     }
 }
 
@@ -82,7 +84,7 @@ impl InsDef for LdrsbDef {
     }
 
     fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-        emit_load(lowering, insn, LoadKind::SignedByte);
+        emit_load(lowering, insn, LoadKind::SignedByte)
     }
 }
 
@@ -102,7 +104,7 @@ impl InsDef for LdrhDef {
     }
 
     fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-        emit_load(lowering, insn, LoadKind::Halfword);
+        emit_load(lowering, insn, LoadKind::Halfword)
     }
 }
 
@@ -122,7 +124,7 @@ impl InsDef for LdrshDef {
     }
 
     fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-        emit_load(lowering, insn, LoadKind::SignedHalfword);
+        emit_load(lowering, insn, LoadKind::SignedHalfword)
     }
 }
 
@@ -134,23 +136,20 @@ enum LoadKind {
     SignedHalfword,
 }
 
-fn emit_load(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, kind: LoadKind) {
-    check_cc(lowering, insn);
+fn emit_load(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    kind: LoadKind,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let (rd, addr) = ldr_operand_resolve(lowering, insn);
+        let load_value = emit_load_value(lowering, addr, kind);
 
-    let (rd, addr) = ldr_operand_resolve(lowering, insn);
-    let load_value = emit_load_value(lowering, addr, kind);
+        emit_write_reg(lowering, rd, load_value);
 
-    lowering.call_void(
-        lowering.helpers.write_reg,
-        &[lowering.cpu_ptr, rd, load_value],
-    );
-
-    let pc_update = if insn.data.arm_operands.rd == 15 {
-        lowering.iconst_u32(0)
-    } else {
-        lowering.iconst_u32(insn.data.size())
-    };
-    lowering.builder.ins().return_(&[pc_update]);
+        let pc_update = emit_pc_update_for_rd(lowering, insn, insn.data.arm_operands.rd);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_load_value(lowering: &mut LoweringContext<'_, '_>, addr: Value, kind: LoadKind) -> Value {
@@ -180,10 +179,9 @@ fn emit_load_value(lowering: &mut LoweringContext<'_, '_>, addr: Value, kind: Lo
 fn ldr_operand_resolve(
     lowering: &mut LoweringContext<'_, '_>,
     insn: &JitInstruction<'_>,
-) -> (Value, Value) {
-    let rd = lowering.iconst_u32(insn.data.arm_operands.rd);
-    let rn = lowering.iconst_u32(insn.data.arm_operands.rn);
-    let base = lowering.call_value(lowering.helpers.read_reg, &[lowering.cpu_ptr, rn]);
+) -> (u32, Value) {
+    let rd = insn.data.arm_operands.rd;
+    let base = emit_read_reg(lowering, insn.data.arm_operands.rn);
     let disp = lowering.iconst_i32(insn.data.arm_operands.mem_disp);
 
     if !insn.data.arm_operands.mem_writeback {
@@ -194,14 +192,11 @@ fn ldr_operand_resolve(
     if insn.data.arm_operands.mem_post_index {
         let mem_post_imm = lowering.iconst_i32(insn.data.arm_operands.mem_post_imm);
         let new_base = lowering.builder.ins().iadd(base, mem_post_imm);
-        lowering.call_void(
-            lowering.helpers.write_reg,
-            &[lowering.cpu_ptr, rn, new_base],
-        );
+        emit_write_reg(lowering, insn.data.arm_operands.rn, new_base);
         (rd, base)
     } else {
         let addr = lowering.builder.ins().iadd(base, disp);
-        lowering.call_void(lowering.helpers.write_reg, &[lowering.cpu_ptr, rn, addr]);
+        emit_write_reg(lowering, insn.data.arm_operands.rn, addr);
         (rd, addr)
     }
 }

@@ -38,7 +38,7 @@ impl SysTick {
 
     #[inline(always)]
     fn refresh_next_tick_cycle(&self) {
-        let next_tick_cycle = if !self.Sys_enableflag() {
+        let next_tick_cycle = if !self.sys_enable_flag() {
             None
         } else {
             let cvr = self.cvr.get();
@@ -53,7 +53,7 @@ impl SysTick {
         self.next_tick_cycle.set(next_tick_cycle);
     }
 
-    fn Sys_enableflag(&self) -> bool {
+    fn sys_enable_flag(&self) -> bool {
         self.csr.get() & SYST_CSR_ENABLE != 0
     }
 
@@ -154,7 +154,7 @@ impl Peripheral for SysTick {
             return;
         }
 
-        if !self.Sys_enableflag() {
+        if !self.sys_enable_flag() {
             self.refresh_next_tick_cycle();
             return;
         }
@@ -194,7 +194,7 @@ impl Peripheral for SysTick {
 
     #[inline(always)]
     fn is_tick_active(&self) -> bool {
-        self.Sys_enableflag()
+        self.sys_enable_flag()
     }
 
     #[inline(always)]

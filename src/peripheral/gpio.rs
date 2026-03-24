@@ -169,7 +169,7 @@ impl Peripheral for Gpio {
             0x08 => { /* IDR is read-only */ }
             0x0C => {
                 self.odr = val;
-                // self.notify_odr_change(1 << 13);
+                self.notify_odr_change(1 << 13);
             }
             0x10 => {
                 self.bsrr = val;
@@ -177,14 +177,14 @@ impl Peripheral for Gpio {
                 let set = val & 0xFFFF;
                 let reset = (val >> 16) & 0xFFFF;
                 self.odr = (self.odr & !reset) | set;
-                // self.notify_odr_change(1 << 13);
+                self.notify_odr_change(1 << 13);
             }
             0x14 => {
                 self.brr = val;
                 // Bits 0-15: reset
                 let reset = val & 0xFFFF;
                 self.odr &= !reset;
-                // self.notify_odr_change(1 << 13);
+                self.notify_odr_change(1 << 13);
             }
             0x18 => {
                 self.lckr = val;

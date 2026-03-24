@@ -87,7 +87,7 @@ impl Peripheral for Scb {
                     let clear_bits = val & 0x0000FFFF;
                     // Apply changes based on bits (e.g. system reset request)
                     // Currently just storing lower bits for simulation state
-                    self.aircr = (0xFA050000 | clear_bits); 
+                    self.aircr = 0xFA050000 | clear_bits;
                 }
             }
             0x10 => self.scr = val,

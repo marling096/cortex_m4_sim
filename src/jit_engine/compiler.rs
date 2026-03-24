@@ -1,5 +1,5 @@
 use crate::jit_engine::engine::{JitBlockFn, JitEngine, JitError};
-use crate::jit_engine::table::JitInstructionTable;
+use crate::jit_engine::table::JitBlockTable;
 
 pub struct JitInstructionCompiler {
     engine: JitEngine,
@@ -14,7 +14,7 @@ impl JitInstructionCompiler {
 
     pub fn compile_table<'a>(
         &mut self,
-        table: &JitInstructionTable<'a>,
+        table: &JitBlockTable<'a>,
     ) -> Result<Vec<(u32, JitBlockFn)>, JitError> {
         self.engine.compile_table(table)
     }
@@ -38,7 +38,7 @@ mod tests {
     use super::*;
     use crate::context::CpuContext;
     use crate::cpu::Cpu;
-    use crate::jit_engine::table::JitInstructionTableBuilder;
+    use crate::jit_engine::table::JitBlockTableBuilder;
     use crate::opcodes::instruction::OpcodeTable;
     use crate::peripheral::bus::Bus;
     use crate::peripheral::nvic::Nvic;
@@ -71,7 +71,7 @@ mod tests {
             .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -83,9 +83,9 @@ mod tests {
             .compile_table(&table)
             .expect("failed to compile table");
 
-        assert_eq!(compiled.len(), 2);
+        assert_eq!(compiled.len(), 1);
         assert!(compiler.compiled_entry(0x0800_0000).is_some());
-        assert!(compiler.compiled_entry(0x0800_0002).is_some());
+        assert!(compiler.compiled_entry(0x0800_0002).is_none());
 
         let mut cpu = build_cpu();
         cpu.write_reg(1, 0x2000_0000);
@@ -93,7 +93,7 @@ mod tests {
         let entry = compiler
             .compiled_entry(0x0800_0000)
             .expect("missing compiled entry");
-        let pc_update = unsafe {
+        let cycles = unsafe {
             entry(
                 &mut cpu as *mut Cpu,
                 table
@@ -102,7 +102,8 @@ mod tests {
             )
         };
 
-        assert_eq!(pc_update, 2);
+        assert_eq!(cycles, 3);
+        assert_eq!(cpu.next_pc, 0x0800_0004);
         assert_eq!(cpu.read_reg(0), 0x1122_3344);
     }
 
@@ -113,7 +114,7 @@ mod tests {
             .disasm_all(&[0x00, 0xA0], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -129,7 +130,7 @@ mod tests {
         let entry = compiler
             .compiled_entry(0x0800_0000)
             .expect("missing compiled entry");
-        let pc_update = unsafe {
+        let cycles = unsafe {
             entry(
                 &mut cpu as *mut Cpu,
                 table
@@ -138,7 +139,8 @@ mod tests {
             )
         };
 
-        assert_eq!(pc_update, 2);
+        assert_eq!(cycles, 1);
+        assert_eq!(cpu.next_pc, 0x0800_0002);
         assert_eq!(cpu.read_reg(0), 0x0800_0004);
     }
 }

@@ -3,10 +3,9 @@ use cranelift::codegen::ir::condcodes::IntCC;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
-    InsDef, check_cc, emit_bool_to_u32, emit_compute_shift, emit_current_carry,
-    emit_read_reg, emit_resolve_op2, emit_return_for_rd, emit_return_size,
-    emit_update_apsr_nz, emit_update_apsr_nzc, emit_update_apsr_nzcv,
-    emit_write_reg,
+    InsDef, emit_bool_to_u32, emit_compute_shift, emit_current_carry, emit_pc_update_for_rd,
+    emit_read_reg, emit_resolve_op2, emit_size_value, emit_update_apsr_nz,
+    emit_update_apsr_nzc, emit_update_apsr_nzcv, emit_write_reg, with_cc,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -27,7 +26,7 @@ macro_rules! define_def {
             }
 
             fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-                $emit(lowering, insn);
+                $emit(lowering, insn)
             }
         }
     };
@@ -126,322 +125,353 @@ enum CalcOp {
 }
 
 fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
-    let lsb = imm_operand(insn, 2);
-    let width = imm_operand(insn, 3);
-    let result = if width == 0 || lsb >= 32 {
-        lowering.iconst_u32(0)
-    } else {
-        let eff_width = width.min(32 - lsb);
-        let shifted = lowering.builder.ins().ushr_imm(rn, i64::from(lsb));
-        if eff_width >= 32 {
-            shifted
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
+        let lsb = imm_operand(insn, 2);
+        let width = imm_operand(insn, 3);
+        let result = if width == 0 || lsb >= 32 {
+            lowering.iconst_u32(0)
         } else {
-            let mask = lowering.iconst_u32((1u32 << eff_width) - 1);
-            lowering.builder.ins().band(shifted, mask)
-        }
-    };
+            let eff_width = width.min(32 - lsb);
+            let shifted = lowering.builder.ins().ushr_imm(rn, i64::from(lsb));
+            if eff_width >= 32 {
+                shifted
+            } else {
+                let mask = lowering.iconst_u32((1u32 << eff_width) - 1);
+                lowering.builder.ins().band(shifted, mask)
+            }
+        };
 
-    emit_write_reg(lowering, rd, result);
-    emit_return_for_rd(lowering, insn, rd);
+        emit_write_reg(lowering, rd, result);
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_uxtb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_extend_mask(lowering, insn, 0xFF);
+    emit_extend_mask(lowering, insn, 0xFF)
 }
 
 fn emit_uxth(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_extend_mask(lowering, insn, 0xFFFF);
+    emit_extend_mask(lowering, insn, 0xFFFF)
 }
 
-fn emit_extend_mask(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, mask: u32) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let (value, _) = emit_resolve_op2(lowering);
-    let mask = lowering.iconst_u32(mask);
-    let result = lowering.builder.ins().band(value, mask);
-    emit_write_reg(lowering, rd, result);
-    emit_return_for_rd(lowering, insn, rd);
+fn emit_extend_mask(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    mask: u32,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let (value, _) = emit_resolve_op2(lowering, insn);
+        let mask = lowering.iconst_u32(mask);
+        let result = lowering.builder.ins().band(value, mask);
+        emit_write_reg(lowering, rd, result);
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_cmp(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_compare(lowering, insn, CompareOp::Cmp);
+    emit_compare(lowering, insn, CompareOp::Cmp)
 }
 
 fn emit_cmn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_compare(lowering, insn, CompareOp::Cmn);
+    emit_compare(lowering, insn, CompareOp::Cmn)
 }
 
-fn emit_compare(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, op: CompareOp) {
-    check_cc(lowering, insn);
+fn emit_compare(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    op: CompareOp,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
+        let (op2, _) = emit_resolve_op2(lowering, insn);
+        let sign_mask = lowering.iconst_u32(0x8000_0000);
 
-    let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
-    let (op2, _) = emit_resolve_op2(lowering);
-    let sign_mask = lowering.iconst_u32(0x8000_0000);
-
-    let (result, carry, overflow) = match op {
-        CompareOp::Cmp => {
-            let result = lowering.builder.ins().isub(rn, op2);
-            let carry_cond = lowering
-                .builder
-                .ins()
-                .icmp(IntCC::UnsignedGreaterThanOrEqual, rn, op2);
-            let carry = emit_bool_to_u32(lowering, carry_cond);
-            let lhs_xor_rhs = lowering.builder.ins().bxor(rn, op2);
-            let lhs_xor_res = lowering.builder.ins().bxor(rn, result);
-            let bits = lowering.builder.ins().band(lhs_xor_rhs, lhs_xor_res);
-            let bits = lowering.builder.ins().band(bits, sign_mask);
-            let overflow_cond = lowering.builder.ins().icmp_imm(IntCC::NotEqual, bits, 0);
-            let overflow = emit_bool_to_u32(lowering, overflow_cond);
-            (result, carry, overflow)
-        }
-        CompareOp::Cmn => {
-            let result = lowering.builder.ins().iadd(rn, op2);
-            let zero = lowering.iconst_u32(0);
-            let carry = emit_add_carry(lowering, rn, op2, zero);
-            let overflow = emit_add_overflow(lowering, rn, op2, result);
-            (result, carry, overflow)
-        }
-    };
-
-    emit_update_apsr_nzcv(lowering, result, carry, overflow);
-    emit_return_size(lowering, insn);
-}
-
-fn emit_tst(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_test(lowering, insn, TestOp::Tst);
-}
-
-fn emit_teq(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_test(lowering, insn, TestOp::Teq);
-}
-
-fn emit_test(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, op: TestOp) {
-    check_cc(lowering, insn);
-
-    let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
-    let (op2, carry) = emit_resolve_op2(lowering);
-    let result = match op {
-        TestOp::Tst => lowering.builder.ins().band(rn, op2),
-        TestOp::Teq => lowering.builder.ins().bxor(rn, op2),
-    };
-
-    emit_update_apsr_nzc(lowering, result, carry);
-    emit_return_size(lowering, insn);
-}
-
-fn emit_mov(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_move(lowering, insn, false);
-}
-
-fn emit_movs(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_move(lowering, insn, false);
-}
-
-fn emit_mvn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_move(lowering, insn, true);
-}
-
-fn emit_move(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, invert: bool) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let (value, carry) = emit_resolve_op2(lowering);
-    let result = if invert {
-        lowering.builder.ins().bnot(value)
-    } else {
-        value
-    };
-
-    emit_write_reg(lowering, rd, result);
-    if insn.data.update_flags() {
-        emit_update_apsr_nzc(lowering, result, carry);
-    }
-    emit_return_for_rd(lowering, insn, rd);
-}
-
-fn emit_and(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_logic(lowering, insn, LogicOp::And);
-}
-
-fn emit_orr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_logic(lowering, insn, LogicOp::Orr);
-}
-
-fn emit_eor(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_logic(lowering, insn, LogicOp::Eor);
-}
-
-fn emit_bic(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_logic(lowering, insn, LogicOp::Bic);
-}
-
-fn emit_orn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_logic(lowering, insn, LogicOp::Orn);
-}
-
-fn emit_logic(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, op: LogicOp) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
-    let (op2, carry) = emit_resolve_op2(lowering);
-    let result = match op {
-        LogicOp::And => lowering.builder.ins().band(rn, op2),
-        LogicOp::Orr => lowering.builder.ins().bor(rn, op2),
-        LogicOp::Eor => lowering.builder.ins().bxor(rn, op2),
-        LogicOp::Bic => {
-            let inverted = lowering.builder.ins().bnot(op2);
-            lowering.builder.ins().band(rn, inverted)
-        }
-        LogicOp::Orn => {
-            let inverted = lowering.builder.ins().bnot(op2);
-            lowering.builder.ins().bor(rn, inverted)
-        }
-    };
-
-    emit_write_reg(lowering, rd, result);
-    if insn.data.update_flags() {
-        emit_update_apsr_nzc(lowering, result, carry);
-    }
-    emit_return_for_rd(lowering, insn, rd);
-}
-
-fn emit_add(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Add);
-}
-
-fn emit_adc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Adc);
-}
-
-fn emit_sub(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Sub);
-}
-
-fn emit_sbc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Sbc);
-}
-
-fn emit_rsb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Rsb);
-}
-
-fn emit_mul(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Mul);
-}
-
-fn emit_udiv(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Udiv);
-}
-
-fn emit_mls(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_calculate(lowering, insn, CalcOp::Mls);
-}
-
-fn emit_calculate(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, op: CalcOp) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
-    let (op2, _) = emit_resolve_op2(lowering);
-    let zero = lowering.iconst_u32(0);
-
-    let result = match op {
-        CalcOp::Add => lowering.builder.ins().iadd(rn, op2),
-        CalcOp::Adc => {
-            let carry_in = emit_current_carry(lowering);
-            let partial = lowering.builder.ins().iadd(rn, op2);
-            lowering.builder.ins().iadd(partial, carry_in)
-        }
-        CalcOp::Sub => lowering.builder.ins().isub(rn, op2),
-        CalcOp::Sbc => {
-            let carry_in = emit_current_carry(lowering);
-            let one = lowering.iconst_u32(1);
-            let borrow = lowering.builder.ins().bxor(carry_in, one);
-            let rhs = lowering.builder.ins().iadd(op2, borrow);
-            lowering.builder.ins().isub(rn, rhs)
-        }
-        CalcOp::Rsb => lowering.builder.ins().isub(op2, rn),
-        CalcOp::Mul => lowering.builder.ins().imul(rn, op2),
-        CalcOp::Udiv => emit_udiv_or_zero(lowering, rn, op2),
-        CalcOp::Mls => {
-            let ra = reg_operand(insn, 3);
-            let ra = emit_read_reg(lowering, ra);
-            let product = lowering.builder.ins().imul(rn, op2);
-            lowering.builder.ins().isub(ra, product)
-        }
-    };
-
-    emit_write_reg(lowering, rd, result);
-
-    match op {
-        CalcOp::Add => {
-            if insn.data.update_flags() {
-                let carry = emit_add_carry(lowering, rn, op2, zero);
-                let overflow = emit_add_overflow(lowering, rn, op2, result);
-                emit_update_apsr_nzcv(lowering, result, carry, overflow);
-            }
-        }
-        CalcOp::Adc => {
-            if insn.data.update_flags() {
-                let carry_in = emit_current_carry(lowering);
-                let carry = emit_add_carry(lowering, rn, op2, carry_in);
-                let rhs = lowering.builder.ins().iadd(op2, carry_in);
-                let overflow = emit_add_overflow(lowering, rn, rhs, result);
-                emit_update_apsr_nzcv(lowering, result, carry, overflow);
-            }
-        }
-        CalcOp::Sub => {
-            if insn.data.update_flags() {
+        let (result, carry, overflow) = match op {
+            CompareOp::Cmp => {
+                let result = lowering.builder.ins().isub(rn, op2);
                 let carry_cond = lowering
                     .builder
                     .ins()
                     .icmp(IntCC::UnsignedGreaterThanOrEqual, rn, op2);
                 let carry = emit_bool_to_u32(lowering, carry_cond);
-                let overflow = emit_sub_overflow(lowering, rn, op2, result);
-                emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                let lhs_xor_rhs = lowering.builder.ins().bxor(rn, op2);
+                let lhs_xor_res = lowering.builder.ins().bxor(rn, result);
+                let bits = lowering.builder.ins().band(lhs_xor_rhs, lhs_xor_res);
+                let bits = lowering.builder.ins().band(bits, sign_mask);
+                let overflow_cond = lowering.builder.ins().icmp_imm(IntCC::NotEqual, bits, 0);
+                let overflow = emit_bool_to_u32(lowering, overflow_cond);
+                (result, carry, overflow)
             }
+            CompareOp::Cmn => {
+                let result = lowering.builder.ins().iadd(rn, op2);
+                let zero = lowering.iconst_u32(0);
+                let carry = emit_add_carry(lowering, rn, op2, zero);
+                let overflow = emit_add_overflow(lowering, rn, op2, result);
+                (result, carry, overflow)
+            }
+        };
+
+        emit_update_apsr_nzcv(lowering, result, carry, overflow);
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
+}
+
+fn emit_tst(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_test(lowering, insn, TestOp::Tst)
+}
+
+fn emit_teq(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_test(lowering, insn, TestOp::Teq)
+}
+
+fn emit_test(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    op: TestOp,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
+        let (op2, carry) = emit_resolve_op2(lowering, insn);
+        let result = match op {
+            TestOp::Tst => lowering.builder.ins().band(rn, op2),
+            TestOp::Teq => lowering.builder.ins().bxor(rn, op2),
+        };
+
+        emit_update_apsr_nzc(lowering, result, carry);
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
+}
+
+fn emit_mov(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_move(lowering, insn, false)
+}
+
+fn emit_movs(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_move(lowering, insn, false)
+}
+
+fn emit_mvn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_move(lowering, insn, true)
+}
+
+fn emit_move(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    invert: bool,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let (value, carry) = emit_resolve_op2(lowering, insn);
+        let result = if invert {
+            lowering.builder.ins().bnot(value)
+        } else {
+            value
+        };
+
+        emit_write_reg(lowering, rd, result);
+        if insn.data.update_flags() {
+            emit_update_apsr_nzc(lowering, result, carry);
         }
-        CalcOp::Sbc => {
-            if insn.data.update_flags() {
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
+}
+
+fn emit_and(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_logic(lowering, insn, LogicOp::And)
+}
+
+fn emit_orr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_logic(lowering, insn, LogicOp::Orr)
+}
+
+fn emit_eor(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_logic(lowering, insn, LogicOp::Eor)
+}
+
+fn emit_bic(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_logic(lowering, insn, LogicOp::Bic)
+}
+
+fn emit_orn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_logic(lowering, insn, LogicOp::Orn)
+}
+
+fn emit_logic(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    op: LogicOp,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
+        let (op2, carry) = emit_resolve_op2(lowering, insn);
+        let result = match op {
+            LogicOp::And => lowering.builder.ins().band(rn, op2),
+            LogicOp::Orr => lowering.builder.ins().bor(rn, op2),
+            LogicOp::Eor => lowering.builder.ins().bxor(rn, op2),
+            LogicOp::Bic => {
+                let inverted = lowering.builder.ins().bnot(op2);
+                lowering.builder.ins().band(rn, inverted)
+            }
+            LogicOp::Orn => {
+                let inverted = lowering.builder.ins().bnot(op2);
+                lowering.builder.ins().bor(rn, inverted)
+            }
+        };
+
+        emit_write_reg(lowering, rd, result);
+        if insn.data.update_flags() {
+            emit_update_apsr_nzc(lowering, result, carry);
+        }
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
+}
+
+fn emit_add(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Add)
+}
+
+fn emit_adc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Adc)
+}
+
+fn emit_sub(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Sub)
+}
+
+fn emit_sbc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Sbc)
+}
+
+fn emit_rsb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Rsb)
+}
+
+fn emit_mul(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Mul)
+}
+
+fn emit_udiv(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Udiv)
+}
+
+fn emit_mls(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    emit_calculate(lowering, insn, CalcOp::Mls)
+}
+
+fn emit_calculate(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    op: CalcOp,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
+        let (op2, _) = emit_resolve_op2(lowering, insn);
+        let zero = lowering.iconst_u32(0);
+
+        let result = match op {
+            CalcOp::Add => lowering.builder.ins().iadd(rn, op2),
+            CalcOp::Adc => {
+                let carry_in = emit_current_carry(lowering);
+                let partial = lowering.builder.ins().iadd(rn, op2);
+                lowering.builder.ins().iadd(partial, carry_in)
+            }
+            CalcOp::Sub => lowering.builder.ins().isub(rn, op2),
+            CalcOp::Sbc => {
                 let carry_in = emit_current_carry(lowering);
                 let one = lowering.iconst_u32(1);
                 let borrow = lowering.builder.ins().bxor(carry_in, one);
                 let rhs = lowering.builder.ins().iadd(op2, borrow);
-                let carry_cond = lowering
-                    .builder
-                    .ins()
-                    .icmp(IntCC::UnsignedGreaterThanOrEqual, rn, rhs);
-                let carry = emit_bool_to_u32(lowering, carry_cond);
-                let overflow = emit_sub_overflow(lowering, rn, rhs, result);
-                emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                lowering.builder.ins().isub(rn, rhs)
             }
-        }
-        CalcOp::Rsb => {
-            if insn.data.update_flags() {
-                let carry_cond = lowering
-                    .builder
-                    .ins()
-                    .icmp(IntCC::UnsignedGreaterThanOrEqual, op2, rn);
-                let carry = emit_bool_to_u32(lowering, carry_cond);
-                let overflow = emit_sub_overflow(lowering, op2, rn, result);
-                emit_update_apsr_nzcv(lowering, result, carry, overflow);
+            CalcOp::Rsb => lowering.builder.ins().isub(op2, rn),
+            CalcOp::Mul => lowering.builder.ins().imul(rn, op2),
+            CalcOp::Udiv => emit_udiv_or_zero(lowering, rn, op2),
+            CalcOp::Mls => {
+                let ra = reg_operand(insn, 3);
+                let ra = emit_read_reg(lowering, ra);
+                let product = lowering.builder.ins().imul(rn, op2);
+                lowering.builder.ins().isub(ra, product)
             }
-        }
-        CalcOp::Mul => {
-            if insn.data.update_flags() {
-                emit_update_apsr_nz(lowering, result);
-            }
-        }
-        CalcOp::Udiv | CalcOp::Mls => {}
-    }
+        };
 
-    emit_return_for_rd(lowering, insn, rd);
+        emit_write_reg(lowering, rd, result);
+
+        match op {
+            CalcOp::Add => {
+                if insn.data.update_flags() {
+                    let carry = emit_add_carry(lowering, rn, op2, zero);
+                    let overflow = emit_add_overflow(lowering, rn, op2, result);
+                    emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                }
+            }
+            CalcOp::Adc => {
+                if insn.data.update_flags() {
+                    let carry_in = emit_current_carry(lowering);
+                    let carry = emit_add_carry(lowering, rn, op2, carry_in);
+                    let rhs = lowering.builder.ins().iadd(op2, carry_in);
+                    let overflow = emit_add_overflow(lowering, rn, rhs, result);
+                    emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                }
+            }
+            CalcOp::Sub => {
+                if insn.data.update_flags() {
+                    let carry_cond = lowering
+                        .builder
+                        .ins()
+                        .icmp(IntCC::UnsignedGreaterThanOrEqual, rn, op2);
+                    let carry = emit_bool_to_u32(lowering, carry_cond);
+                    let overflow = emit_sub_overflow(lowering, rn, op2, result);
+                    emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                }
+            }
+            CalcOp::Sbc => {
+                if insn.data.update_flags() {
+                    let carry_in = emit_current_carry(lowering);
+                    let one = lowering.iconst_u32(1);
+                    let borrow = lowering.builder.ins().bxor(carry_in, one);
+                    let rhs = lowering.builder.ins().iadd(op2, borrow);
+                    let carry_cond = lowering
+                        .builder
+                        .ins()
+                        .icmp(IntCC::UnsignedGreaterThanOrEqual, rn, rhs);
+                    let carry = emit_bool_to_u32(lowering, carry_cond);
+                    let overflow = emit_sub_overflow(lowering, rn, rhs, result);
+                    emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                }
+            }
+            CalcOp::Rsb => {
+                if insn.data.update_flags() {
+                    let carry_cond = lowering
+                        .builder
+                        .ins()
+                        .icmp(IntCC::UnsignedGreaterThanOrEqual, op2, rn);
+                    let carry = emit_bool_to_u32(lowering, carry_cond);
+                    let overflow = emit_sub_overflow(lowering, op2, rn, result);
+                    emit_update_apsr_nzcv(lowering, result, carry, overflow);
+                }
+            }
+            CalcOp::Mul => {
+                if insn.data.update_flags() {
+                    emit_update_apsr_nz(lowering, result);
+                }
+            }
+            CalcOp::Udiv | CalcOp::Mls => {}
+        }
+
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_udiv_or_zero(lowering: &mut LoweringContext<'_, '_>, lhs: Value, rhs: Value) -> Value {
@@ -449,15 +479,16 @@ fn emit_udiv_or_zero(lowering: &mut LoweringContext<'_, '_>, lhs: Value, rhs: Va
 }
 
 fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
-
-    let rd = insn.data.arm_operands.rd;
-    let (result, carry) = emit_compute_shift(lowering);
-    emit_write_reg(lowering, rd, result);
-    if insn.data.update_flags() {
-        emit_update_apsr_nzc(lowering, result, carry);
-    }
-    emit_return_for_rd(lowering, insn, rd);
+    with_cc(lowering, insn, |lowering| {
+        let rd = insn.data.arm_operands.rd;
+        let (result, carry) = emit_compute_shift(lowering);
+        emit_write_reg(lowering, rd, result);
+        if insn.data.update_flags() {
+            emit_update_apsr_nzc(lowering, result, carry);
+        }
+        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_add_carry(

@@ -2,8 +2,8 @@ use capstone::arch::arm::ArmInsn;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
-    InsDef, check_cc, emit_read_reg, emit_resolve_mem_rt_addr, emit_return_size,
-    emit_write_reg,
+    InsDef, emit_read_reg, emit_read_reg_value, emit_resolve_mem_rt_addr, emit_size_value,
+    emit_write_reg, with_cc,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -24,7 +24,7 @@ macro_rules! define_def {
             }
 
             fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-                $emit(lowering, insn);
+                $emit(lowering, insn)
             }
         }
     };
@@ -52,15 +52,15 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 }
 
 fn emit_str(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_store(lowering, insn, StoreKind::Word);
+    emit_store(lowering, insn, StoreKind::Word)
 }
 
 fn emit_strb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_store(lowering, insn, StoreKind::Byte);
+    emit_store(lowering, insn, StoreKind::Byte)
 }
 
 fn emit_strh(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    emit_store(lowering, insn, StoreKind::Halfword);
+    emit_store(lowering, insn, StoreKind::Halfword)
 }
 
 enum StoreKind {
@@ -69,151 +69,174 @@ enum StoreKind {
     Halfword,
 }
 
-fn emit_store(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>, kind: StoreKind) {
-    check_cc(lowering, insn);
+fn emit_store(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction<'_>,
+    kind: StoreKind,
+) {
+    with_cc(lowering, insn, |lowering| {
+        let (rt, addr) = emit_resolve_mem_rt_addr(lowering);
+        let value = emit_read_reg_value(lowering, rt);
 
-    let (rt, addr) = emit_resolve_mem_rt_addr(lowering);
-    let value = lowering.call_value(lowering.helpers.read_reg, &[lowering.cpu_ptr, rt]);
-
-    match kind {
-        StoreKind::Word => {
-            let mask = lowering.iconst_u32(!3u32);
-            let aligned = lowering.builder.ins().band(addr, mask);
-            lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, aligned, value]);
+        match kind {
+            StoreKind::Word => {
+                let mask = lowering.iconst_u32(!3u32);
+                let aligned = lowering.builder.ins().band(addr, mask);
+                lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, aligned, value]);
+            }
+            StoreKind::Byte => lowering.call_void(
+                lowering.helpers.write_u8,
+                &[lowering.cpu_ptr, addr, value],
+            ),
+            StoreKind::Halfword => lowering.call_void(
+                lowering.helpers.write_u16,
+                &[lowering.cpu_ptr, addr, value],
+            ),
         }
-        StoreKind::Byte => lowering.call_void(
-            lowering.helpers.write_u8,
-            &[lowering.cpu_ptr, addr, value],
-        ),
-        StoreKind::Halfword => lowering.call_void(
-            lowering.helpers.write_u16,
-            &[lowering.cpu_ptr, addr, value],
-        ),
-    }
 
-    emit_return_size(lowering, insn);
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
-
-    if insn.data.transed_operands.is_empty() {
-        emit_return_size(lowering, insn);
-        return;
-    }
-
-    let base_reg = insn.data.transed_operands[0];
-    let mut addr = emit_read_reg(lowering, base_reg);
-    let mut loads_pc = false;
-
-    for &reg in &insn.data.transed_operands[1..] {
-        let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, addr]);
-        emit_write_reg(lowering, reg, value);
-        addr = lowering.builder.ins().iadd_imm(addr, 4);
-        if reg == 15 {
-            loads_pc = true;
+    with_cc(lowering, insn, |lowering| {
+        if insn.data.transed_operands.is_empty() {
+            let pc_update = emit_size_value(lowering, insn);
+            lowering.set_pc_update(pc_update);
+            return;
         }
-    }
 
-    if insn.data.writeback() {
-        emit_write_reg(lowering, base_reg, addr);
-    }
+        let base_reg = insn.data.transed_operands[0];
+        let mut addr = emit_read_reg(lowering, base_reg);
+        let mut loads_pc = false;
 
-    let pc_update = if loads_pc {
-        lowering.iconst_u32(0)
-    } else {
-        lowering.iconst_u32(insn.data.size())
-    };
-    lowering.builder.ins().return_(&[pc_update]);
+        for &reg in &insn.data.transed_operands[1..] {
+            let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, addr]);
+            emit_write_reg(lowering, reg, value);
+            addr = lowering.builder.ins().iadd_imm(addr, 4);
+            if reg == 15 {
+                loads_pc = true;
+            }
+        }
+
+        if insn.data.writeback() {
+            emit_write_reg(lowering, base_reg, addr);
+        }
+
+        let pc_update = if loads_pc {
+            lowering.iconst_u32(0)
+        } else {
+            emit_size_value(lowering, insn)
+        };
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
+    with_cc(lowering, insn, |lowering| {
+        if insn.data.transed_operands.is_empty() {
+            let pc_update = emit_size_value(lowering, insn);
+            lowering.set_pc_update(pc_update);
+            return;
+        }
 
-    if insn.data.transed_operands.is_empty() {
-        emit_return_size(lowering, insn);
-        return;
-    }
+        let base_reg = insn.data.transed_operands[0];
+        let mut addr = emit_read_reg(lowering, base_reg);
 
-    let base_reg = insn.data.transed_operands[0];
-    let mut addr = emit_read_reg(lowering, base_reg);
+        for &reg in &insn.data.transed_operands[1..] {
+            let value = emit_read_reg(lowering, reg);
+            lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
+            addr = lowering.builder.ins().iadd_imm(addr, 4);
+        }
 
-    for &reg in &insn.data.transed_operands[1..] {
-        let value = emit_read_reg(lowering, reg);
-        lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
-        addr = lowering.builder.ins().iadd_imm(addr, 4);
-    }
+        if insn.data.writeback() {
+            emit_write_reg(lowering, base_reg, addr);
+        }
 
-    if insn.data.writeback() {
-        emit_write_reg(lowering, base_reg, addr);
-    }
-
-    emit_return_size(lowering, insn);
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
+    with_cc(lowering, insn, |lowering| {
+        let count = insn.data.transed_operands.len() as u32;
+        let sp = emit_read_reg(lowering, 13);
+        let offset = lowering.iconst_u32(count.wrapping_mul(4));
+        let new_sp = lowering.builder.ins().isub(sp, offset);
+        let mut addr = new_sp;
 
-    let count = insn.data.transed_operands.len() as u32;
-    let sp = emit_read_reg(lowering, 13);
-    let offset = lowering.iconst_u32(count.wrapping_mul(4));
-    let new_sp = lowering.builder.ins().isub(sp, offset);
-    let mut addr = new_sp;
+        for &reg in &insn.data.transed_operands {
+            let value = emit_read_reg(lowering, reg);
+            lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
+            addr = lowering.builder.ins().iadd_imm(addr, 4);
+        }
 
-    for &reg in &insn.data.transed_operands {
-        let value = emit_read_reg(lowering, reg);
-        lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
-        addr = lowering.builder.ins().iadd_imm(addr, 4);
-    }
-
-    emit_write_reg(lowering, 13, new_sp);
-    emit_return_size(lowering, insn);
+        emit_write_reg(lowering, 13, new_sp);
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
+    with_cc(lowering, insn, |lowering| {
+        let mut sp = emit_read_reg(lowering, 13);
+        let mut popped_pc = None;
 
-    let mut sp = emit_read_reg(lowering, 13);
-    let mut popped_pc = None;
-
-    for &reg in &insn.data.transed_operands {
-        let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, sp]);
-        sp = lowering.builder.ins().iadd_imm(sp, 4);
-        if reg == 15 {
-            popped_pc = Some(value);
-        } else {
-            emit_write_reg(lowering, reg, value);
+        for &reg in &insn.data.transed_operands {
+            let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, sp]);
+            sp = lowering.builder.ins().iadd_imm(sp, 4);
+            if reg == 15 {
+                popped_pc = Some(value);
+            } else {
+                emit_write_reg(lowering, reg, value);
+            }
         }
-    }
 
-    emit_write_reg(lowering, 13, sp);
+        emit_write_reg(lowering, 13, sp);
 
-    if let Some(pc_value) = popped_pc {
-        let handled = lowering.call_value(
-            lowering.helpers.try_exception_return,
-            &[lowering.cpu_ptr, pc_value],
-        );
-        let handled_block = lowering.builder.create_block();
-        let continue_block = lowering.builder.create_block();
-        lowering
-            .builder
-            .ins()
-            .brif(handled, handled_block, &[], continue_block, &[]);
+        if let Some(pc_value) = popped_pc {
+            let handled = lowering.call_value(
+                lowering.helpers.try_exception_return,
+                &[lowering.cpu_ptr, pc_value],
+            );
+            let handled_block = lowering.builder.create_block();
+            let continue_block = lowering.builder.create_block();
+            let join_block = lowering.builder.create_block();
+            lowering.builder.append_block_param(join_block, types::I32);
+            lowering
+                .builder
+                .ins()
+                .brif(handled, handled_block, &[], continue_block, &[]);
 
-        lowering.builder.switch_to_block(handled_block);
-        lowering.builder.seal_block(handled_block);
-        let zero = lowering.iconst_u32(0);
-        lowering.builder.ins().return_(&[zero]);
+            lowering.builder.switch_to_block(handled_block);
+            lowering.builder.seal_block(handled_block);
+            let zero = lowering.iconst_u32(0);
+            lowering
+                .builder
+                .ins()
+                .jump(join_block, &[zero.into()]);
 
-        lowering.builder.switch_to_block(continue_block);
-        lowering.builder.seal_block(continue_block);
-        let mask = lowering.iconst_u32(!1u32);
-        let aligned_pc = lowering.builder.ins().band(pc_value, mask);
-        emit_write_reg(lowering, 15, aligned_pc);
-        let zero = lowering.iconst_u32(0);
-        lowering.builder.ins().return_(&[zero]);
-        return;
-    }
+            lowering.builder.switch_to_block(continue_block);
+            lowering.builder.seal_block(continue_block);
+            let mask = lowering.iconst_u32(!1u32);
+            let aligned_pc = lowering.builder.ins().band(pc_value, mask);
+            emit_write_reg(lowering, 15, aligned_pc);
+            let zero = lowering.iconst_u32(0);
+            lowering
+                .builder
+                .ins()
+                .jump(join_block, &[zero.into()]);
 
-    emit_return_size(lowering, insn);
+            lowering.builder.seal_block(join_block);
+            lowering.builder.switch_to_block(join_block);
+            let pc_update = lowering.builder.block_params(join_block)[0];
+            lowering.set_pc_update(pc_update);
+            return;
+        }
+
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
 }

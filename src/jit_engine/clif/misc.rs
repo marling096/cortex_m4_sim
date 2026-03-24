@@ -1,8 +1,6 @@
 use capstone::arch::arm::ArmInsn;
 
-use cranelift::prelude::*;
-
-use crate::jit_engine::clif::instructions::{InsDef, check_cc, emit_return_size};
+use crate::jit_engine::clif::instructions::{InsDef, emit_size_value, with_cc};
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
 
@@ -22,7 +20,7 @@ macro_rules! define_def {
             }
 
             fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-                $emit(lowering, insn);
+                $emit(lowering, insn)
             }
         }
     };
@@ -44,15 +42,18 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 }
 
 fn emit_noop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-    check_cc(lowering, insn);
-    emit_return_size(lowering, insn);
+    with_cc(lowering, insn, |lowering| {
+        let pc_update = emit_size_value(lowering, insn);
+        lowering.set_pc_update(pc_update);
+    })
 }
 
 fn emit_bkpt(lowering: &mut LoweringContext<'_, '_>, _insn: &JitInstruction<'_>) {
+    lowering.flush_dirty_state();
     lowering.call_void(
         lowering.helpers.execute_bkpt,
         &[lowering.cpu_ptr, lowering.instr_ptr],
     );
     let zero = lowering.iconst_u32(0);
-    lowering.builder.ins().return_(&[zero]);
+    lowering.set_pc_update(zero);
 }

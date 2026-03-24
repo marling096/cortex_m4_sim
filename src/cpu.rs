@@ -1,3 +1,5 @@
+#![allow(dead_code, non_camel_case_types, non_snake_case, private_interfaces)]
+
 use std::vec;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
@@ -208,6 +210,9 @@ impl CpuContext for Cpu {
 }
 
 impl Cpu {
+    const JIT_REG_BASE_OFFSET: usize = std::mem::offset_of!(Cpu, registers)
+        + std::mem::offset_of!(Registers, reg);
+
     const FLASH_ALIAS_BASE: u32 = 0x0000_0000;
     const FLASH_ALIAS_LAST: u32 = 0x0007_FFFF;
     const FLASH_BASE: u32 = 0x0800_0000;
@@ -233,6 +238,16 @@ impl Cpu {
     const HINT_SRC_NONE: u8 = 0;
     const HINT_SRC_OTHER: u8 = 1;
     const HINT_SRC_PERIPHERAL: u8 = 2;
+
+    #[inline(always)]
+    pub(crate) fn jit_reg_base_offset() -> i32 {
+        Self::JIT_REG_BASE_OFFSET as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_reg_offset(reg: u32) -> i32 {
+        (Self::JIT_REG_BASE_OFFSET + reg as usize * std::mem::size_of::<u32>()) as i32
+    }
 
     #[inline(always)]
     fn set_interrupt_check_hint(&mut self, source: u8) {
@@ -276,7 +291,7 @@ impl Cpu {
         }
     }
 
-    pub fn new(frequency: Arc<AtomicU32>, machine_cycle: u8, peripheral_bus: Bus, mut ppb: Bus) -> Cpu {
+    pub fn new(frequency: Arc<AtomicU32>, machine_cycle: u8, peripheral_bus: Bus, ppb: Bus) -> Cpu {
         let mut peripheral_tick_mask = 0u8;
         if peripheral_bus.has_tickables() {
             peripheral_tick_mask |= 1;
@@ -797,6 +812,21 @@ impl Cpu {
             self.try_take_interrupt();
         }
         1
+    }
+
+    #[inline(always)]
+    pub fn finish_block_step_cycles(
+        &mut self,
+        execute_cycles: u32,
+        current_pc: u32,
+        pc_update: u32,
+    ) -> u32 {
+        self.update_pc_with_current(current_pc, pc_update);
+        if pc_update != 0 {
+            self.write_pc(self.next_pc);
+        }
+        self.Cpu_pipeline.remain_cycles = 0;
+        execute_cycles.max(1)
     }
 
     #[inline(always)]

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod clif;
 pub mod compiler;
 pub mod engine;

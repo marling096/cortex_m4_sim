@@ -1,7 +1,9 @@
 use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmReg};
 use cranelift::prelude::*;
 
-use crate::jit_engine::clif::instructions::{InsDef, check_cc};
+use crate::jit_engine::clif::instructions::{
+	InsDef, emit_pc_update_for_rd, emit_read_reg, emit_write_reg, with_cc,
+};
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
 
@@ -35,23 +37,18 @@ impl InsDef for AdrDef {
 	}
 
 	fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-		emit_adr(lowering, insn);
+		emit_adr(lowering, insn)
 	}
 }
 
 fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
-	check_cc(lowering, insn);
-
-	let rd = lowering.iconst_u32(insn.data.arm_operands.rd);
-	let target = emit_adr_target(lowering, insn);
-	lowering.call_void(lowering.helpers.write_reg, &[lowering.cpu_ptr, rd, target]);
-
-	let pc_update = if insn.data.arm_operands.rd == 15 {
-		lowering.iconst_u32(0)
-	} else {
-		lowering.iconst_u32(insn.data.size())
-	};
-	lowering.builder.ins().return_(&[pc_update]);
+	with_cc(lowering, insn, |lowering| {
+		let rd = insn.data.arm_operands.rd;
+		let target = emit_adr_target(lowering, insn);
+		emit_write_reg(lowering, rd, target);
+		let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
+		lowering.set_pc_update(pc_update);
+	})
 }
 
 fn emit_adr_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) -> Value {
@@ -63,14 +60,12 @@ fn emit_adr_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction
 			let base = if mem.base().0 == ArmReg::ARM_REG_PC as u16 {
 				pc_aligned
 			} else {
-				let reg = lowering.iconst_u32(insn.data.resolve_reg(mem.base()));
-				lowering.call_value(lowering.helpers.read_reg, &[lowering.cpu_ptr, reg])
+				emit_read_reg(lowering, insn.data.resolve_reg(mem.base()))
 			};
 			emit_add_signed(lowering, base, i64::from(mem.disp()))
 		}
 		Some(ArmOperandType::Reg(reg)) => {
-			let reg = lowering.iconst_u32(insn.data.resolve_reg(*reg));
-			lowering.call_value(lowering.helpers.read_reg, &[lowering.cpu_ptr, reg])
+			emit_read_reg(lowering, insn.data.resolve_reg(*reg))
 		}
 		_ => lowering.iconst_u32(0),
 	}

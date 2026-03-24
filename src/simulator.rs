@@ -1,8 +1,8 @@
 // mod cpu;
 use crate::context::CpuContext;
 use crate::cpu::Cpu;
-use crate::jit_engine::engine::{JitEngine, JitError};
-use crate::jit_engine::table::JitInstructionTable;
+use crate::jit_engine::engine::{JitEngine, JitError, JitStatsSnapshot};
+use crate::jit_engine::table::{JitBlockStats, JitBlockTable};
 use crate::opcodes::instruction::Cpu_InstrTable;
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -74,10 +74,39 @@ impl Simulator {
         true
     }
 
-    pub fn sim_loop<'a>(
+    pub fn sim_loop_interpreter<'a>(
         &mut self,
         cpu_ins_table: Cpu_InstrTable<'a>,
-        jit_table: JitInstructionTable<'a>,
+    ) {
+        const DEFAULT_REPORT_WINDOW: u32 = 10000;
+
+        let report_window = std::env::var("SIM_REPORT_WINDOW")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(DEFAULT_REPORT_WINDOW);
+
+        let no_throttle = std::env::var("SIM_NO_THROTTLE")
+            .map(|v| v != "0")
+            .unwrap_or(false);
+        let peripheral_tick_batch = std::env::var("SIM_PERIPH_TICK_BATCH")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(1);
+
+        println!(
+            "Simulator mode: FAST | throttle: {} | periph batch: {}",
+            if no_throttle { "OFF" } else { "ON" },
+            peripheral_tick_batch
+        );
+
+        self.sim_loop_fast(cpu_ins_table, no_throttle, peripheral_tick_batch, report_window);
+    }
+
+    pub fn sim_loop_jit<'a>(
+        &mut self,
+        jit_table: JitBlockTable<'a>,
     ) -> Result<(), JitError> {
         const DEFAULT_REPORT_WINDOW: u32 = 10000;
 
@@ -95,29 +124,14 @@ impl Simulator {
             .and_then(|v| v.parse::<u32>().ok())
             .filter(|v| *v > 0)
             .unwrap_or(1);
-        let use_jit = std::env::var("SIM_USE_BLOCK")
-            .map(|v| v != "0")
-            .unwrap_or(false);
 
         println!(
-            "Simulator mode: {} | throttle: {} | periph batch: {}",
-            if use_jit { "JIT" } else { "FAST" },
+            "Simulator mode: JIT | throttle: {} | periph batch: {}",
             if no_throttle { "OFF" } else { "ON" },
             peripheral_tick_batch
         );
 
-        if use_jit {
-            self.sim_loop_fast_jit(
-                cpu_ins_table,
-                jit_table,
-                no_throttle,
-                peripheral_tick_batch,
-                report_window,
-            )
-        } else {
-            self.sim_loop_fast(cpu_ins_table, no_throttle, peripheral_tick_batch, report_window);
-            Ok(())
-        }
+        self.sim_loop_fast_jit(jit_table, no_throttle, peripheral_tick_batch, report_window)
     }
 
     fn sim_loop_fast<'a>(
@@ -227,13 +241,22 @@ impl Simulator {
 
     fn sim_loop_fast_jit<'a>(
         &mut self,
-        cpu_ins_table: Cpu_InstrTable<'a>,
-        jit_table: JitInstructionTable<'a>,
+        jit_table: JitBlockTable<'a>,
         no_throttle: bool,
         peripheral_tick_batch: u32,
         report_window: u32,
     ) -> Result<(), JitError> {
         let mut engine = JitEngine::new()?;
+        engine.compile_table(&jit_table)?;
+        let report_jit_stats = std::env::var("SIM_JIT_STATS")
+            .map(|v| v != "0")
+            .unwrap_or(false);
+        let table_block_stats = jit_table.block_stats();
+        let mut last_jit_stats = engine.stats_snapshot();
+
+        if report_jit_stats {
+            Self::print_jit_table_stats(table_block_stats);
+        }
         let mut fetch_count: u32 = 0;
         let mut window_start = Instant::now();
         let report_window_f64 = report_window as f64;
@@ -281,7 +304,7 @@ impl Simulator {
             };
 
             let current_pc = self.cpu.next_pc;
-            match cpu_ins_table.get(current_pc) {
+            match jit_table.get(current_pc) {
                 Some(ins) => trace_instruction!(current_pc, ins),
                 None => {
                     eprintln!(
@@ -309,6 +332,12 @@ impl Simulator {
                         actual_freq_hz / 1_000_000.0
                     );
                 }
+                if report_jit_stats {
+                    let current_stats = engine.stats_snapshot();
+                    let delta = current_stats.delta_since(last_jit_stats);
+                    Self::print_jit_runtime_stats(delta);
+                    last_jit_stats = current_stats;
+                }
                 fetch_count = 0;
                 window_start = Instant::now();
             }
@@ -325,5 +354,49 @@ impl Simulator {
         }
 
         Ok(())
+    }
+
+    fn print_jit_table_stats(stats: JitBlockStats) {
+        println!(
+            "JIT block table: blocks={} avg_len={:.2} terminators: branch={} target={} pc_write={} it_end={} exret={} gap={} eof={}",
+            stats.block_count,
+            stats.average_block_len(),
+            stats.branch_blocks,
+            stats.branch_target_blocks,
+            stats.pc_write_blocks,
+            stats.it_block_end_blocks,
+            stats.exception_return_blocks,
+            stats.gap_blocks,
+            stats.end_of_table_blocks,
+        );
+    }
+
+    fn print_jit_runtime_stats(stats: JitStatsSnapshot) {
+        println!(
+            concat!(
+                "JIT stats: exec_blocks={} avg_exec_len={:.2} cache_hit={:.1}% ",
+                "compiled={} suffix={} avg_compiled_len={:.2} fallback={} ",
+                "helpers/ins={:.2} reg_r={} reg_w={} mem_r={} mem_w={} ",
+                "op2={} mem_addr={} shift={} flags={} cc={} exret={}"
+            ),
+            stats.executed_blocks,
+            stats.average_executed_block_len(),
+            stats.cache_hit_rate() * 100.0,
+            stats.compiled_blocks,
+            stats.compiled_suffix_blocks,
+            stats.average_compiled_block_len(),
+            stats.fallback_calls,
+            stats.helper_calls_per_guest_instruction(),
+            stats.read_reg_calls,
+            stats.write_reg_calls,
+            stats.mem_read_calls,
+            stats.mem_write_calls,
+            stats.resolve_op2_calls,
+            stats.resolve_mem_rt_addr_calls,
+            stats.compute_shift_calls,
+            stats.flag_update_calls,
+            stats.check_condition_calls,
+            stats.exception_return_calls,
+        );
     }
 }

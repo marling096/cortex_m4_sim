@@ -98,6 +98,10 @@ impl<'a> JitInstruction<'a> {
             return true;
         }
 
+        if self.data.writes_pc() {
+            return true;
+        }
+
         if self.data.arm_operands.rd == 15 {
             return true;
         }
@@ -128,10 +132,33 @@ pub struct JitBlockRange {
     pub terminator: JitBlockTerminator,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct JitBlockStats {
+    pub block_count: usize,
+    pub total_instruction_count: usize,
+    pub branch_blocks: usize,
+    pub branch_target_blocks: usize,
+    pub pc_write_blocks: usize,
+    pub it_block_end_blocks: usize,
+    pub exception_return_blocks: usize,
+    pub gap_blocks: usize,
+    pub end_of_table_blocks: usize,
+}
+
+impl JitBlockStats {
+    pub fn average_block_len(&self) -> f64 {
+        if self.block_count == 0 {
+            0.0
+        } else {
+            self.total_instruction_count as f64 / self.block_count as f64
+        }
+    }
+}
+
 pub struct JitBlockBuilder;
 
 impl JitBlockBuilder {
-    pub fn build<'a>(table: &JitInstructionTable<'a>) -> Vec<JitBlockRange> {
+    pub fn build<'a>(table: &JitBlockTable<'a>) -> Vec<JitBlockRange> {
         let mut entries: Vec<_> = table.iter_entries().collect();
         entries.sort_unstable_by_key(|(pc, _)| *pc);
 
@@ -216,15 +243,16 @@ impl JitBlockBuilder {
     }
 }
 
-pub struct JitInstructionTable<'a> {
+pub struct JitBlockTable<'a> {
     entries: FxHashMap<u32, JitInstruction<'a>>,
     fast_table: Vec<Option<JitInstruction<'a>>>,
     fast_base: u32,
     blocks: Vec<JitBlockRange>,
     block_starts: FxHashMap<u32, usize>,
+    block_membership: FxHashMap<u32, usize>,
 }
 
-impl<'a> JitInstructionTable<'a> {
+impl<'a> JitBlockTable<'a> {
     pub fn len(&self) -> usize {
         self.entries.len() + self.fast_table.iter().filter(|entry| entry.is_some()).count()
     }
@@ -245,6 +273,30 @@ impl<'a> JitInstructionTable<'a> {
         self.block_starts
             .get(&pc)
             .and_then(|index| self.blocks.get(*index))
+    }
+
+    pub fn block_containing(&self, pc: u32) -> Option<&JitBlockRange> {
+        self.block_membership
+            .get(&pc)
+            .and_then(|index| self.blocks.get(*index))
+    }
+
+    pub fn block_stats(&self) -> JitBlockStats {
+        let mut stats = JitBlockStats::default();
+        for block in &self.blocks {
+            stats.block_count += 1;
+            stats.total_instruction_count += block.instruction_count;
+            match block.terminator {
+                JitBlockTerminator::Branch => stats.branch_blocks += 1,
+                JitBlockTerminator::BranchTarget => stats.branch_target_blocks += 1,
+                JitBlockTerminator::PcWrite => stats.pc_write_blocks += 1,
+                JitBlockTerminator::ItBlockEnd => stats.it_block_end_blocks += 1,
+                JitBlockTerminator::ExceptionReturn => stats.exception_return_blocks += 1,
+                JitBlockTerminator::Gap => stats.gap_blocks += 1,
+                JitBlockTerminator::EndOfTable => stats.end_of_table_blocks += 1,
+            }
+        }
+        stats
     }
 
     #[inline(always)]
@@ -278,11 +330,11 @@ impl<'a> JitInstructionTable<'a> {
 }
 
 #[derive(Default)]
-pub struct JitInstructionTableBuilder<'a> {
+pub struct JitBlockTableBuilder<'a> {
     entries: FxHashMap<u32, JitInstruction<'a>>,
 }
 
-impl<'a> JitInstructionTableBuilder<'a> {
+impl<'a> JitBlockTableBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -331,7 +383,7 @@ impl<'a> JitInstructionTableBuilder<'a> {
         Ok(())
     }
 
-    pub fn build(self) -> JitInstructionTable<'a> {
+    pub fn build(self) -> JitBlockTable<'a> {
         let mut table = optimize_entries(self.entries);
         let blocks = JitBlockBuilder::build(&table);
         let block_starts = blocks
@@ -339,8 +391,23 @@ impl<'a> JitInstructionTableBuilder<'a> {
             .enumerate()
             .map(|(index, block)| (block.start_pc, index))
             .collect();
+        let mut block_membership = FxHashMap::default();
+        for (index, block) in blocks.iter().enumerate() {
+            let mut current_pc = block.start_pc;
+            loop {
+                block_membership.insert(current_pc, index);
+                if current_pc == block.end_pc {
+                    break;
+                }
+                let Some(ins) = table.get(current_pc) else {
+                    break;
+                };
+                current_pc = current_pc.wrapping_add(ins.data.size());
+            }
+        }
         table.blocks = blocks;
         table.block_starts = block_starts;
+        table.block_membership = block_membership;
         table
     }
 
@@ -348,7 +415,7 @@ impl<'a> JitInstructionTableBuilder<'a> {
         opcode_table: &OpcodeTable,
         cs: &'a Capstone,
         insns: I,
-    ) -> Result<JitInstructionTable<'a>, JitTableBuildError>
+    ) -> Result<JitBlockTable<'a>, JitTableBuildError>
     where
         I: IntoIterator<Item = &'a Insn<'a>>,
     {
@@ -384,7 +451,7 @@ mod tests {
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
 
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -408,7 +475,7 @@ mod tests {
             .disasm_all(&[0x00, 0xE0, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -435,7 +502,7 @@ mod tests {
             .disasm_all(&[0xFE, 0xE7, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -460,7 +527,7 @@ mod tests {
             .disasm_all(&[0x87, 0x46, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -483,7 +550,7 @@ mod tests {
             .disasm_all(&[0x18, 0xBF, 0xFB, 0x1A, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -507,7 +574,7 @@ mod tests {
             .disasm_all(&[0x10, 0xBD, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
         let opcode_table = OpcodeTable::new();
-        let table = JitInstructionTableBuilder::build_from_disassembly(
+        let table = JitBlockTableBuilder::build_from_disassembly(
             &opcode_table,
             &cs,
             insns.iter(),
@@ -524,14 +591,15 @@ mod tests {
     }
 }
 
-fn optimize_entries<'a>(mut entries: FxHashMap<u32, JitInstruction<'a>>) -> JitInstructionTable<'a> {
+fn optimize_entries<'a>(mut entries: FxHashMap<u32, JitInstruction<'a>>) -> JitBlockTable<'a> {
     if entries.is_empty() {
-        return JitInstructionTable {
+        return JitBlockTable {
             entries,
             fast_table: Vec::new(),
             fast_base: 0,
             blocks: Vec::new(),
             block_starts: FxHashMap::default(),
+            block_membership: FxHashMap::default(),
         };
     }
 
@@ -548,12 +616,13 @@ fn optimize_entries<'a>(mut entries: FxHashMap<u32, JitInstruction<'a>>) -> JitI
 
     let range = max_addr - min_addr;
     if range > 16 * 1024 * 1024 {
-        return JitInstructionTable {
+        return JitBlockTable {
             entries,
             fast_table: Vec::new(),
             fast_base: 0,
             blocks: Vec::new(),
             block_starts: FxHashMap::default(),
+            block_membership: FxHashMap::default(),
         };
     }
 
@@ -578,11 +647,12 @@ fn optimize_entries<'a>(mut entries: FxHashMap<u32, JitInstruction<'a>>) -> JitI
         }
     }
 
-    JitInstructionTable {
+    JitBlockTable {
         entries,
         fast_table,
         fast_base,
         blocks: Vec::new(),
         block_starts: FxHashMap::default(),
+        block_membership: FxHashMap::default(),
     }
 }
