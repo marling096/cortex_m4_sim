@@ -1,9 +1,10 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, CycleInfo, Executable, Opcode, OperandResolver, check_condition,
 };
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
 
 pub struct Branch_builder;
 impl InstrBuilder for Branch_builder {
@@ -145,18 +146,18 @@ impl Executable for Op_Blx {
 
 pub struct OpBranchResolver;
 impl OperandResolver for OpBranchResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.op2 = data.get_operand(0);
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.op2 = decoded.get_operand(0).cloned();
         0
     }
 }
 
 pub struct OpBxResolver;
 impl OperandResolver for OpBxResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.op2 = data.get_operand(0);
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.op2 = decoded.get_operand(0).cloned();
         0
     }
 }
@@ -164,8 +165,8 @@ impl OperandResolver for OpBxResolver {
 fn resolve_branch_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     match &data.arm_operands.op2 {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(imm) => imm as u32,
-            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)),
+            DecodedOperandKind::Imm(imm) => imm as u32,
+            DecodedOperandKind::Reg(reg) => cpu.read_reg(reg),
             _ => 0,
         },
         None => 0,

@@ -1,9 +1,10 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition,
 };
-use capstone::arch::arm::ArmOperandType;
 
 pub struct Compare_branch_builder;
 impl InstrBuilder for Compare_branch_builder {
@@ -15,7 +16,7 @@ impl InstrBuilder for Compare_branch_builder {
 pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_CBZ as u32,
+            insnid: ArmInsn::ARM_INS_CBZ as u32,
             name: "CBZ".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -28,7 +29,7 @@ pub fn add_compare_branch_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_CBNZ as u32,
+            insnid: ArmInsn::ARM_INS_CBNZ as u32,
             name: "CBNZ".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -91,25 +92,25 @@ impl Executable for Op_Cbnz {
 
 pub struct OpCompareBranchResolver;
 impl OperandResolver for OpCompareBranchResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rn = match data.get_operand(0) {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rn = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
-        data.arm_operands.op2 = data.get_operand(1);
-        data.arm_operands.rn
+        decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
+        decoded.arm_operands.rn
     }
 }
 
 fn resolve_compare_branch_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     match &data.arm_operands.op2 {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(imm) => imm as u32,
-            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)),
+            DecodedOperandKind::Imm(imm) => imm as u32,
+            DecodedOperandKind::Reg(reg) => cpu.read_reg(reg),
             _ => 0,
         },
         None => 0,

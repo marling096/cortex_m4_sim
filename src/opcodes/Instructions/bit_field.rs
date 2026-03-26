@@ -1,4 +1,5 @@
 ﻿use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 use capstone::arch::arm::ArmOperandType;
@@ -12,7 +13,7 @@ impl InstrBuilder for Bit_field_builder {
 
 pub fn add_bit_field_def() -> Vec<crate::opcodes::opcode::Opcode> {
 	vec![crate::opcodes::opcode::Opcode {
-		insnid: capstone::arch::arm::ArmInsn::ARM_INS_UBFX as u32,
+		insnid: crate::arch::ArmInsn::ARM_INS_UBFX as u32,
 		name: "UBFX".to_string(),
 		length: 32,
 		cycles: crate::opcodes::opcode::CycleInfo {
@@ -28,24 +29,24 @@ pub fn add_bit_field_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpBitFieldResolver;
 impl OperandResolver for OpBitFieldResolver {
-	fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-		let rd = match data.get_operand(0) {
+	fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+		let rd = match decoded.get_operand(0) {
 			Some(op) => match op.op_type {
-				ArmOperandType::Reg(r) => data.resolve_reg(r),
+				DecodedOperandKind::Reg(reg) => reg,
 				_ => 0,
 			},
 			None => 0,
 		};
-		let rn = match data.get_operand(1) {
+		let rn = match decoded.get_operand(1) {
 			Some(op) => match op.op_type {
-				ArmOperandType::Reg(r) => data.resolve_reg(r),
+				DecodedOperandKind::Reg(reg) => reg,
 				_ => 0,
 			},
 			None => 0,
 		};
-		data.arm_operands.condition = data.condition();
-		data.arm_operands.rd = rd;
-		data.arm_operands.rn = rn;
+		decoded.arm_operands.condition = raw.condition();
+		decoded.arm_operands.rd = rd;
+		decoded.arm_operands.rn = rn;
 		rd
 	}
 }

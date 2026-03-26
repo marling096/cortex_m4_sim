@@ -1,4 +1,5 @@
 ﻿use crate::context::CpuContext;
+use crate::opcodes::decoded::DecodedInstructionBuilder;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
@@ -11,7 +12,7 @@ impl InstrBuilder for Hint_builder {
 
 pub fn add_Hint_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![crate::opcodes::opcode::Opcode {
-        insnid: capstone::arch::arm::ArmInsn::ARM_INS_HINT as u32,
+        insnid: crate::arch::ArmInsn::ARM_INS_HINT as u32,
         name: "Hint".to_string(),
         length: 32,
         cycles: crate::opcodes::opcode::CycleInfo {
@@ -40,9 +41,8 @@ impl Executable for Op_Hint {
 
 pub struct OpHintResolver;
 impl OperandResolver for OpHintResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        // Hint has no operands; nothing to push.
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
         0
     }
 }

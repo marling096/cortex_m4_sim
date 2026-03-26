@@ -1,4 +1,4 @@
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
+use crate::arch::ArmInsn;
 use cranelift::codegen::ir::condcodes::IntCC;
 use cranelift::prelude::*;
 
@@ -9,6 +9,7 @@ use crate::jit_engine::clif::instructions::{
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
+use crate::opcodes::decoded::DecodedOperandKind;
 
 macro_rules! define_def {
     ($struct_name:ident, $static_name:ident, $insn:ident, $mnemonic:literal, $emit:ident) => {
@@ -542,7 +543,7 @@ fn emit_sub_overflow(
 fn imm_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
     match insn.data.get_operand(index) {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(value) => value as u32,
+            DecodedOperandKind::Imm(value) => value as u32,
             _ => 0,
         },
         None => 0,
@@ -552,7 +553,7 @@ fn imm_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
 fn reg_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
     match insn.data.get_operand(index) {
         Some(op) => match op.op_type {
-            ArmOperandType::Reg(reg) => insn.data.resolve_reg(reg),
+            DecodedOperandKind::Reg(reg) => reg,
             _ => 0,
         },
         None => 0,

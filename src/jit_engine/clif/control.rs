@@ -1,4 +1,4 @@
-use capstone::arch::arm::{ArmInsn, ArmOperandType};
+use crate::arch::ArmInsn;
 use cranelift::codegen::ir::condcodes::IntCC;
 use cranelift::prelude::*;
 
@@ -7,6 +7,7 @@ use crate::jit_engine::clif::instructions::{
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
+use crate::opcodes::decoded::DecodedOperandKind;
 
 macro_rules! define_def {
     ($struct_name:ident, $static_name:ident, $insn:ident, $mnemonic:literal, $emit:ident) => {
@@ -188,8 +189,8 @@ fn emit_compare_branch(
 
 fn emit_branch_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) -> Value {
     match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
-        Some(ArmOperandType::Imm(imm)) => lowering.iconst_u32(*imm as u32),
-        Some(ArmOperandType::Reg(reg)) => emit_read_reg(lowering, insn.data.resolve_reg(*reg)),
+        Some(DecodedOperandKind::Imm(imm)) => lowering.iconst_u32(*imm as u32),
+        Some(DecodedOperandKind::Reg(reg)) => emit_read_reg(lowering, *reg),
         _ => lowering.iconst_u32(0),
     }
 }

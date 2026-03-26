@@ -1,6 +1,11 @@
 use std::time::Instant;
 
+use crate::arch::{ArmCC, ArmInsn};
 use crate::context::CpuContext;
+use crate::opcodes::decoded::{
+    DecodedInstruction, DecodedInstructionBuilder, DecodedOperand, DecodedOperandKind,
+    DecodedShift,
+};
 use capstone::prelude::*;
 #[derive(Clone)]
 pub struct Opcode {
@@ -46,7 +51,7 @@ pub trait Executable {
 }
 
 pub trait OperandResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32;
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32;
 }
 
 #[derive(Clone, Copy)]
@@ -69,9 +74,9 @@ impl CycleInfo {
 pub trait MatchFn {
     fn op_match(&self, ops: &ArmOpcode) -> bool;
 }
-pub type CycleAdjustFn = fn(&mut CycleInfo, &[ArmOperand]);
+pub type CycleAdjustFn = fn(&mut CycleInfo, &DecodedInstruction);
 
-use capstone::arch::arm::{ArmInsn, ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
+use capstone::arch::arm::{ArmInsnDetail, ArmOperand, ArmOperandType, ArmReg, ArmShift};
 use capstone::{Insn, InsnDetail};
 
 /// 封装了 ARM 指令及其详细信息的结构体
@@ -85,6 +90,7 @@ pub struct ArmOpcode<'a> {
 
     /// 转换后的操作数列表 (如寄存器编号、立即数值等)，由 OperandResolver 填充
     pub transed_operands: Vec<u32>,
+    pub decoded_operands: Vec<DecodedOperand>,
     pub arm_operands: ArmOperands,
     /// 指令详细信息 (含操作数、CC、Writeback 等)
     ///
@@ -141,6 +147,7 @@ impl<'a> ArmOpcode<'a> {
                 detail,
                 cs,
                 transed_operands: Vec::new(),
+                decoded_operands: Vec::new(),
                 arm_operands: ArmOperands::new(),
                 update_flags: false,
                 update_carry: 0,
@@ -207,12 +214,28 @@ impl<'a> ArmOpcode<'a> {
         self.writeback() && self.op_str().contains("],")
     }
 
-    pub fn condition(&self) -> capstone::arch::arm::ArmCC {
-        self.arm_detail().cc()
+    pub fn condition(&self) -> ArmCC {
+        match self.arm_detail().cc() {
+            capstone::arch::arm::ArmCC::ARM_CC_EQ => ArmCC::ARM_CC_EQ,
+            capstone::arch::arm::ArmCC::ARM_CC_NE => ArmCC::ARM_CC_NE,
+            capstone::arch::arm::ArmCC::ARM_CC_HS => ArmCC::ARM_CC_HS,
+            capstone::arch::arm::ArmCC::ARM_CC_LO => ArmCC::ARM_CC_LO,
+            capstone::arch::arm::ArmCC::ARM_CC_MI => ArmCC::ARM_CC_MI,
+            capstone::arch::arm::ArmCC::ARM_CC_PL => ArmCC::ARM_CC_PL,
+            capstone::arch::arm::ArmCC::ARM_CC_VS => ArmCC::ARM_CC_VS,
+            capstone::arch::arm::ArmCC::ARM_CC_VC => ArmCC::ARM_CC_VC,
+            capstone::arch::arm::ArmCC::ARM_CC_HI => ArmCC::ARM_CC_HI,
+            capstone::arch::arm::ArmCC::ARM_CC_LS => ArmCC::ARM_CC_LS,
+            capstone::arch::arm::ArmCC::ARM_CC_GE => ArmCC::ARM_CC_GE,
+            capstone::arch::arm::ArmCC::ARM_CC_LT => ArmCC::ARM_CC_LT,
+            capstone::arch::arm::ArmCC::ARM_CC_GT => ArmCC::ARM_CC_GT,
+            capstone::arch::arm::ArmCC::ARM_CC_LE => ArmCC::ARM_CC_LE,
+            _ => ArmCC::ARM_CC_AL,
+        }
     }
 
     pub fn it_mask(&self) -> u8 {
-        if self.id() != ArmInsn::ARM_INS_IT as u32 {
+        if !matches!(ArmInsn::from_raw(self.id()), Some(ArmInsn::ARM_INS_IT)) {
             return 0;
         }
 
@@ -246,7 +269,7 @@ pub struct ArmOperands {
 
     pub rd: u32,
     pub rn: u32,
-    pub op2: Option<ArmOperand>,
+    pub op2: Option<DecodedOperand>,
 
     pub mem_disp: i32,
     pub mem_has_index: bool,
@@ -310,6 +333,68 @@ pub fn resolve_multi_reg_operands(data: &mut ArmOpcode, with_base_reg: bool) -> 
     }
 
     reg_count
+}
+
+pub fn resolve_multi_reg_decoded(
+    raw: &ArmOpcode,
+    decoded: &mut DecodedInstructionBuilder,
+    with_base_reg: bool,
+) -> u32 {
+    decoded.arm_operands.condition = raw.condition();
+    decoded.transed_operands.clear();
+
+    let mut reg_count = 0u32;
+    let mut base_captured = !with_base_reg;
+
+    let mut index = 0usize;
+    while let Some(op) = decoded.get_operand(index).cloned() {
+        match op.op_type {
+            crate::opcodes::decoded::DecodedOperandKind::Reg(reg) => {
+                if with_base_reg && !base_captured {
+                    decoded.transed_operands.push(reg);
+                    base_captured = true;
+                } else {
+                    decoded.transed_operands.push(reg);
+                    reg_count = reg_count.saturating_add(1);
+                }
+            }
+            _ if with_base_reg && !base_captured => {
+                panic!("Expected base register");
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    if with_base_reg {
+        if !base_captured {
+            panic!("missing base register");
+        }
+        if decoded.transed_operands.len() > 1 {
+            decoded.transed_operands[1..].sort_unstable();
+        }
+    } else {
+        decoded.transed_operands.sort_unstable();
+        reg_count = decoded.transed_operands.len() as u32;
+    }
+
+    reg_count
+}
+
+pub fn apply_decoded_builder(data: &mut ArmOpcode<'_>, decoded: &DecodedInstructionBuilder) {
+    data.transed_operands = decoded.transed_operands.clone();
+    data.decoded_operands = (0..)
+        .map_while(|index| decoded.get_operand(index).cloned())
+        .collect();
+    data.arm_operands.condition = decoded.arm_operands.condition;
+    data.arm_operands.rd = decoded.arm_operands.rd;
+    data.arm_operands.rn = decoded.arm_operands.rn;
+    data.arm_operands.op2 = decoded.arm_operands.op2.clone();
+    data.arm_operands.mem_disp = decoded.arm_operands.mem_disp;
+    data.arm_operands.mem_has_index = decoded.arm_operands.mem_has_index;
+    data.arm_operands.mem_writeback = decoded.arm_operands.mem_writeback;
+    data.arm_operands.mem_post_index = decoded.arm_operands.mem_post_index;
+    data.arm_operands.mem_post_imm = decoded.arm_operands.mem_post_imm;
 }
 
 pub fn count_reg_operands(operands: &[ArmOperand]) -> u32 {
@@ -378,7 +463,6 @@ pub fn UpdateApsr_V(cpu: &mut dyn crate::context::CpuContext, flag: u8) {
     }
     cpu.write_apsr(apsr);
 }
-use capstone::arch::arm::ArmCC;
 pub fn check_condition(cpu: &dyn CpuContext, cc: ArmCC) -> bool {
     let apsr = cpu.read_apsr();
     let n = (apsr >> 31) & 1;
@@ -402,7 +486,6 @@ pub fn check_condition(cpu: &dyn CpuContext, cc: ArmCC) -> bool {
         ArmCC::ARM_CC_GT => z == 0 && (n == v),
         ArmCC::ARM_CC_LE => z == 1 || (n != v),
         ArmCC::ARM_CC_AL => true,
-        _ => true,
     }
 }
 
@@ -414,70 +497,61 @@ pub fn runtime_read_reg(cpu: &dyn CpuContext, data: &ArmOpcode<'_>, reg: u32) ->
     }
 }
 
-pub fn operand_resolver_multi_runtime(
-    cpu: &mut dyn crate::context::CpuContext,
-    data: &ArmOpcode,
-) -> (u32, u32) {
-    let arch_detail = if let arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
-        arm
-    } else {
-        panic!("ArmOpcode has invalid detail");
-    };
-    let mut operands = arch_detail.operands();
-    let op_rt = operands.next().expect("missing rt operand");
-    let op2 = operands.next().expect("missing mem operand");
-    let op3 = operands.next();
-
-    let rt = match op_rt.op_type {
-        ArmOperandType::Reg(r) => data.resolve_reg(r),
-        _ => panic!("first operand is not a register"),
-    };
-    let writeback = data.writeback();
-    let post_index = op3.is_some();
-
-    let (base_reg, base_val, disp, index_offset) = match op2.op_type {
-        ArmOperandType::Mem(mem) => {
-            let base_reg = data.resolve_reg(mem.base());
-            let base_val = runtime_read_reg(cpu, data, base_reg);
-            let disp = mem.disp();
-            let index_offset = if mem.index() != capstone::RegId::INVALID_REG {
-                let val = runtime_read_reg(cpu, data, data.resolve_reg(mem.index()));
-                let current_c = (cpu.read_apsr() >> 29) as u8 & 1;
-                let (r2_val, _carry) = op_shift_match_by_shift(op2.shift, val, current_c);
-                r2_val
-            } else {
-                0
-            };
-            (base_reg, base_val, disp, index_offset)
-        }
-        _ => panic!("operand2 is not a memory operand"),
-    };
-
-    let pre_offset = index_offset.wrapping_add_signed(disp);
-    if !writeback {
-        return (rt, base_val.wrapping_add(pre_offset));
-    }
-
-    if post_index {
-        let post_offset = match op3.expect("missing post-index offset").op_type {
-            ArmOperandType::Imm(imm) => imm as u32,
-            ArmOperandType::Reg(reg) => runtime_read_reg(cpu, data, data.resolve_reg(reg)),
-            _ => panic!("third operand is not an immediate/register"),
-        };
-        let addr = base_val;
-        let new_base = base_val.wrapping_add(post_offset);
-        cpu.write_reg(base_reg, new_base);
-        (rt, addr)
-    } else {
-        let addr = base_val.wrapping_add(pre_offset);
-        cpu.write_reg(base_reg, addr);
-        (rt, addr)
-    }
-}
-
 //return (value after shift , carry)
-fn op_shift_match(op2: ArmOperand, val: u32, current_c: u8) -> (u32, u8) {
-    op_shift_match_by_shift(op2.shift, val, current_c)
+fn op_shift_match(shift_kind: DecodedShift, val: u32, current_c: u8) -> (u32, u8) {
+    match shift_kind {
+        DecodedShift::Lsl(shift) => match shift {
+            0 => (val, current_c),
+            1..=31 => {
+                let carry = (val >> (32 - shift)) & 1;
+                (val << shift, carry as u8)
+            }
+            32 => (0, (val & 1) as u8),
+            _ => panic!("Lsl invalid shift amount"),
+        },
+        DecodedShift::Lsr(shift) => match shift {
+            0 => (val, current_c),
+            1..=31 => {
+                let carry = (val >> (shift - 1)) & 1;
+                (val >> shift, carry as u8)
+            }
+            32 => (0, (val >> 31) as u8),
+            _ => panic!("Lsr invalid shift amount"),
+        },
+        DecodedShift::Asr(shift) => match shift {
+            0 => (val, current_c),
+            1..=31 => {
+                let carry = (val >> (shift - 1)) & 1;
+                let res = ((val as i32) >> shift) as u32;
+                (res, carry as u8)
+            }
+            _ => {
+                let carry = (val >> 31) & 1;
+                let res = if (val as i32) < 0 { 0xFFFFFFFF } else { 0 };
+                (res, carry as u8)
+            }
+        },
+        DecodedShift::Ror(shift) => {
+            if shift == 0 {
+                (val, current_c)
+            } else {
+                let shift_mod = shift % 32;
+                if shift_mod == 0 {
+                    (val, (val >> 31) as u8)
+                } else {
+                    let res = val.rotate_right(shift_mod);
+                    let carry = (res >> 31) & 1;
+                    (res, carry as u8)
+                }
+            }
+        }
+        DecodedShift::Rrx(_) => {
+            let c_out = (val & 1) as u8;
+            let res = (val >> 1) | ((current_c as u32) << 31);
+            (res, c_out)
+        }
+        DecodedShift::Invalid => (val, current_c),
+    }
 }
 
 fn op_shift_match_by_shift(shift_kind: ArmShift, val: u32, current_c: u8) -> (u32, u8) {
@@ -557,12 +631,12 @@ pub fn resolve_op2_runtime(
         return (0, current_c);
     };
 
-    match op2.op_type {
-        ArmOperandType::Reg(reg) => {
-            let value = runtime_read_reg(cpu, data, data.resolve_reg(reg));
-            op_shift_match(op2.clone(), value, current_c)
+    match &op2.op_type {
+        DecodedOperandKind::Reg(reg) => {
+            let value = runtime_read_reg(cpu, data, *reg);
+            op_shift_match(op2.shift, value, current_c)
         }
-        ArmOperandType::Imm(imm) => (imm as u32, current_c),
+        DecodedOperandKind::Imm(imm) => (*imm as u32, current_c),
         _ => (0, current_c),
     }
 }

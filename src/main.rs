@@ -1,3 +1,4 @@
+mod arch;
 mod context;
 mod cpu;
 mod disassembler;
@@ -11,8 +12,7 @@ mod perf_tests;
 use crate::cpu::Cpu;
 use crate::disassembler::disassemble_from_reset_handler;
 use crate::jit_engine::table::JitBlockTableBuilder;
-use crate::opcodes::instruction::{Cpu_InstrTable, Cpu_Instruction, OpcodeTable};
-use crate::opcodes::opcode::ArmOpcode;
+use crate::opcodes::instruction::OpcodeTable;
 use crate::peripheral::bus::Bus;
 use crate::peripheral::afio::Afio;
 use crate::peripheral::flash::Flash;
@@ -39,39 +39,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         initial_sp, reset_handler_ptr
     );
 
-    let mut all_insns_storage = Vec::new();
-    for (addr, bytes) in &code_segments {
-        let insns = cs.disasm_all(bytes, *addr).map_err(|e| e.to_string())?;
-        all_insns_storage.push(insns);
-    }
-
     let opcode_table = OpcodeTable::new();
-    let table = opcode_table.get_table();
-    let cpu_instr_table = if use_jit {
-        None
-    } else {
-        let instr_table = {
-            let mut instr_table = Cpu_InstrTable::new();
-            for insns in &all_insns_storage {
-                for i in insns.iter() {
-                    let key = i.id().0 as u16;
-                    if let Some(instructions) = table.get(&key) {
-                        for instruction in instructions {
-                            let arm_opcode = ArmOpcode::new(&cs, &i);
-                            let cpu_instruction =
-                                Cpu_Instruction::new(instruction.clone(), arm_opcode.unwrap());
-                            instr_table.add_instruction(cpu_instruction);
-                        }
-                    }
-                }
-            }
-            println!("Building instruction table finished. Opitimizing...");
-            instr_table.optimize();
-            instr_table
-        };
-        Some(instr_table)
-    };
+    let mut all_insns_storage = Vec::new();
     let jit_instr_table = if use_jit {
+        for (addr, bytes) in &code_segments {
+            let insns = cs.disasm_all(bytes, *addr).map_err(|e| e.to_string())?;
+            all_insns_storage.push(insns);
+        }
+
         let mut builder = JitBlockTableBuilder::new();
         for insns in &all_insns_storage {
             builder.extend_disassembly(&opcode_table, &cs, insns.iter())?;
@@ -125,13 +100,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cpu = Cpu::new(shared_freq, 1, bus, ppb);
     let mut simulator = simulator::Simulator::new(cpu);
-    simulator.sim_reset(dcw_data, initial_sp, reset_handler_ptr);
+    simulator.sim_reset(&code_segments, dcw_data, initial_sp, reset_handler_ptr);
     if use_jit {
         simulator.sim_loop_jit(jit_instr_table.expect("jit table must exist when SIM_USE_BLOCK=1"))?;
     } else {
-        simulator.sim_loop_interpreter(
-            cpu_instr_table.expect("cpu instruction table must exist when SIM_USE_BLOCK=0"),
-        );
+        simulator.sim_loop_interpreter()?;
     }
 
     Ok(())

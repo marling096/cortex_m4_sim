@@ -1,8 +1,8 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, operand_resolver_multi_runtime_opcode};
 use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{
-    ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
-};
+use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
 pub struct Str_builder;
 impl InstrBuilder for Str_builder {
@@ -14,7 +14,7 @@ impl InstrBuilder for Str_builder {
 pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_STR as u32,
+            insnid: ArmInsn::ARM_INS_STR as u32,
             name: "STR".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -27,7 +27,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRB as u32,
+            insnid: ArmInsn::ARM_INS_STRB as u32,
             name: "STRB".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -40,7 +40,7 @@ pub fn add_str_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_STRH as u32,
+            insnid: ArmInsn::ARM_INS_STRH as u32,
             name: "STRH".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -91,7 +91,7 @@ impl Executable for Op_Str {
         if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
-        let (rt, mut addr) = operand_resolver_multi_runtime(cpu, data);
+        let (rt, mut addr) = operand_resolver_multi_runtime_opcode(cpu, data);
         addr  =addr & !3; // Align address to word boundary
         let val = cpu.read_reg(rt);
         // print!("STR to address 0x{:08X}: 0x{:08X}\n", addr, val);
@@ -108,7 +108,7 @@ impl Executable for Op_Strb {
         if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
-        let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
+        let (rt, addr) = operand_resolver_multi_runtime_opcode(cpu, data);
         let val = cpu.read_reg(rt) & 0xFF;
         write_u8(cpu, addr, val);
         data.size()
@@ -122,7 +122,7 @@ impl Executable for Op_Strh {
         if !check_condition(cpu, data.arm_operands.condition) {
             return data.size();
         }
-        let (rt, addr) = operand_resolver_multi_runtime(cpu, data);
+        let (rt, addr) = operand_resolver_multi_runtime_opcode(cpu, data);
         let val = cpu.read_reg(rt) & 0xFFFF;
         write_u16(cpu, addr, val);
         data.size()
@@ -131,8 +131,8 @@ impl Executable for Op_Strh {
 
 pub struct OpStrResolver;
 impl OperandResolver for OpStrResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
         0
     }
 }

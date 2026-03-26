@@ -1,10 +1,10 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstruction, DecodedInstructionBuilder};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
-    reg_list_contains, resolve_multi_reg_operands,
+    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, resolve_multi_reg_decoded,
 };
-use capstone::arch::arm::{ArmOperand, ArmReg};
 
 pub struct Stack_builder;
 impl InstrBuilder for Stack_builder {
@@ -16,7 +16,7 @@ impl InstrBuilder for Stack_builder {
 pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_PUSH as u32,
+            insnid: ArmInsn::ARM_INS_PUSH as u32,
             name: "PUSH".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -29,7 +29,7 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: Some(adjust_push_cycles),
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_POP as u32,
+            insnid: ArmInsn::ARM_INS_POP as u32,
             name: "POP".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -44,15 +44,15 @@ pub fn add_stack_def() -> Vec<crate::opcodes::opcode::Opcode> {
     ]
 }
 
-fn adjust_push_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
-    let reg_count = count_reg_operands(operands);
+fn adjust_push_cycles(cycles: &mut CycleInfo, instr: &DecodedInstruction) {
+    let reg_count = instr.transed_operands.len() as u32;
     cycles.execute_cycles = 1u32.saturating_add(reg_count);
 }
 
-fn adjust_pop_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
-    let reg_count = count_reg_operands(operands);
+fn adjust_pop_cycles(cycles: &mut CycleInfo, instr: &DecodedInstruction) {
+    let reg_count = instr.transed_operands.len() as u32;
     let mut execute = 1u32.saturating_add(reg_count);
-    if reg_list_contains(operands, ArmReg::ARM_REG_PC as u16, false) {
+    if instr.transed_operands.contains(&15) {
         execute = execute.saturating_add(1);
     }
     cycles.execute_cycles = execute;
@@ -132,7 +132,7 @@ fn stack_pop(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
 
 pub struct OpStackResolver;
 impl OperandResolver for OpStackResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        resolve_multi_reg_operands(data, false)
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        resolve_multi_reg_decoded(raw, decoded, false)
     }
 }

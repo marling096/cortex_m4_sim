@@ -1,9 +1,8 @@
-// mod cpu;
 use crate::context::CpuContext;
 use crate::cpu::Cpu;
 use crate::jit_engine::engine::{JitEngine, JitError, JitStatsSnapshot};
 use crate::jit_engine::table::{JitBlockStats, JitBlockTable};
-use crate::opcodes::instruction::Cpu_InstrTable;
+use crate::opcodes::thumb_runtime;
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
 use std::thread;
@@ -24,12 +23,16 @@ impl Simulator {
 
     pub fn sim_reset<'a>(
         &mut self,
+        code_segments: &[(u64, Vec<u8>)],
         dcw_data: BTreeMap<u32, u32>,
         initial_sp: u32,
         reset_handler_ptr: u32,
     ) {
+        for (addr, bytes) in code_segments.iter() {
+            self.cpu.load_code_bytes(*addr as u32, bytes);
+        }
         for (addr, data) in dcw_data.iter() {
-            self.cpu.write_mem(*addr, *data);
+            self.cpu.load_bytes(*addr, &((*data as u16).to_le_bytes()));
         }
         self.cpu.write_sp(initial_sp);
         let reset_handler = reset_handler_ptr & !1; //确保最低位为0，表示Thumb指令集
@@ -74,10 +77,7 @@ impl Simulator {
         true
     }
 
-    pub fn sim_loop_interpreter<'a>(
-        &mut self,
-        cpu_ins_table: Cpu_InstrTable<'a>,
-    ) {
+    pub fn sim_loop_interpreter(&mut self) -> Result<(), String> {
         const DEFAULT_REPORT_WINDOW: u32 = 10000;
 
         let report_window = std::env::var("SIM_REPORT_WINDOW")
@@ -101,7 +101,7 @@ impl Simulator {
             peripheral_tick_batch
         );
 
-        self.sim_loop_fast(cpu_ins_table, no_throttle, peripheral_tick_batch, report_window);
+        self.sim_loop_fast(no_throttle, peripheral_tick_batch, report_window)
     }
 
     pub fn sim_loop_jit<'a>(
@@ -134,13 +134,12 @@ impl Simulator {
         self.sim_loop_fast_jit(jit_table, no_throttle, peripheral_tick_batch, report_window)
     }
 
-    fn sim_loop_fast<'a>(
+    fn sim_loop_fast(
         &mut self,
-        ins_table: Cpu_InstrTable<'a>,
         no_throttle: bool,
         peripheral_tick_batch: u32,
         report_window: u32,
-    ) {
+    ) -> Result<(), String> {
         let mut fetch_count: u32 = 0;
         let mut window_start = Instant::now();
         let report_window_f64 = report_window as f64;
@@ -159,26 +158,6 @@ impl Simulator {
         let mut trace_count: u64 = 0;
         let mut trace_limit_reached = false;
 
-        macro_rules! trace_instruction {
-            ($pc:expr, $ins:expr) => {
-                if trace_insn && !trace_limit_reached {
-                    if trace_limit == 0 || trace_count < trace_limit {
-                        println!(
-                            "[TRACE] PC=0x{:08X} {} {}",
-                            $pc,
-                            $ins.data.mnemonic(),
-                            $ins.data.op_str()
-                        );
-                        trace_count += 1;
-                        if trace_limit != 0 && trace_count >= trace_limit {
-                            println!("[TRACE] limit reached: {}", trace_limit);
-                            trace_limit_reached = true;
-                        }
-                    }
-                }
-            };
-        }
-
         let machine_cycle = self.cpu.machine_cycle as u32;
         loop {
             let loop_start = if no_throttle {
@@ -189,42 +168,54 @@ impl Simulator {
 
             let current_pc = self.cpu.next_pc;
             self.cpu.prefetch_next_pc(current_pc);
-
-            match ins_table.get(current_pc) {
-                Some(ins) => {
-                    trace_instruction!(current_pc, ins);
-                    let elapsed_cycles = self.cpu.step(ins, current_pc);
-                    self.advance_system_cycles(elapsed_cycles);
-
-                    pending_peripheral_cycles =
-                        pending_peripheral_cycles.saturating_add(elapsed_cycles);
-                    self.maybe_drive_peripherals(
-                        &mut pending_peripheral_cycles,
-                        peripheral_tick_batch,
-                    );
-
-                    fetch_count += 1;
-                    if fetch_count >= report_window {
-                        let elapsed_secs = window_start.elapsed().as_secs_f64();
-                        if elapsed_secs > 0.0 {
-                            let actual_freq_hz = report_window_f64 / elapsed_secs;
-                            println!(
-                                "Actual Execution Frequency ({} ins): {:.6} MHz",
-                                report_window,
-                                actual_freq_hz / 1_000_000.0
-                            );
-                        }
-                        fetch_count = 0;
-                        window_start = Instant::now();
-                    }
-                }
-                None => {
-                    eprintln!(
-                        "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
-                        current_pc
-                    );
+            let step_outcome = match thumb_runtime::step(&mut self.cpu, current_pc) {
+                Ok(outcome) => outcome,
+                Err(err) => {
+                    eprintln!("Error: {err}. Simulation stopped.");
                     break;
                 }
+            };
+
+            if trace_insn && !trace_limit_reached {
+                if trace_limit == 0 || trace_count < trace_limit {
+                    println!(
+                        "[TRACE] PC=0x{:08X} {} {}",
+                        current_pc,
+                        step_outcome.mnemonic,
+                        step_outcome.op_str
+                    );
+                    trace_count += 1;
+                    if trace_limit != 0 && trace_count >= trace_limit {
+                        println!("[TRACE] limit reached: {}", trace_limit);
+                        trace_limit_reached = true;
+                    }
+                }
+            }
+
+            let elapsed_cycles = step_outcome.cycles;
+
+            self.advance_system_cycles(elapsed_cycles);
+
+            pending_peripheral_cycles =
+                pending_peripheral_cycles.saturating_add(elapsed_cycles);
+            self.maybe_drive_peripherals(
+                &mut pending_peripheral_cycles,
+                peripheral_tick_batch,
+            );
+
+            fetch_count += 1;
+            if fetch_count >= report_window {
+                let elapsed_secs = window_start.elapsed().as_secs_f64();
+                if elapsed_secs > 0.0 {
+                    let actual_freq_hz = report_window_f64 / elapsed_secs;
+                    println!(
+                        "Actual Execution Frequency ({} ins): {:.6} MHz",
+                        report_window,
+                        actual_freq_hz / 1_000_000.0
+                    );
+                }
+                fetch_count = 0;
+                window_start = Instant::now();
             }
 
             if let Some(loop_start) = loop_start {
@@ -237,6 +228,8 @@ impl Simulator {
                 }
             }
         }
+
+        Ok(())
     }
 
     fn sim_loop_fast_jit<'a>(

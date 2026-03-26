@@ -3,9 +3,9 @@
 use std::vec;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
+use crate::arch::ArmCC;
 
 use crate::context::CpuContext;
-use crate::opcodes::instruction::Cpu_Instruction;
 use crate::peripheral::bus::Bus;
 use crate::peripheral::nvic::Nvic;
 use crate::peripheral::systick::SysTick;
@@ -37,6 +37,8 @@ pub struct Cpu {
     peripheral_next_due_cycle: u64,
     ppb_nvic_index: Option<usize>,
     ppb_systick_index: Option<usize>,
+    it_state_mask: u8,
+    it_state_cond: u8,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -327,6 +329,8 @@ impl Cpu {
             peripheral_next_due_cycle: 0,
             ppb_nvic_index,
             ppb_systick_index,
+            it_state_mask: 0,
+            it_state_cond: ArmCC::ARM_CC_AL as u8,
         }
     }
 
@@ -359,6 +363,79 @@ impl Cpu {
         self.pending_ppb_event_drain = false;
         self.peripheral_schedule_dirty = true;
         self.peripheral_next_due_cycle = 0;
+        self.clear_it_state();
+    }
+
+    #[inline(always)]
+    pub fn clear_it_state(&mut self) {
+        self.it_state_mask = 0;
+        self.it_state_cond = ArmCC::ARM_CC_AL as u8;
+    }
+
+    #[inline(always)]
+    pub fn set_it_state(&mut self, cond: ArmCC, mask: u8) {
+        self.it_state_cond = cond as u8;
+        self.it_state_mask = mask & 0xF;
+    }
+
+    #[inline(always)]
+    pub fn it_active(&self) -> bool {
+        self.it_state_mask != 0
+    }
+
+    #[inline(always)]
+    pub fn it_current_condition(&self) -> ArmCC {
+        let base = match self.it_state_cond {
+            x if x == ArmCC::ARM_CC_EQ as u8 => ArmCC::ARM_CC_EQ,
+            x if x == ArmCC::ARM_CC_NE as u8 => ArmCC::ARM_CC_NE,
+            x if x == ArmCC::ARM_CC_HS as u8 => ArmCC::ARM_CC_HS,
+            x if x == ArmCC::ARM_CC_LO as u8 => ArmCC::ARM_CC_LO,
+            x if x == ArmCC::ARM_CC_MI as u8 => ArmCC::ARM_CC_MI,
+            x if x == ArmCC::ARM_CC_PL as u8 => ArmCC::ARM_CC_PL,
+            x if x == ArmCC::ARM_CC_VS as u8 => ArmCC::ARM_CC_VS,
+            x if x == ArmCC::ARM_CC_VC as u8 => ArmCC::ARM_CC_VC,
+            x if x == ArmCC::ARM_CC_HI as u8 => ArmCC::ARM_CC_HI,
+            x if x == ArmCC::ARM_CC_LS as u8 => ArmCC::ARM_CC_LS,
+            x if x == ArmCC::ARM_CC_GE as u8 => ArmCC::ARM_CC_GE,
+            x if x == ArmCC::ARM_CC_LT as u8 => ArmCC::ARM_CC_LT,
+            x if x == ArmCC::ARM_CC_GT as u8 => ArmCC::ARM_CC_GT,
+            x if x == ArmCC::ARM_CC_LE as u8 => ArmCC::ARM_CC_LE,
+            _ => ArmCC::ARM_CC_AL,
+        };
+
+        if (self.it_state_mask & 0x8) != 0 {
+            base
+        } else {
+            match base {
+                ArmCC::ARM_CC_EQ => ArmCC::ARM_CC_NE,
+                ArmCC::ARM_CC_NE => ArmCC::ARM_CC_EQ,
+                ArmCC::ARM_CC_HS => ArmCC::ARM_CC_LO,
+                ArmCC::ARM_CC_LO => ArmCC::ARM_CC_HS,
+                ArmCC::ARM_CC_MI => ArmCC::ARM_CC_PL,
+                ArmCC::ARM_CC_PL => ArmCC::ARM_CC_MI,
+                ArmCC::ARM_CC_VS => ArmCC::ARM_CC_VC,
+                ArmCC::ARM_CC_VC => ArmCC::ARM_CC_VS,
+                ArmCC::ARM_CC_HI => ArmCC::ARM_CC_LS,
+                ArmCC::ARM_CC_LS => ArmCC::ARM_CC_HI,
+                ArmCC::ARM_CC_GE => ArmCC::ARM_CC_LT,
+                ArmCC::ARM_CC_LT => ArmCC::ARM_CC_GE,
+                ArmCC::ARM_CC_GT => ArmCC::ARM_CC_LE,
+                ArmCC::ARM_CC_LE => ArmCC::ARM_CC_GT,
+                _ => ArmCC::ARM_CC_AL,
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn advance_it_state(&mut self) {
+        if self.it_state_mask == 0 {
+            return;
+        }
+
+        self.it_state_mask = (self.it_state_mask << 1) & 0xF;
+        if self.it_state_mask == 0 {
+            self.it_state_cond = ArmCC::ARM_CC_AL as u8;
+        }
     }
 
     #[inline(always)]
@@ -597,6 +674,7 @@ impl Cpu {
         self.write_pc(handler);
         self.next_pc = handler;
         self.exception_stack.push(exception_num);
+        self.clear_it_state();
 
         if exception_num == Self::SYSTICK_EXCEPTION_NUM {
             if let Some(index) = self.ppb_systick_index {
@@ -662,6 +740,7 @@ impl Cpu {
         let target_pc = pc & !1;
         self.registers.reg[15] = target_pc;
         self.next_pc = target_pc;
+        self.clear_it_state();
 
         if let Some(exception_num) = self.exception_stack.pop() {
             if exception_num >= 16 {
@@ -688,6 +767,47 @@ impl Cpu {
     #[inline(always)]
     fn write32(&mut self, addr: u32, val: u32) {
         self.write32_inner(addr, val);
+    }
+
+    pub fn load_bytes(&mut self, addr: u32, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+
+        if Self::in_range(addr, Self::FLASH_BASE, Self::FLASH_LAST) {
+            let offset = (addr - Self::FLASH_BASE) as usize;
+            let end = offset.saturating_add(bytes.len());
+            assert!(end <= self.flash.len(), "flash code segment exceeds simulated flash range");
+            self.flash[offset..end].copy_from_slice(bytes);
+            return;
+        }
+
+        if Self::in_range(addr, Self::FLASH_ALIAS_BASE, Self::FLASH_ALIAS_LAST) {
+            let offset = addr as usize;
+            let end = offset.saturating_add(bytes.len());
+            assert!(end <= self.flash.len(), "flash alias code segment exceeds simulated flash range");
+            self.flash[offset..end].copy_from_slice(bytes);
+            return;
+        }
+
+        if Self::in_range(addr, Self::RAM_BASE, Self::RAM_LAST) {
+            let offset = (addr - Self::RAM_BASE) as usize;
+            let end = offset.saturating_add(bytes.len());
+            assert!(end <= self.ram.len(), "ram code segment exceeds simulated ram range");
+            self.ram[offset..end].copy_from_slice(bytes);
+            return;
+        }
+
+        panic!("Code Load Error: Unmapped address 0x{:08X}", addr);
+    }
+
+    pub fn load_code_bytes(&mut self, addr: u32, bytes: &[u8]) {
+        self.load_bytes(addr, bytes);
+    }
+
+    #[inline(always)]
+    pub fn fetch_thumb_bytes(&self, addr: u32) -> [u8; 4] {
+        self.read32(addr).to_le_bytes()
     }
 
     #[inline(always)]
@@ -827,27 +947,6 @@ impl Cpu {
         }
         self.Cpu_pipeline.remain_cycles = 0;
         execute_cycles.max(1)
-    }
-
-    #[inline(always)]
-    pub fn finish_step<'a>(
-        &mut self,
-        ins: &Cpu_Instruction<'a>,
-        current_pc: u32,
-        pc_update: u32,
-    ) -> u32 {
-        self.finish_step_cycles(ins.op.cycles.execute_cycles, current_pc, pc_update)
-    }
-
-    // changed: make step take &mut self and avoid borrow conflicts
-    #[inline(always)]
-    pub fn step<'a>(&mut self, ins: &Cpu_Instruction<'a>, current_pc: u32) -> u32 {
-        if let Some(cycles) = self.begin_step() {
-            return cycles;
-        }
-
-        let pc_update = (ins.op.exec)(&mut *self, &ins.data);
-        self.finish_step(ins, current_pc, pc_update)
     }
 
     #[inline(always)]

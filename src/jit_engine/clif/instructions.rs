@@ -1,4 +1,4 @@
-use capstone::arch::arm::{ArmCC, ArmOperandType, ArmShift};
+use crate::arch::ArmCC;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::adr;
@@ -9,6 +9,7 @@ use crate::jit_engine::clif::memory;
 use crate::jit_engine::clif::misc;
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
+use crate::opcodes::decoded::{DecodedOperandKind, DecodedShift};
 
 pub trait InsDef {
     fn insn_id(&self) -> u32;
@@ -227,9 +228,9 @@ fn emit_static_op2(
     let op2 = insn.data.arm_operands.op2.as_ref()?;
 
     match op2.op_type {
-        ArmOperandType::Imm(imm) => Some((lowering.iconst_u32(imm as u32), current_carry)),
-        ArmOperandType::Reg(reg) => {
-            let value = emit_read_reg(lowering, insn.data.resolve_reg(reg));
+        DecodedOperandKind::Imm(imm) => Some((lowering.iconst_u32(imm as u32), current_carry)),
+        DecodedOperandKind::Reg(reg) => {
+            let value = emit_read_reg(lowering, reg);
             emit_static_shifted_reg_op2(lowering, value, current_carry, op2.shift)
         }
         _ => None,
@@ -240,13 +241,16 @@ fn emit_static_shifted_reg_op2(
     lowering: &mut LoweringContext<'_, '_>,
     value: Value,
     current_carry: Value,
-    shift: ArmShift,
+    shift: DecodedShift,
 ) -> Option<(Value, Value)> {
     match shift {
-        ArmShift::Invalid | ArmShift::Lsl(0) | ArmShift::Lsr(0) | ArmShift::Asr(0) => {
+        DecodedShift::Invalid
+        | DecodedShift::Lsl(0)
+        | DecodedShift::Lsr(0)
+        | DecodedShift::Asr(0) => {
             Some((value, current_carry))
         }
-        ArmShift::Lsl(amount) => match amount {
+        DecodedShift::Lsl(amount) => match amount {
             1..=31 => {
                 let result = lowering.builder.ins().ishl_imm(value, i64::from(amount));
                 let carry = emit_shifted_bit(lowering, value, amount - 1, true);
@@ -259,7 +263,7 @@ fn emit_static_shifted_reg_op2(
             }
             _ => Some((lowering.iconst_u32(0), lowering.iconst_u32(0))),
         },
-        ArmShift::Lsr(amount) => match amount {
+        DecodedShift::Lsr(amount) => match amount {
             1..=31 => {
                 let result = lowering.builder.ins().ushr_imm(value, i64::from(amount));
                 let carry = emit_shifted_bit(lowering, value, amount - 1, false);
@@ -272,7 +276,7 @@ fn emit_static_shifted_reg_op2(
             }
             _ => Some((lowering.iconst_u32(0), lowering.iconst_u32(0))),
         },
-        ArmShift::Asr(amount) => match amount {
+        DecodedShift::Asr(amount) => match amount {
             1..=31 => {
                 let result = lowering.builder.ins().sshr_imm(value, i64::from(amount));
                 let carry = emit_shifted_bit(lowering, value, amount - 1, false);
@@ -284,7 +288,7 @@ fn emit_static_shifted_reg_op2(
                 Some((result, carry))
             }
         },
-        _ => None,
+        DecodedShift::Ror(_) | DecodedShift::Rrx(_) => None,
     }
 }
 

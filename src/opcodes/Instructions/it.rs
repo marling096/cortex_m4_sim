@@ -1,4 +1,5 @@
 ﻿use crate::context::CpuContext;
+use crate::opcodes::decoded::DecodedInstructionBuilder;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
@@ -22,7 +23,7 @@ impl InstrBuilder for It_builder {
 }
 pub fn add_it_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![crate::opcodes::opcode::Opcode {
-        insnid: capstone::arch::arm::ArmInsn::ARM_INS_IT as u32,
+        insnid: crate::arch::ArmInsn::ARM_INS_IT as u32,
         name: "IT".to_string(),
         length: 16,
         cycles: crate::opcodes::opcode::CycleInfo {
@@ -38,9 +39,8 @@ pub fn add_it_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpItResolver;
 impl OperandResolver for OpItResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        // IT has no runtime operands for this emulator
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
         0
     }
 }

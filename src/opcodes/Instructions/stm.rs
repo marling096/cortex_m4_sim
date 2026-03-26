@@ -1,10 +1,9 @@
-﻿use crate::context::CpuContext;
+﻿use crate::opcodes::decoded::{DecodedInstruction, DecodedInstructionBuilder};
+use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
-    resolve_multi_reg_operands,
+    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, resolve_multi_reg_decoded,
 };
-use capstone::arch::arm::ArmOperand;
 
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Stm;
@@ -49,7 +48,7 @@ impl InstrBuilder for Stm_builder {
 }
 pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![crate::opcodes::opcode::Opcode {
-        insnid: capstone::arch::arm::ArmInsn::ARM_INS_STM as u32,
+        insnid: crate::arch::ArmInsn::ARM_INS_STM as u32,
         name: "STM".to_string(),
         length: 32,
         cycles: crate::opcodes::opcode::CycleInfo {
@@ -63,14 +62,14 @@ pub fn add_stm_def() -> Vec<crate::opcodes::opcode::Opcode> {
     }]
 }
 
-fn adjust_stm_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
-    let reg_count = count_reg_operands(operands).saturating_sub(1);
+fn adjust_stm_cycles(cycles: &mut CycleInfo, instr: &DecodedInstruction) {
+    let reg_count = (instr.transed_operands.len() as u32).saturating_sub(1);
     cycles.execute_cycles = 1u32.saturating_add(reg_count);
 }
 
 pub struct OpStm_resolver;
 impl OperandResolver for OpStm_resolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        resolve_multi_reg_operands(data, true)
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        resolve_multi_reg_decoded(raw, decoded, true)
     }
 }

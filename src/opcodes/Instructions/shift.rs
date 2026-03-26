@@ -1,10 +1,11 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
     UpdateApsr_Z, check_condition,
 };
-use capstone::arch::arm::ArmOperandType;
 
 pub struct Shiift_builder;
 impl InstrBuilder for Shiift_builder {
@@ -16,7 +17,7 @@ impl InstrBuilder for Shiift_builder {
 pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_ASR as u32,
+            insnid: ArmInsn::ARM_INS_ASR as u32,
             name: "ASR".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -29,7 +30,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LSL as u32,
+            insnid: ArmInsn::ARM_INS_LSL as u32,
             name: "LSL".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -42,7 +43,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LSR as u32,
+            insnid: ArmInsn::ARM_INS_LSR as u32,
             name: "LSR".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -55,7 +56,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_ROR as u32,
+            insnid: ArmInsn::ARM_INS_ROR as u32,
             name: "ROR".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -68,7 +69,7 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_RRX as u32,
+            insnid: ArmInsn::ARM_INS_RRX as u32,
             name: "RRX".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -85,35 +86,32 @@ pub fn addd_shift_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpShiftResolver;
 impl OperandResolver for OpShiftResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let rd = match data.get_operand(0) {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        let rd = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
-        let rm = match data.get_operand(1) {
+        let rm = match decoded.get_operand(1) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
 
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rd = rd;
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rd = rd;
 
-        let op2 = data.get_operand(2);
+        let op2 = decoded.get_operand(2).cloned();
         if op2.is_some() {
-            // 3-operand: LSLS Rd, Rm, Rs/imm  (Thumb T2/T3 or T1 with explicit shift)
-            data.arm_operands.rn = rm;   // Rm is the value to be shifted
-            data.arm_operands.op2 = op2; // Rs or imm is the shift amount
+            decoded.arm_operands.rn = rm;
+            decoded.arm_operands.op2 = op2;
         } else {
-            // 2-operand T1: LSLS Rd, Rs  鈫? Rd = Rd SHIFT Rs
-            // operand[0]=Rd (dest & source), operand[1]=Rs (shift amount)
-            data.arm_operands.rn = rd;   // source value is Rd itself
-            data.arm_operands.op2 = data.get_operand(1); // shift amount = operand[1]
+            decoded.arm_operands.rn = rd;
+            decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
         }
         rd
     }
@@ -290,8 +288,8 @@ impl Executable for Op_Rrx {
 fn resolve_shift_amount(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     match &data.arm_operands.op2 {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(imm) => (imm as u32) & 0xFF,
-            ArmOperandType::Reg(reg) => cpu.read_reg(data.resolve_reg(reg)) & 0xFF,
+            DecodedOperandKind::Imm(imm) => (imm as u32) & 0xFF,
+            DecodedOperandKind::Reg(reg) => cpu.read_reg(reg) & 0xFF,
             _ => 0,
         },
         None => 0,

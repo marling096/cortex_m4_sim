@@ -1,4 +1,5 @@
 ﻿use crate::context::CpuContext;
+use crate::opcodes::decoded::DecodedInstructionBuilder;
 use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 use crate::opcodes::instruction::{InstrBuilder};
 
@@ -12,7 +13,7 @@ impl InstrBuilder for Nop_builder {
 pub fn add_nop_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_NOP as u32,
+            insnid: crate::arch::ArmInsn::ARM_INS_NOP as u32,
             name: "NOP".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -42,9 +43,8 @@ impl Executable for Op_Nop {
 
 pub struct OpNopResolver;
 impl OperandResolver for OpNopResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        // NOP has no operands
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
         0
     }
 }

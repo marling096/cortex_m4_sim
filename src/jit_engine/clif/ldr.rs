@@ -1,4 +1,4 @@
-use capstone::arch::arm::ArmInsn;
+use crate::arch::ArmInsn;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{

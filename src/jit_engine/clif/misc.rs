@@ -1,4 +1,4 @@
-use capstone::arch::arm::ArmInsn;
+use crate::arch::ArmInsn;
 
 use crate::jit_engine::clif::instructions::{InsDef, emit_size_value, with_cc};
 use crate::jit_engine::engine::LoweringContext;

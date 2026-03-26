@@ -1,10 +1,10 @@
-﻿use crate::context::CpuContext;
-use crate::opcodes::instruction::InstrBuilder;
-use crate::opcodes::opcode::{
-    ArmOpcode, Executable, OperandResolver, check_condition, operand_resolver_multi_runtime,
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{
+    DecodedInstructionBuilder, DecodedOperandKind, operand_resolver_multi_runtime_opcode,
 };
-use capstone::arch::arm::ArmOperandType;
-use capstone::arch::DetailsArchInsn;
+use crate::opcodes::instruction::InstrBuilder;
+use crate::opcodes::opcode::{ArmOpcode, Executable, OperandResolver, check_condition};
 
 pub struct Ldr_builder;
 impl InstrBuilder for Ldr_builder {
@@ -16,7 +16,7 @@ impl InstrBuilder for Ldr_builder {
 pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDR as u32,
+            insnid: ArmInsn::ARM_INS_LDR as u32,
             name: "LDR".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -29,7 +29,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRB as u32,
+            insnid: ArmInsn::ARM_INS_LDRB as u32,
             name: "LDRB".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -42,7 +42,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRSB as u32,
+            insnid: ArmInsn::ARM_INS_LDRSB as u32,
             name: "LDRSB".to_string(),
             length: 16,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -55,7 +55,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRH as u32,
+            insnid: ArmInsn::ARM_INS_LDRH as u32,
             name: "LDRH".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -68,7 +68,7 @@ pub fn add_ldr_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDRSH as u32,
+            insnid: ArmInsn::ARM_INS_LDRSH as u32,
             name: "LDRSH".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -112,7 +112,7 @@ fn operand_resolver_multi_cached(cpu: &mut crate::cpu::Cpu, data: &ArmOpcode) ->
     let ops = &data.arm_operands;
 
     if ops.mem_has_index {
-        return operand_resolver_multi_runtime(cpu, data);
+        return operand_resolver_multi_runtime_opcode(cpu, data);
     }
 
     operand_resolver_multi_cached_no_index(cpu, ops)
@@ -222,48 +222,41 @@ impl Executable for Op_Ldrsh {
 
 pub struct OpLdrResolver;
 impl OperandResolver for OpLdrResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        data.arm_operands.condition = data.condition();
-        let arch_detail = if let capstone::arch::ArchDetail::ArmDetail(arm) = data.detail.arch_detail() {
-            arm
-        } else {
-            panic!("ArmOpcode has invalid detail");
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rd = match decoded.get_operand(0) {
+            Some(op) => match op.op_type {
+                DecodedOperandKind::Reg(reg) => reg,
+                _ => panic!("first operand is not a register"),
+            },
+            None => panic!("missing rt operand"),
         };
+        decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
+        decoded.arm_operands.mem_has_index = false;
+        decoded.arm_operands.mem_writeback = raw.writeback();
+        decoded.arm_operands.mem_post_index = decoded.get_operand(2).is_some();
+        decoded.arm_operands.mem_post_imm = 0;
+        decoded.arm_operands.mem_disp = 0;
 
-        let mut operands = arch_detail.operands();
-        let op_rt = operands.next().expect("missing rt operand");
-        let op_mem = operands.next().expect("missing mem operand");
-        let op3 = operands.next();
-
-        data.arm_operands.rd = match op_rt.op_type {
-            ArmOperandType::Reg(r) => data.resolve_reg(r),
-            _ => panic!("first operand is not a register"),
+        let mem = match decoded.get_operand(1).cloned() {
+            Some(op) => match op.op_type {
+                DecodedOperandKind::Mem(mem) => mem,
+                _ => panic!("operand2 is not a memory operand"),
+            },
+            None => panic!("missing mem operand"),
         };
-        data.arm_operands.op2 = Some(op_mem.clone());
+        decoded.arm_operands.rn = mem.base;
+        decoded.arm_operands.mem_disp = mem.disp;
+        decoded.arm_operands.mem_has_index = mem.index.is_some();
 
-        data.arm_operands.mem_has_index = false;
-        data.arm_operands.mem_writeback = data.writeback();
-        data.arm_operands.mem_post_index = op3.is_some();
-        data.arm_operands.mem_post_imm = 0;
-        data.arm_operands.mem_disp = 0;
-
-        match op_mem.op_type {
-            ArmOperandType::Mem(mem) => {
-                data.arm_operands.rn = data.resolve_reg(mem.base());
-                data.arm_operands.mem_disp = mem.disp();
-                data.arm_operands.mem_has_index = mem.index() != capstone::RegId::INVALID_REG;
-            }
-            _ => panic!("operand2 is not a memory operand"),
-        }
-
-        if let Some(op3) = op3 {
-            data.arm_operands.mem_post_imm = match op3.op_type {
-                ArmOperandType::Imm(imm) => imm,
+        if let Some(op3) = decoded.get_operand(2) {
+            decoded.arm_operands.mem_post_imm = match op3.op_type {
+                DecodedOperandKind::Imm(imm) => imm as i32,
                 _ => 0,
             };
         }
 
-        data.arm_operands.rd
+        decoded.arm_operands.rd
     }
 }
 
@@ -272,6 +265,8 @@ mod tests {
     use super::*;
     use crate::context::CpuContext;
     use crate::cpu::Cpu;
+    use crate::opcodes::decoded::DecodedInstructionBuilder;
+    use crate::opcodes::opcode::apply_decoded_builder;
     use crate::opcodes::opcode::ArmOpcode;
     use crate::peripheral::bus::Bus;
     use capstone::arch;
@@ -443,7 +438,9 @@ mod tests {
             .expect("sample bytes produced no instruction");
 
         let mut data = ArmOpcode::new(&cs, &insn).expect("failed to build ArmOpcode for ldr sample");
-        OpLdrResolver.resolve(&mut data);
+        let mut decoded = DecodedInstructionBuilder::from_arm_opcode(&data);
+        OpLdrResolver.resolve(&data, &mut decoded);
+        apply_decoded_builder(&mut data, &decoded);
 
         let mut cpu = make_cpu();
         cpu.write_apsr(0);

@@ -1,10 +1,11 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
     UpdateApsr_Z, check_condition, resolve_op2_runtime,
 };
-use capstone::arch::arm::ArmOperandType;
 
 // TST{cond} Rn, Operand2
 // TEQ{cond} Rn, Operand2
@@ -53,18 +54,18 @@ impl Executable for Op_Teq {
 
 pub struct OpTst_resolver;
 impl OperandResolver for OpTst_resolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
 
-        let rn = match data.get_operand(0) {
+        let rn = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rn = rn;
-        data.arm_operands.op2 = data.get_operand(1);
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rn = rn;
+        decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
         rn
     }
 }
@@ -78,7 +79,7 @@ impl InstrBuilder for Tst_builder {
 pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_TST as u32,
+            insnid: ArmInsn::ARM_INS_TST as u32,
             name: "TST".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -91,7 +92,7 @@ pub fn add_tst_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_TEQ as u32,
+            insnid: ArmInsn::ARM_INS_TEQ as u32,
             name: "TEQ".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {

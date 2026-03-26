@@ -1,10 +1,11 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N,
-    UpdateApsr_Z, check_condition,
+    UpdateApsr_Z, check_condition, resolve_op2_runtime,
 };
 use crate::opcodes::instruction::{InstrBuilder};
-use capstone::arch::arm::{ArmOperandType, ArmShift};
 
 pub struct Mov_builder;
 impl InstrBuilder for Mov_builder {
@@ -16,7 +17,7 @@ impl InstrBuilder for Mov_builder {
 pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MOV as u32,
+            insnid: ArmInsn::ARM_INS_MOV as u32,
             name: "MOV".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -29,7 +30,7 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MVN as u32,
+            insnid: ArmInsn::ARM_INS_MVN as u32,
             name: "MVN".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -50,19 +51,19 @@ pub fn add_mov_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpMovResolver;
 impl OperandResolver for OpMovResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let rd = match data.get_operand(0) {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        let rd = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
 
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rd = rd;
-        data.arm_operands.rn = 0;
-        data.arm_operands.op2 = data.get_operand(1);
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rd = rd;
+        decoded.arm_operands.rn = 0;
+        decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
         rd
     }
 }
@@ -113,71 +114,5 @@ impl Executable for Op_Mvn {
 }
 
 fn resolve_op2_and_carry(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> (u32, u8) {
-    let current_c = ((cpu.read_apsr() >> 29) & 1) as u8;
-    let Some(op2) = &data.arm_operands.op2 else {
-        return (0, current_c);
-    };
-
-    match op2.op_type {
-        ArmOperandType::Reg(reg) => {
-            let value = cpu.read_reg(data.resolve_reg(reg));
-            op_shift_match(op2.shift, value, current_c)
-        }
-        ArmOperandType::Imm(imm) => (imm as u32, current_c),
-        _ => (0, current_c),
-    }
-}
-
-fn op_shift_match(shift: ArmShift, value: u32, current_c: u8) -> (u32, u8) {
-    match shift {
-        ArmShift::Lsl(amount) => match amount {
-            0 => (value, current_c),
-            1..=31 => {
-                let carry = ((value >> (32 - amount)) & 1) as u8;
-                (value.wrapping_shl(amount), carry)
-            }
-            32 => (0, (value & 1) as u8),
-            _ => (0, 0),
-        },
-        ArmShift::Lsr(amount) => match amount {
-            0 => (value, current_c),
-            1..=31 => {
-                let carry = ((value >> (amount - 1)) & 1) as u8;
-                (value >> amount, carry)
-            }
-            32 => (0, (value >> 31) as u8),
-            _ => (0, 0),
-        },
-        ArmShift::Asr(amount) => match amount {
-            0 => (value, current_c),
-            1..=31 => {
-                let carry = ((value >> (amount - 1)) & 1) as u8;
-                (((value as i32) >> amount) as u32, carry)
-            }
-            _ => {
-                let carry = ((value >> 31) & 1) as u8;
-                let result = if (value as i32) < 0 { 0xFFFF_FFFF } else { 0 };
-                (result, carry)
-            }
-        },
-        ArmShift::Ror(amount) => {
-            if amount == 0 {
-                (value, current_c)
-            } else {
-                let shift_mod = amount % 32;
-                if shift_mod == 0 {
-                    (value, (value >> 31) as u8)
-                } else {
-                    let result = value.rotate_right(shift_mod);
-                    (result, ((result >> 31) & 1) as u8)
-                }
-            }
-        }
-        ArmShift::Rrx(_) => {
-            let carry = (value & 1) as u8;
-            let result = (value >> 1) | ((current_c as u32) << 31);
-            (result, carry)
-        }
-        _ => (value, current_c),
-    }
+    resolve_op2_runtime(cpu, data)
 }

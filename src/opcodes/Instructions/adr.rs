@@ -1,9 +1,9 @@
 ﻿use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, check_condition,
 };
-use capstone::arch::arm::{ArmOperandType, ArmReg};
 
 // ADR{cond} Rd, label
 pub struct OpAdr;
@@ -25,18 +25,18 @@ impl Executable for OpAdr {
 
 pub struct OpAdrResolver;
 impl OperandResolver for OpAdrResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let rd = match data.get_operand(0) {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        let rd = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rd = rd;
-        data.arm_operands.rn = 0;
-        data.arm_operands.op2 = data.get_operand(1);
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rd = rd;
+        decoded.arm_operands.rn = 0;
+        decoded.arm_operands.op2 = decoded.get_operand(1).cloned();
 
         rd
     }
@@ -47,17 +47,16 @@ fn resolve_adr_target(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
 
     match &data.arm_operands.op2 {
         Some(op2) => match op2.op_type {
-            ArmOperandType::Imm(imm) => add_signed_u32(pc_aligned, imm as i64),
-            ArmOperandType::Mem(mem) => {
-                let base_reg = mem.base();
-                let base = if base_reg.0 == ArmReg::ARM_REG_PC as u16 {
+            DecodedOperandKind::Imm(imm) => add_signed_u32(pc_aligned, imm),
+            DecodedOperandKind::Mem(ref mem) => {
+                let base = if mem.base == 15 {
                     pc_aligned
                 } else {
-                    cpu.read_reg(data.resolve_reg(base_reg))
+                    cpu.read_reg(mem.base)
                 };
-                add_signed_u32(base, mem.disp() as i64)
+                add_signed_u32(base, i64::from(mem.disp))
             }
-            ArmOperandType::Reg(r) => cpu.read_reg(data.resolve_reg(r)),
+            DecodedOperandKind::Reg(reg) => cpu.read_reg(reg),
             _ => 0,
         },
         None => 0,
@@ -82,7 +81,7 @@ impl InstrBuilder for AdrBuilder {
 
 pub fn add_adr_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![crate::opcodes::opcode::Opcode {
-        insnid: capstone::arch::arm::ArmInsn::ARM_INS_ADR as u32,
+        insnid: crate::arch::ArmInsn::ARM_INS_ADR as u32,
         name: "ADR".to_string(),
         length: 32,
         cycles: crate::opcodes::opcode::CycleInfo {

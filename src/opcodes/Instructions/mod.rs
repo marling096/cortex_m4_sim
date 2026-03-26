@@ -26,7 +26,8 @@ mod tests {
 	use crate::context::CpuContext;
 	use crate::cpu::Cpu;
 	use crate::disassembler::disassemble_from_reset_handler;
-	use crate::opcodes::opcode::{ArmOpcode, Opcode};
+	use crate::opcodes::decoded::DecodedInstructionBuilder;
+	use crate::opcodes::opcode::{apply_decoded_builder, ArmOpcode, Opcode};
 	use crate::peripheral::bus::Bus;
 	use capstone::arch;
 	use capstone::prelude::*;
@@ -243,7 +244,9 @@ mod tests {
 		let mut cpu = make_cpu();
 		seed_cpu_state(&mut cpu);
 
-		def.operand_resolver.resolve(&mut data);
+		let mut decoded = DecodedInstructionBuilder::from_arm_opcode(&data);
+		def.operand_resolver.resolve(&data, &mut decoded);
+		apply_decoded_builder(&mut data, &decoded);
 		let ret = (def.exec)(&mut cpu, &data);
 
 		assert!(

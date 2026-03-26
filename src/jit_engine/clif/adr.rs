@@ -1,4 +1,4 @@
-use capstone::arch::arm::{ArmInsn, ArmOperandType, ArmReg};
+use crate::arch::ArmInsn;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
@@ -6,6 +6,7 @@ use crate::jit_engine::clif::instructions::{
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
+use crate::opcodes::decoded::{DecodedOperandKind, is_pc_reg};
 
 pub(crate) static ADR_DEF: AdrDef = AdrDef;
 
@@ -29,9 +30,9 @@ impl InsDef for AdrDef {
 
 	fn supports(&self, insn: &JitInstruction<'_>) -> bool {
 		match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
-			Some(ArmOperandType::Imm(_))
-			| Some(ArmOperandType::Mem(_))
-			| Some(ArmOperandType::Reg(_)) => true,
+			Some(DecodedOperandKind::Imm(_))
+			| Some(DecodedOperandKind::Mem(_))
+			| Some(DecodedOperandKind::Reg(_)) => true,
 			_ => false,
 		}
 	}
@@ -55,17 +56,17 @@ fn emit_adr_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction
 	let pc_aligned = lowering.iconst_u32(insn.data.address().wrapping_add(4) & !0x3);
 
 	match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
-		Some(ArmOperandType::Imm(imm)) => emit_add_signed(lowering, pc_aligned, i64::from(*imm)),
-		Some(ArmOperandType::Mem(mem)) => {
-			let base = if mem.base().0 == ArmReg::ARM_REG_PC as u16 {
+		Some(DecodedOperandKind::Imm(imm)) => emit_add_signed(lowering, pc_aligned, i64::from(*imm)),
+		Some(DecodedOperandKind::Mem(mem)) => {
+			let base = if is_pc_reg(mem.base) {
 				pc_aligned
 			} else {
-				emit_read_reg(lowering, insn.data.resolve_reg(mem.base()))
+				emit_read_reg(lowering, mem.base)
 			};
-			emit_add_signed(lowering, base, i64::from(mem.disp()))
+			emit_add_signed(lowering, base, i64::from(mem.disp))
 		}
-		Some(ArmOperandType::Reg(reg)) => {
-			emit_read_reg(lowering, insn.data.resolve_reg(*reg))
+		Some(DecodedOperandKind::Reg(reg)) => {
+			emit_read_reg(lowering, *reg)
 		}
 		_ => lowering.iconst_u32(0),
 	}

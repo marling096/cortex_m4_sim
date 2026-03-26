@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use capstone::arch::arm::{ArmCC, ArmInsn, ArmOperandType};
+use crate::arch::{ArmCC, ArmInsn};
 use cranelift::codegen::ir::{FuncRef, StackSlot, StackSlotData, StackSlotKind};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
@@ -14,9 +14,11 @@ use crate::context::CpuContext;
 use crate::cpu::Cpu;
 use crate::jit_engine::clif::instructions as jit_instructions;
 use crate::jit_engine::table::{JitBlockRange, JitInstruction, JitBlockTable};
+use crate::opcodes::decoded::{
+    DecodedOperandKind, operand_resolver_multi_runtime, resolve_op2_runtime, runtime_read_reg,
+};
 use crate::opcodes::opcode::{
     UpdateApsr_C, UpdateApsr_N, UpdateApsr_V, UpdateApsr_Z, check_condition,
-    operand_resolver_multi_runtime, resolve_op2_runtime, runtime_read_reg,
 };
 
 pub type JitBlockFn = unsafe extern "C" fn(*mut Cpu, *const ()) -> u32;
@@ -1442,8 +1444,8 @@ extern "C" fn jit_compute_shift_packed(cpu: *mut Cpu, instr: *const ()) -> u64 {
     let current_c = ((cpu.read_apsr() >> 29) & 1) as u8;
     let shift_amount = match &instr.data.arm_operands.op2 {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(imm) => (imm as u32) & 0xFF,
-            ArmOperandType::Reg(reg) => runtime_read_reg(cpu, &instr.data, instr.data.resolve_reg(reg)) & 0xFF,
+            DecodedOperandKind::Imm(imm) => (imm as u32) & 0xFF,
+            DecodedOperandKind::Reg(reg) => runtime_read_reg(cpu, &instr.data, reg) & 0xFF,
             _ => 0,
         },
         None => 0,
@@ -1524,8 +1526,8 @@ extern "C" fn jit_execute_bkpt(cpu: *mut Cpu, instr: *const ()) {
 
     let imm = match &instr.data.arm_operands.op2 {
         Some(op) => match op.op_type {
-            ArmOperandType::Imm(imm) => imm as u32,
-            ArmOperandType::Reg(reg) => runtime_read_reg(cpu, &instr.data, instr.data.resolve_reg(reg)),
+            DecodedOperandKind::Imm(imm) => imm as u32,
+            DecodedOperandKind::Reg(reg) => runtime_read_reg(cpu, &instr.data, reg),
             _ => 0,
         },
         None => 0,
@@ -1547,8 +1549,12 @@ extern "C" fn jit_execute_fallback(cpu: *mut Cpu, instr: *const ()) -> u32 {
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
     let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
+    let raw = instr
+        .fallback_data
+        .as_ref()
+        .expect("missing fallback opcode for jit fallback execution");
     cpu.write_pc(instr.data.address().wrapping_add(4));
-    (instr.op.exec)(cpu, &instr.data)
+    (instr.op.exec)(cpu, raw)
 }
 
 #[cfg(test)]

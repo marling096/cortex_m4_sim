@@ -1,10 +1,9 @@
-﻿use crate::context::CpuContext;
+﻿use crate::opcodes::decoded::{DecodedInstruction, DecodedInstructionBuilder};
+use crate::context::CpuContext;
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
-    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, count_reg_operands,
-    reg_list_contains, resolve_multi_reg_operands,
+    ArmOpcode, CycleInfo, Executable, OperandResolver, check_condition, resolve_multi_reg_decoded,
 };
-use capstone::arch::arm::{ArmOperand, ArmReg};
 
 // op{addr_mode}{cond} Rn{!}, reglist
 pub struct Op_Ldm;
@@ -46,10 +45,10 @@ pub fn ldm(cpu: &mut dyn CpuContext, data: &ArmOpcode) -> u32 {
     }
 }
 
-fn adjust_ldm_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
-    let reg_count = count_reg_operands(operands).saturating_sub(1);
+fn adjust_ldm_cycles(cycles: &mut CycleInfo, instr: &DecodedInstruction) {
+    let reg_count = (instr.transed_operands.len() as u32).saturating_sub(1);
     let mut execute = 1u32.saturating_add(reg_count);
-    if reg_list_contains(operands, ArmReg::ARM_REG_PC as u16, true) {
+    if instr.transed_operands.iter().skip(1).any(|&reg| reg == 15) {
         execute = execute.saturating_add(1);
     }
     cycles.execute_cycles = execute;
@@ -57,8 +56,8 @@ fn adjust_ldm_cycles(cycles: &mut CycleInfo, operands: &[ArmOperand]) {
 
 pub struct OpLdm_resolver;
 impl OperandResolver for OpLdm_resolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        resolve_multi_reg_operands(data, true)
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        resolve_multi_reg_decoded(raw, decoded, true)
     }
 }
 
@@ -70,7 +69,7 @@ impl InstrBuilder for Ldm_builder {
 }
 pub fn add_ldm_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![crate::opcodes::opcode::Opcode {
-        insnid: capstone::arch::arm::ArmInsn::ARM_INS_LDM as u32,
+        insnid: crate::arch::ArmInsn::ARM_INS_LDM as u32,
         name: "LDM".to_string(),
         length: 32,
         cycles: crate::opcodes::opcode::CycleInfo {

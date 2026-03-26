@@ -1,4 +1,6 @@
-﻿use crate::context::CpuContext;
+﻿use crate::arch::ArmInsn;
+use crate::context::CpuContext;
+use crate::opcodes::decoded::{DecodedInstructionBuilder, DecodedOperandKind};
 use crate::opcodes::instruction::InstrBuilder;
 use crate::opcodes::opcode::{
     ArmOpcode, Executable, OperandResolver, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V,
@@ -16,7 +18,7 @@ impl InstrBuilder for Calculate_builder {
 pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
     vec![
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_ADD as u32,
+            insnid: ArmInsn::ARM_INS_ADD as u32,
             name: "ADD".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -29,7 +31,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_ADC as u32,
+            insnid: ArmInsn::ARM_INS_ADC as u32,
             name: "ADC".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -42,7 +44,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_SUB as u32,
+            insnid: ArmInsn::ARM_INS_SUB as u32,
             name: "SUB".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -55,7 +57,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_SBC as u32,
+            insnid: ArmInsn::ARM_INS_SBC as u32,
             name: "SBC".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -68,7 +70,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_RSB as u32,
+            insnid: ArmInsn::ARM_INS_RSB as u32,
             name: "RSB".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -81,7 +83,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MUL as u32,
+            insnid: ArmInsn::ARM_INS_MUL as u32,
             name: "MUL".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -94,7 +96,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_UDIV as u32,
+            insnid: ArmInsn::ARM_INS_UDIV as u32,
             name: "UDIV".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -107,7 +109,7 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
             adjust_cycles: None,
         },
         crate::opcodes::opcode::Opcode {
-            insnid: capstone::arch::arm::ArmInsn::ARM_INS_MLS as u32,
+            insnid: ArmInsn::ARM_INS_MLS as u32,
             name: "MLS".to_string(),
             length: 32,
             cycles: crate::opcodes::opcode::CycleInfo {
@@ -125,25 +127,25 @@ pub fn add_calculate_def() -> Vec<crate::opcodes::opcode::Opcode> {
 
 pub struct OpCalculateResolver;
 impl OperandResolver for OpCalculateResolver {
-    fn resolve(&self, data: &mut ArmOpcode) -> u32 {
-        let rd = match data.get_operand(0) {
+    fn resolve(&self, raw: &ArmOpcode, decoded: &mut DecodedInstructionBuilder) -> u32 {
+        let rd = match decoded.get_operand(0) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => 0,
             },
             None => 0,
         };
-        let rn = match data.get_operand(1) {
+        let rn = match decoded.get_operand(1) {
             Some(op) => match op.op_type {
-                ArmOperandType::Reg(r) => data.resolve_reg(r),
+                DecodedOperandKind::Reg(reg) => reg,
                 _ => rd,
             },
             None => rd,
         };
-        data.arm_operands.condition = data.condition();
-        data.arm_operands.rd = rd;
-        data.arm_operands.rn = rn;
-        data.arm_operands.op2 = data.get_operand(2).or_else(|| data.get_operand(1));
+        decoded.arm_operands.condition = raw.condition();
+        decoded.arm_operands.rd = rd;
+        decoded.arm_operands.rn = rn;
+        decoded.arm_operands.op2 = decoded.get_operand(2).cloned().or_else(|| decoded.get_operand(1).cloned());
         rd
     }
 }
