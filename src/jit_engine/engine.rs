@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::arch::{ArmCC, ArmInsn};
+use crate::arch::ArmInsn;
 use cranelift::codegen::ir::{FuncRef, StackSlot, StackSlotData, StackSlotKind};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
@@ -15,8 +15,8 @@ use crate::cpu::Cpu;
 use crate::jit_engine::clif::instructions as jit_instructions;
 use crate::jit_engine::table::{JitBlockRange, JitInstruction, JitBlockTable};
 use crate::opcodes::decoded::{
-    DecodedOperandKind, check_condition, operand_resolver_multi_runtime, resolve_op2_runtime,
-    runtime_read_reg, update_apsr_c, update_apsr_n, update_apsr_v, update_apsr_z,
+    DecodedOperandKind, operand_resolver_multi_runtime, resolve_op2_runtime,
+    runtime_read_reg,
 };
 use crate::opcodes::thumb_runtime;
 
@@ -87,7 +87,6 @@ impl BlockStateCache {
 struct JitRuntimeCounters {
     finish_block_step_cycles_calls: AtomicU64,
     fallback_calls: AtomicU64,
-    check_condition_calls: AtomicU64,
     read_reg_calls: AtomicU64,
     write_reg_calls: AtomicU64,
     read_apsr_calls: AtomicU64,
@@ -107,7 +106,6 @@ impl JitRuntimeCounters {
         Self {
             finish_block_step_cycles_calls: AtomicU64::new(0),
             fallback_calls: AtomicU64::new(0),
-            check_condition_calls: AtomicU64::new(0),
             read_reg_calls: AtomicU64::new(0),
             write_reg_calls: AtomicU64::new(0),
             read_apsr_calls: AtomicU64::new(0),
@@ -126,7 +124,6 @@ impl JitRuntimeCounters {
     fn reset(&self) {
         self.finish_block_step_cycles_calls.store(0, Ordering::Relaxed);
         self.fallback_calls.store(0, Ordering::Relaxed);
-        self.check_condition_calls.store(0, Ordering::Relaxed);
         self.read_reg_calls.store(0, Ordering::Relaxed);
         self.write_reg_calls.store(0, Ordering::Relaxed);
         self.read_apsr_calls.store(0, Ordering::Relaxed);
@@ -155,7 +152,6 @@ pub struct JitStatsSnapshot {
     pub cache_misses: u64,
     pub finish_block_step_cycles_calls: u64,
     pub fallback_calls: u64,
-    pub check_condition_calls: u64,
     pub read_reg_calls: u64,
     pub write_reg_calls: u64,
     pub read_apsr_calls: u64,
@@ -190,9 +186,6 @@ impl JitStatsSnapshot {
                 .finish_block_step_cycles_calls
                 .saturating_sub(previous.finish_block_step_cycles_calls),
             fallback_calls: self.fallback_calls.saturating_sub(previous.fallback_calls),
-            check_condition_calls: self
-                .check_condition_calls
-                .saturating_sub(previous.check_condition_calls),
             read_reg_calls: self.read_reg_calls.saturating_sub(previous.read_reg_calls),
             write_reg_calls: self.write_reg_calls.saturating_sub(previous.write_reg_calls),
             read_apsr_calls: self.read_apsr_calls.saturating_sub(previous.read_apsr_calls),
@@ -242,7 +235,6 @@ impl JitStatsSnapshot {
     pub fn helper_calls(&self) -> u64 {
         self.finish_block_step_cycles_calls
             + self.fallback_calls
-            + self.check_condition_calls
             + self.read_reg_calls
             + self.write_reg_calls
             + self.read_apsr_calls
@@ -268,7 +260,6 @@ impl JitStatsSnapshot {
 
 pub(crate) struct RuntimeFunctions {
     pub(crate) finish_block_step_cycles: FuncId,
-    pub(crate) check_condition: FuncId,
     pub(crate) read_reg: FuncId,
     pub(crate) write_reg: FuncId,
     pub(crate) read_apsr: FuncId,
@@ -279,10 +270,6 @@ pub(crate) struct RuntimeFunctions {
     pub(crate) write_u8: FuncId,
     pub(crate) write_u16: FuncId,
     pub(crate) write_u32: FuncId,
-    pub(crate) update_apsr_n: FuncId,
-    pub(crate) update_apsr_z: FuncId,
-    pub(crate) update_apsr_c: FuncId,
-    pub(crate) update_apsr_v: FuncId,
     pub(crate) try_exception_return: FuncId,
     pub(crate) resolve_op2_packed: FuncId,
     pub(crate) resolve_mem_rt_addr: FuncId,
@@ -565,7 +552,6 @@ impl JitEngine {
             "jit_finish_block_step_cycles",
             jit_finish_block_step_cycles as *const u8,
         );
-        builder.symbol("jit_check_condition", jit_check_condition as *const u8);
         builder.symbol("jit_read_reg", jit_read_reg as *const u8);
         builder.symbol("jit_write_reg", jit_write_reg as *const u8);
         builder.symbol("jit_read_apsr", jit_read_apsr as *const u8);
@@ -576,10 +562,6 @@ impl JitEngine {
         builder.symbol("jit_write_u8", jit_write_u8 as *const u8);
         builder.symbol("jit_write_u16", jit_write_u16 as *const u8);
         builder.symbol("jit_write_u32", jit_write_u32 as *const u8);
-        builder.symbol("jit_update_apsr_n", jit_update_apsr_n as *const u8);
-        builder.symbol("jit_update_apsr_z", jit_update_apsr_z as *const u8);
-        builder.symbol("jit_update_apsr_c", jit_update_apsr_c as *const u8);
-        builder.symbol("jit_update_apsr_v", jit_update_apsr_v as *const u8);
         builder.symbol(
             "jit_try_exception_return",
             jit_try_exception_return as *const u8,
@@ -629,9 +611,6 @@ impl JitEngine {
                 .finish_block_step_cycles_calls
                 .load(Ordering::Relaxed),
             fallback_calls: JIT_RUNTIME_COUNTERS.fallback_calls.load(Ordering::Relaxed),
-            check_condition_calls: JIT_RUNTIME_COUNTERS
-                .check_condition_calls
-                .load(Ordering::Relaxed),
             read_reg_calls: JIT_RUNTIME_COUNTERS.read_reg_calls.load(Ordering::Relaxed),
             write_reg_calls: JIT_RUNTIME_COUNTERS.write_reg_calls.load(Ordering::Relaxed),
             read_apsr_calls: JIT_RUNTIME_COUNTERS.read_apsr_calls.load(Ordering::Relaxed),
@@ -1069,12 +1048,6 @@ impl RuntimeFunctions {
             sig.returns.push(AbiParam::new(types::I32));
         })?;
 
-        let check_condition = declare_import(module, "jit_check_condition", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-            sig.returns.push(AbiParam::new(types::I32));
-        })?;
-
         let read_reg = declare_import(module, "jit_read_reg", |sig| {
             sig.params.push(AbiParam::new(ptr_ty));
             sig.params.push(AbiParam::new(types::I32));
@@ -1133,26 +1106,6 @@ impl RuntimeFunctions {
             sig.params.push(AbiParam::new(types::I32));
         })?;
 
-        let update_apsr_n = declare_import(module, "jit_update_apsr_n", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-        })?;
-
-        let update_apsr_z = declare_import(module, "jit_update_apsr_z", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-        })?;
-
-        let update_apsr_c = declare_import(module, "jit_update_apsr_c", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-        })?;
-
-        let update_apsr_v = declare_import(module, "jit_update_apsr_v", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-        })?;
-
         let try_exception_return = declare_import(module, "jit_try_exception_return", |sig| {
             sig.params.push(AbiParam::new(ptr_ty));
             sig.params.push(AbiParam::new(types::I32));
@@ -1196,7 +1149,6 @@ impl RuntimeFunctions {
 
         Ok(Self {
             finish_block_step_cycles,
-            check_condition,
             read_reg,
             write_reg,
             read_apsr,
@@ -1207,10 +1159,6 @@ impl RuntimeFunctions {
             write_u8,
             write_u16,
             write_u32,
-            update_apsr_n,
-            update_apsr_z,
-            update_apsr_c,
-            update_apsr_v,
             try_exception_return,
             resolve_op2_packed,
             resolve_mem_rt_addr,
@@ -1231,26 +1179,6 @@ where
     Ok(module.declare_function(name, Linkage::Import, &sig)?)
 }
 
-fn decode_condition(cc: u32) -> ArmCC {
-    match cc {
-        x if x == ArmCC::ARM_CC_EQ as u32 => ArmCC::ARM_CC_EQ,
-        x if x == ArmCC::ARM_CC_NE as u32 => ArmCC::ARM_CC_NE,
-        x if x == ArmCC::ARM_CC_HS as u32 => ArmCC::ARM_CC_HS,
-        x if x == ArmCC::ARM_CC_LO as u32 => ArmCC::ARM_CC_LO,
-        x if x == ArmCC::ARM_CC_MI as u32 => ArmCC::ARM_CC_MI,
-        x if x == ArmCC::ARM_CC_PL as u32 => ArmCC::ARM_CC_PL,
-        x if x == ArmCC::ARM_CC_VS as u32 => ArmCC::ARM_CC_VS,
-        x if x == ArmCC::ARM_CC_VC as u32 => ArmCC::ARM_CC_VC,
-        x if x == ArmCC::ARM_CC_HI as u32 => ArmCC::ARM_CC_HI,
-        x if x == ArmCC::ARM_CC_LS as u32 => ArmCC::ARM_CC_LS,
-        x if x == ArmCC::ARM_CC_GE as u32 => ArmCC::ARM_CC_GE,
-        x if x == ArmCC::ARM_CC_LT as u32 => ArmCC::ARM_CC_LT,
-        x if x == ArmCC::ARM_CC_GT as u32 => ArmCC::ARM_CC_GT,
-        x if x == ArmCC::ARM_CC_LE as u32 => ArmCC::ARM_CC_LE,
-        _ => ArmCC::ARM_CC_AL,
-    }
-}
-
 extern "C" fn jit_finish_block_step_cycles(
     cpu: *mut Cpu,
     execute_cycles: u32,
@@ -1262,14 +1190,6 @@ extern "C" fn jit_finish_block_step_cycles(
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
     cpu.finish_block_step_cycles(execute_cycles, current_pc, pc_update)
-}
-
-extern "C" fn jit_check_condition(cpu: *mut Cpu, cc: u32) -> u32 {
-    JIT_RUNTIME_COUNTERS
-        .check_condition_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &*cpu };
-    u32::from(check_condition(cpu, decode_condition(cc)))
 }
 
 extern "C" fn jit_read_reg(cpu: *mut Cpu, reg: u32) -> u32 {
@@ -1364,38 +1284,6 @@ extern "C" fn jit_write_u16(cpu: *mut Cpu, addr: u32, value: u32) {
     let current = cpu.read_mem(aligned_addr);
     let new_value = (current & mask) | ((value & 0xFFFF) << shift);
     cpu.write_mem(aligned_addr, new_value);
-}
-
-extern "C" fn jit_update_apsr_n(cpu: *mut Cpu, value: u32) {
-    JIT_RUNTIME_COUNTERS
-        .flag_update_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &mut *cpu };
-    update_apsr_n(cpu, value);
-}
-
-extern "C" fn jit_update_apsr_z(cpu: *mut Cpu, value: u32) {
-    JIT_RUNTIME_COUNTERS
-        .flag_update_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &mut *cpu };
-    update_apsr_z(cpu, value);
-}
-
-extern "C" fn jit_update_apsr_c(cpu: *mut Cpu, value: u32) {
-    JIT_RUNTIME_COUNTERS
-        .flag_update_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &mut *cpu };
-    update_apsr_c(cpu, value as u8);
-}
-
-extern "C" fn jit_update_apsr_v(cpu: *mut Cpu, value: u32) {
-    JIT_RUNTIME_COUNTERS
-        .flag_update_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &mut *cpu };
-    update_apsr_v(cpu, value as u8);
 }
 
 extern "C" fn jit_try_exception_return(cpu: *mut Cpu, value: u32) -> u32 {

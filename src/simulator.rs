@@ -1,7 +1,7 @@
 use crate::context::CpuContext;
 use crate::cpu::Cpu;
 use crate::jit_engine::engine::{JitEngine, JitError, JitStatsSnapshot};
-use crate::jit_engine::table::{JitBlockStats, JitBlockTable};
+use crate::jit_engine::table::{JitBlockStats, JitBlockTableBuilder};
 use crate::opcodes::thumb_runtime;
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 pub struct Simulator {
     cpu: Cpu,
     system_cycles: u64,
+    code_ranges: Vec<(u32, u32)>,
 }
 
 impl Simulator {
@@ -18,6 +19,7 @@ impl Simulator {
         Self {
             cpu,
             system_cycles: 0,
+            code_ranges: Vec::new(),
         }
     }
 
@@ -28,8 +30,11 @@ impl Simulator {
         initial_sp: u32,
         reset_handler_ptr: u32,
     ) {
+        self.code_ranges.clear();
         for (addr, bytes) in code_segments.iter() {
             self.cpu.load_code_bytes(*addr as u32, bytes);
+            self.code_ranges
+                .push((*addr as u32, (*addr as u32).wrapping_add(bytes.len() as u32)));
         }
         for (addr, data) in dcw_data.iter() {
             self.cpu.load_bytes(*addr, &((*data as u16).to_le_bytes()));
@@ -41,6 +46,13 @@ impl Simulator {
         self.cpu.next_pc = reset_handler;
         self.cpu.write_mem(0x40021000, 0x0000_0083); //rcc.cr初始值
         self.system_cycles = 0;
+    }
+
+    fn code_segment_end_for_pc(&self, pc: u32) -> Option<u32> {
+        self.code_ranges
+            .iter()
+            .find(|(start, end)| pc >= *start && pc < *end)
+            .map(|(_, end)| *end)
     }
 
     #[inline(always)]
@@ -104,10 +116,7 @@ impl Simulator {
         self.sim_loop_fast(no_throttle, peripheral_tick_batch, report_window)
     }
 
-    pub fn sim_loop_jit(
-        &mut self,
-        jit_table: JitBlockTable,
-    ) -> Result<(), JitError> {
+    pub fn sim_loop_jit(&mut self) -> Result<(), JitError> {
         const DEFAULT_REPORT_WINDOW: u32 = 10000;
 
         let report_window = std::env::var("SIM_REPORT_WINDOW")
@@ -131,7 +140,7 @@ impl Simulator {
             peripheral_tick_batch
         );
 
-        self.sim_loop_fast_jit(jit_table, no_throttle, peripheral_tick_batch, report_window)
+        self.sim_loop_fast_jit(no_throttle, peripheral_tick_batch, report_window)
     }
 
     fn sim_loop_fast(
@@ -234,20 +243,20 @@ impl Simulator {
 
     fn sim_loop_fast_jit(
         &mut self,
-        jit_table: JitBlockTable,
         no_throttle: bool,
         peripheral_tick_batch: u32,
         report_window: u32,
     ) -> Result<(), JitError> {
         let mut engine = JitEngine::new()?;
+        let mut jit_builder = JitBlockTableBuilder::new();
+        let mut jit_table = jit_builder.build_snapshot();
         let report_jit_stats = std::env::var("SIM_JIT_STATS")
             .map(|v| v != "0")
             .unwrap_or(false);
-        let table_block_stats = jit_table.block_stats();
         let mut last_jit_stats = engine.stats_snapshot();
 
         if report_jit_stats {
-            Self::print_jit_table_stats(table_block_stats);
+            Self::print_jit_table_stats(jit_table.block_stats());
         }
         let mut fetch_count: u32 = 0;
         let mut window_start = Instant::now();
@@ -296,6 +305,33 @@ impl Simulator {
             };
 
             let current_pc = self.cpu.next_pc;
+            if jit_table.get(current_pc).is_none() {
+                let Some(segment_end) = self.code_segment_end_for_pc(current_pc) else {
+                    eprintln!(
+                        "Error: PC 0x{:X} is outside loaded code segments in JIT mode. Simulation stopped.",
+                        current_pc
+                    );
+                    break;
+                };
+                let block = thumb_runtime::scan_block(&self.cpu, current_pc, segment_end, 64)
+                    .map_err(JitError::Backend)?;
+                let added = jit_builder
+                    .extend_from_pc(
+                        &self.cpu,
+                        current_pc,
+                        block.end_pc.wrapping_add(4),
+                        block.instruction_count,
+                    )
+                    .map_err(|err| JitError::Backend(err.to_string()))?;
+                if added == 0 {
+                    eprintln!(
+                        "Error: PC 0x{:X} could not be decoded in JIT mode. Simulation stopped.",
+                        current_pc
+                    );
+                    break;
+                }
+                jit_table = jit_builder.build_snapshot();
+            }
             if let Some(ins) = jit_table.get(current_pc) {
                 trace_instruction!(current_pc, ins);
             }
@@ -328,6 +364,7 @@ impl Simulator {
                     );
                 }
                 if report_jit_stats {
+                    Self::print_jit_table_stats(jit_table.block_stats());
                     let current_stats = engine.stats_snapshot();
                     let delta = current_stats.delta_since(last_jit_stats);
                     Self::print_jit_runtime_stats(delta);
@@ -372,7 +409,7 @@ impl Simulator {
                 "JIT stats: exec_blocks={} avg_exec_len={:.2} cache_hit={:.1}% ",
                 "compiled={} suffix={} avg_compiled_len={:.2} fallback={} ",
                 "helpers/ins={:.2} reg_r={} reg_w={} mem_r={} mem_w={} ",
-                "op2={} mem_addr={} shift={} flags={} cc={} exret={}"
+                "op2={} mem_addr={} shift={} flags={} exret={}"
             ),
             stats.executed_blocks,
             stats.average_executed_block_len(),
@@ -390,7 +427,6 @@ impl Simulator {
             stats.resolve_mem_rt_addr_calls,
             stats.compute_shift_calls,
             stats.flag_update_calls,
-            stats.check_condition_calls,
             stats.exception_return_calls,
         );
     }

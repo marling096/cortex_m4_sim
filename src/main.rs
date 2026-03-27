@@ -11,7 +11,6 @@ mod perf_tests;
 
 use crate::cpu::Cpu;
 use crate::disassembler::disassemble_from_reset_handler;
-use crate::jit_engine::table::JitBlockTableBuilder;
 use crate::peripheral::bus::Bus;
 use crate::peripheral::afio::Afio;
 use crate::peripheral::flash::Flash;
@@ -31,29 +30,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|v| v != "0")
         .unwrap_or(false);
 
-    let (_result, cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =
+    let (_result, _cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =
         disassemble_from_reset_handler(input_path, output_path)?;
     println!(
         "Initial SP: 0x{:08X}, Reset_Handler Ptr: 0x{:08X}",
         initial_sp, reset_handler_ptr
     );
-
-    let mut all_insns_storage = Vec::new();
-    let jit_instr_table = if use_jit {
-        for (addr, bytes) in &code_segments {
-            let insns = cs.disasm_all(bytes, *addr).map_err(|e| e.to_string())?;
-            all_insns_storage.push(insns);
-        }
-
-        let mut builder = JitBlockTableBuilder::new();
-        for insns in &all_insns_storage {
-            builder.extend_disassembly(&cs, insns.iter())?;
-        }
-        Some(builder.build())
-    } else {
-        None
-    };
-
 
     let shared_freq = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(8_000_000));
     let gpioa = Gpio::new(0x4001_0800, 0x4001_0BFF);
@@ -100,7 +82,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut simulator = simulator::Simulator::new(cpu);
     simulator.sim_reset(&code_segments, dcw_data, initial_sp, reset_handler_ptr);
     if use_jit {
-        simulator.sim_loop_jit(jit_instr_table.expect("jit table must exist when SIM_USE_BLOCK=1"))?;
+        simulator.sim_loop_jit()?;
     } else {
         simulator.sim_loop_interpreter()?;
     }

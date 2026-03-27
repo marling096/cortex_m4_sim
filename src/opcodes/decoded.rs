@@ -79,6 +79,34 @@ pub struct DecodedInstructionBuilder {
 }
 
 impl DecodedInstruction {
+    pub fn from_parts(
+        address: u32,
+        size: u32,
+        mnemonic: impl Into<String>,
+        op_str: impl Into<String>,
+        operands: Vec<DecodedOperand>,
+        writeback: bool,
+        update_flags: bool,
+        it_mask: u8,
+        writes_pc: bool,
+        transed_operands: Vec<u32>,
+        arm_operands: DecodedArmOperands,
+    ) -> Self {
+        Self {
+            address,
+            size,
+            mnemonic: mnemonic.into(),
+            op_str: op_str.into(),
+            operands,
+            writeback,
+            update_flags,
+            it_mask,
+            writes_pc,
+            transed_operands,
+            arm_operands,
+        }
+    }
+
     pub fn from_arm_opcode(opcode: &ArmOpcode<'_>) -> Self {
         let operands: Vec<_> = opcode
             .operands()
