@@ -2,13 +2,24 @@ use crate::arch::ArmCC;
 
 use crate::context::CpuContext;
 use crate::cpu::Cpu;
-use crate::opcodes::opcode::{check_condition, UpdateApsr_C, UpdateApsr_N, UpdateApsr_V, UpdateApsr_Z};
+use crate::opcodes::decoded::{
+    check_condition, update_apsr_c, update_apsr_n, update_apsr_v, update_apsr_z,
+};
 
 pub struct StepOutcome {
     pub cycles: u32,
     pub mnemonic: &'static str,
     pub op_str: String,
 }
+
+pub struct ExecuteOutcome {
+    pub mnemonic: &'static str,
+    pub op_str: String,
+    pub execute_cycles: u32,
+    pub pc_update: u32,
+}
+
+type ExecOutcome = ExecuteOutcome;
 
 pub fn step(cpu: &mut Cpu, current_pc: u32) -> Result<StepOutcome, String> {
     if let Some(cycles) = cpu.begin_step() {
@@ -19,14 +30,7 @@ pub fn step(cpu: &mut Cpu, current_pc: u32) -> Result<StepOutcome, String> {
         });
     }
 
-    let hw1 = fetch16(cpu, current_pc);
-    let outcome = if is_thumb32(hw1) {
-        let hw2 = fetch16(cpu, current_pc.wrapping_add(2));
-        decode_execute_32(cpu, current_pc, hw1, hw2)?
-    } else {
-        decode_execute_16(cpu, current_pc, hw1)?
-    };
-
+    let outcome = execute_current(cpu, current_pc)?;
     let cycles = cpu.finish_step_cycles(outcome.execute_cycles, current_pc, outcome.pc_update);
     Ok(StepOutcome {
         cycles,
@@ -35,11 +39,14 @@ pub fn step(cpu: &mut Cpu, current_pc: u32) -> Result<StepOutcome, String> {
     })
 }
 
-struct ExecOutcome {
-    mnemonic: &'static str,
-    op_str: String,
-    execute_cycles: u32,
-    pc_update: u32,
+pub fn execute_current(cpu: &mut Cpu, current_pc: u32) -> Result<ExecuteOutcome, String> {
+    let hw1 = fetch16(cpu, current_pc);
+    if is_thumb32(hw1) {
+        let hw2 = fetch16(cpu, current_pc.wrapping_add(2));
+        Ok(decode_execute_32(cpu, current_pc, hw1, hw2)?)
+    } else {
+        Ok(decode_execute_16(cpu, current_pc, hw1)?)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -392,8 +399,8 @@ fn decode_execute_16(cpu: &mut Cpu, current_pc: u32, hw: u16) -> Result<ExecOutc
         return match op {
             0 => {
                 cpu.write_reg(rd, imm8);
-                UpdateApsr_N(cpu, imm8);
-                UpdateApsr_Z(cpu, imm8);
+                update_apsr_n(cpu, imm8);
+                update_apsr_z(cpu, imm8);
                 Ok(normal_outcome("movs", format!("r{rd}, #{imm8}"), 1, 2))
             }
             1 => {
@@ -576,8 +583,8 @@ fn decode_execute_32(cpu: &mut Cpu, current_pc: u32, hw1: u16, hw2: u16) -> Resu
                 let result = cpu.read_reg(rn) & imm;
                 cpu.write_reg(rd, result);
                 if setflags {
-                    UpdateApsr_N(cpu, result);
-                    UpdateApsr_Z(cpu, result);
+                    update_apsr_n(cpu, result);
+                    update_apsr_z(cpu, result);
                 }
                 Ok(normal_outcome("and", format!("r{rd}, r{rn}, #0x{imm:X}"), 1, 4))
             }
@@ -585,16 +592,16 @@ fn decode_execute_32(cpu: &mut Cpu, current_pc: u32, hw1: u16, hw2: u16) -> Resu
                 let result = cpu.read_reg(rn) & !imm;
                 cpu.write_reg(rd, result);
                 if setflags {
-                    UpdateApsr_N(cpu, result);
-                    UpdateApsr_Z(cpu, result);
+                    update_apsr_n(cpu, result);
+                    update_apsr_z(cpu, result);
                 }
                 Ok(normal_outcome("bic", format!("r{rd}, r{rn}, #0x{imm:X}"), 1, if rd == 15 { 0 } else { 4 }))
             }
             2 if rn == 15 => {
                 cpu.write_reg(rd, imm);
                 if setflags {
-                    UpdateApsr_N(cpu, imm);
-                    UpdateApsr_Z(cpu, imm);
+                    update_apsr_n(cpu, imm);
+                    update_apsr_z(cpu, imm);
                 }
                 Ok(normal_outcome("mov.w", format!("r{rd}, #0x{imm:X}"), 1, if rd == 15 { 0 } else { 4 }))
             }
@@ -602,8 +609,8 @@ fn decode_execute_32(cpu: &mut Cpu, current_pc: u32, hw1: u16, hw2: u16) -> Resu
                 let result = cpu.read_reg(rn) | imm;
                 cpu.write_reg(rd, result);
                 if setflags {
-                    UpdateApsr_N(cpu, result);
-                    UpdateApsr_Z(cpu, result);
+                    update_apsr_n(cpu, result);
+                    update_apsr_z(cpu, result);
                 }
                 Ok(normal_outcome("orr", format!("r{rd}, r{rn}, #0x{imm:X}"), 1, if rd == 15 { 0 } else { 4 }))
             }
@@ -693,8 +700,8 @@ fn execute_data_proc_16(cpu: &mut Cpu, op: u16, rdn: u32, rm: u32) -> Result<Exe
         0 => {
             let result = lhs & rhs;
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("ands", format!("r{rdn}, r{rm}"), 1, 2))
         }
         2 => execute_shift_reg(cpu, "lsls", ShiftKind::Lsl, rdn, rdn, rhs & 0xFF, true, 2),
@@ -704,34 +711,34 @@ fn execute_data_proc_16(cpu: &mut Cpu, op: u16, rdn: u32, rm: u32) -> Result<Exe
             let result64 = lhs as u64 + rhs as u64 + carry as u64;
             let result = result64 as u32;
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
-            UpdateApsr_C(cpu, if result64 > 0xFFFF_FFFF { 1 } else { 0 });
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
+            update_apsr_c(cpu, if result64 > 0xFFFF_FFFF { 1 } else { 0 });
             Ok(normal_outcome("adcs", format!("r{rdn}, r{rm}"), 1, 2))
         }
         6 => {
             let borrow = 1u32.wrapping_sub(carry as u32);
             let result = lhs.wrapping_sub(rhs).wrapping_sub(borrow);
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
-            UpdateApsr_C(cpu, if (lhs as u64) >= (rhs as u64 + borrow as u64) { 1 } else { 0 });
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
+            update_apsr_c(cpu, if (lhs as u64) >= (rhs as u64 + borrow as u64) { 1 } else { 0 });
             Ok(normal_outcome("sbcs", format!("r{rdn}, r{rm}"), 1, 2))
         }
         7 => execute_shift_reg(cpu, "rors", ShiftKind::Ror, rdn, rdn, rhs & 0xFF, true, 2),
         8 => {
             let result = lhs & rhs;
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("tst", format!("r{rdn}, r{rm}"), 1, 2))
         }
         9 => {
             let result = 0u32.wrapping_sub(rhs);
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
-            UpdateApsr_C(cpu, if rhs == 0 { 1 } else { 0 });
-            UpdateApsr_V(cpu, if rhs == 0x8000_0000 { 1 } else { 0 });
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
+            update_apsr_c(cpu, if rhs == 0 { 1 } else { 0 });
+            update_apsr_v(cpu, if rhs == 0x8000_0000 { 1 } else { 0 });
             Ok(normal_outcome("rsbs", format!("r{rdn}, r{rm}"), 1, 2))
         }
         10 => {
@@ -740,37 +747,37 @@ fn execute_data_proc_16(cpu: &mut Cpu, op: u16, rdn: u32, rm: u32) -> Result<Exe
         }
         11 => {
             let result = lhs.wrapping_add(rhs);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
-            UpdateApsr_C(cpu, if (lhs as u64) + (rhs as u64) > 0xFFFF_FFFF { 1 } else { 0 });
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
+            update_apsr_c(cpu, if (lhs as u64) + (rhs as u64) > 0xFFFF_FFFF { 1 } else { 0 });
             Ok(normal_outcome("cmn", format!("r{rdn}, r{rm}"), 1, 2))
         }
         12 => {
             let result = lhs | rhs;
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("orrs", format!("r{rdn}, r{rm}"), 1, 2))
         }
         13 => {
             let result = lhs.wrapping_mul(rhs);
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("muls", format!("r{rdn}, r{rm}"), 1, 2))
         }
         14 => {
             let result = lhs & !rhs;
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("bics", format!("r{rdn}, r{rm}"), 1, 2))
         }
         15 => {
             let result = !rhs;
             cpu.write_reg(rdn, result);
-            UpdateApsr_N(cpu, result);
-            UpdateApsr_Z(cpu, result);
+            update_apsr_n(cpu, result);
+            update_apsr_z(cpu, result);
             Ok(normal_outcome("mvns", format!("r{rdn}, r{rm}"), 1, 2))
         }
         _ => Err(format!("unsupported 16-bit data-processing op={op}")),
@@ -790,11 +797,11 @@ fn execute_add(
     let result = lhs.wrapping_add(rhs);
     cpu.write_reg(rd, result);
     if setflags {
-        UpdateApsr_N(cpu, result);
-        UpdateApsr_Z(cpu, result);
-        UpdateApsr_C(cpu, if (lhs as u64) + (rhs as u64) > 0xFFFF_FFFF { 1 } else { 0 });
+        update_apsr_n(cpu, result);
+        update_apsr_z(cpu, result);
+        update_apsr_c(cpu, if (lhs as u64) + (rhs as u64) > 0xFFFF_FFFF { 1 } else { 0 });
         let overflow = (((lhs ^ result) & (rhs ^ result)) >> 31) & 1;
-        UpdateApsr_V(cpu, overflow as u8);
+        update_apsr_v(cpu, overflow as u8);
     }
     Ok(normal_outcome(if setflags { "adds" } else { "add.w" }, op_str, 1, if rd == 15 { 0 } else { size }))
 }
@@ -818,11 +825,11 @@ fn execute_sub(
 }
 
 fn update_sub_flags(cpu: &mut Cpu, lhs: u32, rhs: u32, result: u32) {
-    UpdateApsr_N(cpu, result);
-    UpdateApsr_Z(cpu, result);
-    UpdateApsr_C(cpu, if lhs >= rhs { 1 } else { 0 });
+    update_apsr_n(cpu, result);
+    update_apsr_z(cpu, result);
+    update_apsr_c(cpu, if lhs >= rhs { 1 } else { 0 });
     let overflow = (((lhs ^ rhs) & (lhs ^ result)) >> 31) & 1;
-    UpdateApsr_V(cpu, overflow as u8);
+    update_apsr_v(cpu, overflow as u8);
 }
 
 fn execute_shift_imm(
@@ -837,10 +844,10 @@ fn execute_shift_imm(
     let (result, carry) = apply_shift(value, kind, amount, ((cpu.read_apsr() >> 29) & 1) as u8);
     cpu.write_reg(rd, result);
     if setflags {
-        UpdateApsr_N(cpu, result);
-        UpdateApsr_Z(cpu, result);
+        update_apsr_n(cpu, result);
+        update_apsr_z(cpu, result);
         if amount != 0 {
-            UpdateApsr_C(cpu, carry);
+            update_apsr_c(cpu, carry);
         }
     }
     Ok(normal_outcome(mnemonic, format!("r{rd}, #{}", amount), 1, if rd == 15 { 0 } else { 2 }))
@@ -859,10 +866,10 @@ fn execute_shift_reg(
     let (result, carry) = apply_shift(cpu.read_reg(rm), kind, amount, ((cpu.read_apsr() >> 29) & 1) as u8);
     cpu.write_reg(rd, result);
     if setflags {
-        UpdateApsr_N(cpu, result);
-        UpdateApsr_Z(cpu, result);
+        update_apsr_n(cpu, result);
+        update_apsr_z(cpu, result);
         if amount != 0 {
-            UpdateApsr_C(cpu, carry);
+            update_apsr_c(cpu, carry);
         }
     }
     Ok(normal_outcome(mnemonic, format!("r{rd}, r{rm}, r{}", amount), 1, if rd == 15 { 0 } else { size }))

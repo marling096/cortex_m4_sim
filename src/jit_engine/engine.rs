@@ -15,11 +15,10 @@ use crate::cpu::Cpu;
 use crate::jit_engine::clif::instructions as jit_instructions;
 use crate::jit_engine::table::{JitBlockRange, JitInstruction, JitBlockTable};
 use crate::opcodes::decoded::{
-    DecodedOperandKind, operand_resolver_multi_runtime, resolve_op2_runtime, runtime_read_reg,
+    DecodedOperandKind, check_condition, operand_resolver_multi_runtime, resolve_op2_runtime,
+    runtime_read_reg, update_apsr_c, update_apsr_n, update_apsr_v, update_apsr_z,
 };
-use crate::opcodes::opcode::{
-    UpdateApsr_C, UpdateApsr_N, UpdateApsr_V, UpdateApsr_Z, check_condition,
-};
+use crate::opcodes::thumb_runtime;
 
 pub type JitBlockFn = unsafe extern "C" fn(*mut Cpu, *const ()) -> u32;
 
@@ -674,10 +673,7 @@ impl JitEngine {
         entries
     }
 
-    pub fn compile_table<'a>(
-        &mut self,
-        table: &JitBlockTable<'a>,
-    ) -> Result<Vec<(u32, JitBlockFn)>, JitError> {
+    pub fn compile_table(&mut self, table: &JitBlockTable) -> Result<Vec<(u32, JitBlockFn)>, JitError> {
         for block in table.iter_blocks() {
             if self.blocks.contains_key(&block.start_pc) {
                 continue;
@@ -690,7 +686,7 @@ impl JitEngine {
         Ok(self.compiled_entries())
     }
 
-    pub fn step<'a>(&mut self, cpu: &mut Cpu, table: &JitBlockTable<'a>) -> Result<u32, JitError> {
+    pub fn step(&mut self, cpu: &mut Cpu, table: &JitBlockTable) -> Result<u32, JitError> {
         if let Some(cycles) = cpu.begin_step() {
             return Ok(cycles);
         }
@@ -699,7 +695,7 @@ impl JitEngine {
         self.execute_block(cpu, table, current_pc)
     }
 
-    pub fn run<'a>(&mut self, cpu: &mut Cpu, table: &JitBlockTable<'a>) -> Result<(), JitError> {
+    pub fn run(&mut self, cpu: &mut Cpu, table: &JitBlockTable) -> Result<(), JitError> {
         const DEFAULT_REPORT_WINDOW: u32 = 10_000;
 
         let report_window = std::env::var("SIM_REPORT_WINDOW")
@@ -735,7 +731,7 @@ impl JitEngine {
     fn run_fast<'a>(
         &mut self,
         cpu: &mut Cpu,
-        table: &JitBlockTable<'a>,
+        table: &JitBlockTable,
         no_throttle: bool,
         peripheral_tick_batch: u32,
         report_window: u32,
@@ -827,7 +823,7 @@ impl JitEngine {
     fn execute_block<'a>(
         &mut self,
         cpu: &mut Cpu,
-        table: &JitBlockTable<'a>,
+        table: &JitBlockTable,
         start_pc: u32,
     ) -> Result<u32, JitError> {
         let block = table
@@ -848,7 +844,7 @@ impl JitEngine {
 
     fn get_or_compile_block_from_pc<'a>(
         &mut self,
-        table: &JitBlockTable<'a>,
+        table: &JitBlockTable,
         block: &JitBlockRange,
         start_pc: u32,
     ) -> Result<&CompiledBlock, JitError> {
@@ -868,7 +864,7 @@ impl JitEngine {
 
     fn compile_block_from_pc<'a>(
         &mut self,
-        table: &JitBlockTable<'a>,
+        table: &JitBlockTable,
         block: &JitBlockRange,
         start_pc: u32,
     ) -> Result<CompiledBlock, JitError> {
@@ -900,7 +896,7 @@ impl JitEngine {
     fn compile_sequence<'a>(
         &mut self,
         pc: u32,
-        entries: Vec<(u32, &'a JitInstruction<'a>)>,
+        entries: Vec<(u32, &JitInstruction)>,
     ) -> Result<CompiledBlock, JitError> {
         let ptr_ty = self.module.target_config().pointer_type();
         let mut ctx = self.module.make_context();
@@ -991,7 +987,7 @@ impl JitEngine {
 
                 let execute_cycles = builder
                     .ins()
-                    .iconst(types::I32, i64::from(ins.op.cycles.execute_cycles as i32));
+                    .iconst(types::I32, i64::from(ins.execute_cycles as i32));
                 let updated_total = builder.ins().iadd(carried_total, execute_cycles);
 
                 if index + 1 == entries.len() {
@@ -1050,11 +1046,8 @@ impl JitEngine {
         })
     }
 
-    fn lower_instruction<'a>(
-        lowering: &mut LoweringContext<'_, '_>,
-        ins: &JitInstruction<'a>,
-    ) {
-        match ins.def.or_else(|| jit_instructions::find_def(ins.op.insnid)) {
+    fn lower_instruction(lowering: &mut LoweringContext<'_, '_>, ins: &JitInstruction) {
+        match ins.def.or_else(|| jit_instructions::find_def(ins.insn_id)) {
             Some(def) if def.supports(ins) => def.execute(lowering, ins),
             _ => {
                 let pc_update = lowering.emit_fallback();
@@ -1378,7 +1371,7 @@ extern "C" fn jit_update_apsr_n(cpu: *mut Cpu, value: u32) {
         .flag_update_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    UpdateApsr_N(cpu, value);
+    update_apsr_n(cpu, value);
 }
 
 extern "C" fn jit_update_apsr_z(cpu: *mut Cpu, value: u32) {
@@ -1386,7 +1379,7 @@ extern "C" fn jit_update_apsr_z(cpu: *mut Cpu, value: u32) {
         .flag_update_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    UpdateApsr_Z(cpu, value);
+    update_apsr_z(cpu, value);
 }
 
 extern "C" fn jit_update_apsr_c(cpu: *mut Cpu, value: u32) {
@@ -1394,7 +1387,7 @@ extern "C" fn jit_update_apsr_c(cpu: *mut Cpu, value: u32) {
         .flag_update_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    UpdateApsr_C(cpu, value as u8);
+    update_apsr_c(cpu, value as u8);
 }
 
 extern "C" fn jit_update_apsr_v(cpu: *mut Cpu, value: u32) {
@@ -1402,7 +1395,7 @@ extern "C" fn jit_update_apsr_v(cpu: *mut Cpu, value: u32) {
         .flag_update_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    UpdateApsr_V(cpu, value as u8);
+    update_apsr_v(cpu, value as u8);
 }
 
 extern "C" fn jit_try_exception_return(cpu: *mut Cpu, value: u32) -> u32 {
@@ -1418,7 +1411,7 @@ extern "C" fn jit_resolve_op2_packed(cpu: *mut Cpu, instr: *const ()) -> u64 {
         .resolve_op2_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
+    let instr = unsafe { &*(instr as *const JitInstruction) };
     let (value, carry) = resolve_op2_runtime(cpu, &instr.data);
     ((carry as u64) << 32) | u64::from(value)
 }
@@ -1428,7 +1421,7 @@ extern "C" fn jit_resolve_mem_rt_addr(cpu: *mut Cpu, instr: *const ()) -> u64 {
         .resolve_mem_rt_addr_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
+    let instr = unsafe { &*(instr as *const JitInstruction) };
     let (rt, addr) = operand_resolver_multi_runtime(cpu, &instr.data);
     (u64::from(addr) << 32) | u64::from(rt)
 }
@@ -1438,7 +1431,7 @@ extern "C" fn jit_compute_shift_packed(cpu: *mut Cpu, instr: *const ()) -> u64 {
         .compute_shift_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
+    let instr = unsafe { &*(instr as *const JitInstruction) };
     let rm = instr.data.arm_operands.rn;
     let rm_val = runtime_read_reg(cpu, &instr.data, rm);
     let current_c = ((cpu.read_apsr() >> 29) & 1) as u8;
@@ -1451,7 +1444,7 @@ extern "C" fn jit_compute_shift_packed(cpu: *mut Cpu, instr: *const ()) -> u64 {
         None => 0,
     };
 
-    let (result, carry) = match instr.op.insnid {
+    let (result, carry) = match instr.insn_id {
         x if x == ArmInsn::ARM_INS_ASR as u32 => {
             if shift_amount == 0 {
                 (rm_val, current_c)
@@ -1522,7 +1515,7 @@ extern "C" fn jit_execute_bkpt(cpu: *mut Cpu, instr: *const ()) {
         .bkpt_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
+    let instr = unsafe { &*(instr as *const JitInstruction) };
 
     let imm = match &instr.data.arm_operands.op2 {
         Some(op) => match op.op_type {
@@ -1548,13 +1541,10 @@ extern "C" fn jit_execute_fallback(cpu: *mut Cpu, instr: *const ()) -> u32 {
         .fallback_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction<'static>) };
-    let raw = instr
-        .fallback_data
-        .as_ref()
-        .expect("missing fallback opcode for jit fallback execution");
-    cpu.write_pc(instr.data.address().wrapping_add(4));
-    (instr.op.exec)(cpu, raw)
+    let instr = unsafe { &*(instr as *const JitInstruction) };
+    thumb_runtime::execute_current(cpu, instr.data.address())
+        .unwrap_or_else(|err| panic!("jit fallback execute failed at 0x{:08X}: {err}", instr.data.address()))
+        .pc_update
 }
 
 #[cfg(test)]
@@ -1567,7 +1557,6 @@ mod tests {
 
     use crate::cpu::Cpu;
     use crate::jit_engine::table::JitBlockTableBuilder;
-    use crate::opcodes::instruction::OpcodeTable;
     use crate::peripheral::bus::Bus;
     use crate::peripheral::nvic::Nvic;
     use crate::peripheral::scb::Scb;
@@ -1599,12 +1588,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1625,12 +1609,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1652,12 +1631,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x78, 0x46, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1678,12 +1652,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x01, 0x20, 0x40, 0x1C, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1707,12 +1676,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0x28, 0x00, 0xD0, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1732,12 +1696,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1757,12 +1716,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x01, 0x20, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1784,12 +1738,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x08, 0x40, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1813,12 +1762,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xE0, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1841,12 +1785,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();
@@ -1871,12 +1810,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut engine = JitEngine::new().expect("failed to create jit engine");
@@ -1897,12 +1831,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit table");
 
         let mut cpu = build_cpu();

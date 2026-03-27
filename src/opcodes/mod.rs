@@ -2,6 +2,4 @@
 
 pub mod decoded;
 pub mod opcode;
-pub mod Instructions;
-pub mod instruction;
 pub mod thumb_runtime;

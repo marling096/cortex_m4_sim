@@ -6,10 +6,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::jit_engine::clif::instructions::{self, InsDef};
 use crate::opcodes::decoded::{
-    DecodedInstruction, DecodedInstructionBuilder, DecodedOperandKind,
+    DecodedInstruction, DecodedOperandKind, jit_execute_cycles,
+    normalize_for_jit,
 };
-use crate::opcodes::instruction::OpcodeTable;
-use crate::opcodes::opcode::{ArmOpcode, Opcode};
+use crate::opcodes::opcode::ArmOpcode;
 
 #[derive(Debug)]
 pub enum JitTableBuildError {
@@ -32,29 +32,25 @@ impl fmt::Display for JitTableBuildError {
 
 impl std::error::Error for JitTableBuildError {}
 
-pub struct JitInstruction<'a> {
-    pub op: Opcode,
+pub struct JitInstruction {
+    pub insn_id: u32,
+    pub execute_cycles: u32,
     pub data: DecodedInstruction,
-    pub fallback_data: Option<ArmOpcode<'a>>,
     pub def: Option<&'static dyn InsDef>,
 }
 
-impl<'a> JitInstruction<'a> {
-    pub fn new(op: Opcode, data: DecodedInstruction, fallback_data: Option<ArmOpcode<'a>>) -> Self {
+impl JitInstruction {
+    pub fn new(insn_id: u32, data: DecodedInstruction, execute_cycles: u32) -> Self {
         Self {
-            op,
+            insn_id,
+            execute_cycles,
             data,
-            fallback_data,
             def: None,
         }
     }
 
-    pub fn needs_fallback_data(&self) -> bool {
-        self.def.is_none()
-    }
-
     fn is_it_instruction(&self) -> bool {
-        self.op.insnid == ArmInsn::ARM_INS_IT as u32
+        self.insn_id == ArmInsn::ARM_INS_IT as u32
     }
 
     fn it_following_count(&self) -> usize {
@@ -67,7 +63,7 @@ impl<'a> JitInstruction<'a> {
 
     fn is_branch_instruction(&self) -> bool {
         matches!(
-            self.op.insnid,
+            self.insn_id,
             x if x == ArmInsn::ARM_INS_B as u32
                 || x == ArmInsn::ARM_INS_BL as u32
                 || x == ArmInsn::ARM_INS_BX as u32
@@ -79,7 +75,7 @@ impl<'a> JitInstruction<'a> {
 
     fn static_branch_target(&self) -> Option<u32> {
         if !matches!(
-            self.op.insnid,
+            self.insn_id,
             x if x == ArmInsn::ARM_INS_B as u32
                 || x == ArmInsn::ARM_INS_BL as u32
                 || x == ArmInsn::ARM_INS_CBZ as u32
@@ -95,11 +91,11 @@ impl<'a> JitInstruction<'a> {
     }
 
     fn has_exception_return_path(&self) -> bool {
-        if self.op.insnid == ArmInsn::ARM_INS_BX as u32 {
+        if self.insn_id == ArmInsn::ARM_INS_BX as u32 {
             return true;
         }
 
-        self.op.insnid == ArmInsn::ARM_INS_POP as u32 && self.data.transed_operands.contains(&15)
+        self.insn_id == ArmInsn::ARM_INS_POP as u32 && self.data.transed_operands.contains(&15)
     }
 
     fn modifies_pc(&self) -> bool {
@@ -116,7 +112,7 @@ impl<'a> JitInstruction<'a> {
         }
 
         matches!(
-            self.op.insnid,
+            self.insn_id,
             x if x == ArmInsn::ARM_INS_LDM as u32 || x == ArmInsn::ARM_INS_POP as u32
         ) && self.data.transed_operands.contains(&15)
     }
@@ -167,7 +163,7 @@ impl JitBlockStats {
 pub struct JitBlockBuilder;
 
 impl JitBlockBuilder {
-    pub fn build<'a>(table: &JitBlockTable<'a>) -> Vec<JitBlockRange> {
+    pub fn build(table: &JitBlockTable) -> Vec<JitBlockRange> {
         let mut entries: Vec<_> = table.iter_entries().collect();
         entries.sort_unstable_by_key(|(pc, _)| *pc);
 
@@ -252,16 +248,16 @@ impl JitBlockBuilder {
     }
 }
 
-pub struct JitBlockTable<'a> {
-    entries: FxHashMap<u32, JitInstruction<'a>>,
-    fast_table: Vec<Option<JitInstruction<'a>>>,
+pub struct JitBlockTable {
+    entries: FxHashMap<u32, JitInstruction>,
+    fast_table: Vec<Option<JitInstruction>>,
     fast_base: u32,
     blocks: Vec<JitBlockRange>,
     block_starts: FxHashMap<u32, usize>,
     block_membership: FxHashMap<u32, usize>,
 }
 
-impl<'a> JitBlockTable<'a> {
+impl JitBlockTable {
     pub fn len(&self) -> usize {
         self.entries.len() + self.fast_table.iter().filter(|entry| entry.is_some()).count()
     }
@@ -309,7 +305,7 @@ impl<'a> JitBlockTable<'a> {
     }
 
     #[inline(always)]
-    pub fn get(&self, pc: u32) -> Option<&JitInstruction<'a>> {
+    pub fn get(&self, pc: u32) -> Option<&JitInstruction> {
         let offset = (pc.wrapping_sub(self.fast_base)) >> 1;
         if (offset as usize) < self.fast_table.len() {
             unsafe {
@@ -326,7 +322,7 @@ impl<'a> JitBlockTable<'a> {
         }
     }
 
-    pub fn iter_entries(&self) -> impl Iterator<Item = (u32, &JitInstruction<'a>)> + '_ {
+    pub fn iter_entries(&self) -> impl Iterator<Item = (u32, &JitInstruction)> + '_ {
         let fast_base = self.fast_base;
         let fast_iter = self.fast_table.iter().enumerate().filter_map(move |(index, entry)| {
             entry
@@ -339,71 +335,57 @@ impl<'a> JitBlockTable<'a> {
 }
 
 #[derive(Default)]
-pub struct JitBlockTableBuilder<'a> {
-    entries: FxHashMap<u32, JitInstruction<'a>>,
+pub struct JitBlockTableBuilder {
+    entries: FxHashMap<u32, JitInstruction>,
 }
 
-impl<'a> JitBlockTableBuilder<'a> {
+impl JitBlockTableBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn add_instruction(&mut self, mut instr: JitInstruction<'a>) {
-        let raw_data = instr
-            .fallback_data
-            .as_mut()
-            .expect("missing raw opcode for jit instruction");
-        let mut decoded = DecodedInstructionBuilder::from_arm_opcode(raw_data);
-        instr.op.operand_resolver.resolve(raw_data, &mut decoded);
-        instr.data = decoded.clone().build();
-        if let Some(adjust_cycles) = instr.op.adjust_cycles {
-            adjust_cycles(&mut instr.op.cycles, &instr.data);
-        }
-        instr.def = instructions::find_def(instr.op.insnid).filter(|def| def.supports(&instr));
-        if !instr.needs_fallback_data() {
-            instr.fallback_data = None;
-        }
+    pub fn add_instruction(&mut self, mut instr: JitInstruction) {
+        instr.def = instructions::find_def(instr.insn_id).filter(|def| def.supports(&instr));
         self.entries.insert(instr.data.address(), instr);
     }
 
     pub fn add_disassembled_instruction(
         &mut self,
-        opcode_table: &OpcodeTable,
-        cs: &'a Capstone,
-        insn: &'a Insn<'a>,
+        cs: &Capstone,
+        insn: &Insn<'_>,
     ) -> Result<(), JitTableBuildError> {
         let insn_id = ArmInsn::from_raw(insn.id().0)
             .map(|id| id as u32)
             .ok_or(JitTableBuildError::MissingOpcodeDefinition { insn_id: insn.id().0 })?;
-        let defs = opcode_table
-            .get_table()
-            .get(&(insn_id as u16))
-            .ok_or(JitTableBuildError::MissingOpcodeDefinition { insn_id })?;
         let arm_opcode = ArmOpcode::new(cs, insn).ok_or(JitTableBuildError::DecodeFailed {
             address: insn.address(),
         })?;
 
-        let decoded = DecodedInstruction::from_arm_opcode(&arm_opcode);
-        self.add_instruction(JitInstruction::new(defs[0].clone(), decoded, Some(arm_opcode)));
+        if let Some(instr) = build_decoded_only_instruction(insn_id, &arm_opcode) {
+            self.add_instruction(instr);
+            return Ok(());
+        }
+
+        let instr = build_fallback_instruction(insn_id, &arm_opcode);
+        self.add_instruction(instr);
         Ok(())
     }
 
-    pub fn extend_disassembly<I>(
+    pub fn extend_disassembly<'a, I>(
         &mut self,
-        opcode_table: &OpcodeTable,
-        cs: &'a Capstone,
+        cs: &Capstone,
         insns: I,
     ) -> Result<(), JitTableBuildError>
     where
         I: IntoIterator<Item = &'a Insn<'a>>,
     {
         for insn in insns {
-            self.add_disassembled_instruction(opcode_table, cs, insn)?;
+            self.add_disassembled_instruction(cs, insn)?;
         }
         Ok(())
     }
 
-    pub fn build(self) -> JitBlockTable<'a> {
+    pub fn build(self) -> JitBlockTable {
         let mut table = optimize_entries(self.entries);
         let blocks = JitBlockBuilder::build(&table);
         let block_starts = blocks
@@ -431,18 +413,38 @@ impl<'a> JitBlockTableBuilder<'a> {
         table
     }
 
-    pub fn build_from_disassembly<I>(
-        opcode_table: &OpcodeTable,
-        cs: &'a Capstone,
+    pub fn build_from_disassembly<'a, I>(
+        cs: &Capstone,
         insns: I,
-    ) -> Result<JitBlockTable<'a>, JitTableBuildError>
+    ) -> Result<JitBlockTable, JitTableBuildError>
     where
         I: IntoIterator<Item = &'a Insn<'a>>,
     {
         let mut builder = Self::new();
-        builder.extend_disassembly(opcode_table, cs, insns)?;
+        builder.extend_disassembly(cs, insns)?;
         Ok(builder.build())
     }
+}
+
+fn build_decoded_only_instruction(
+    insn_id: u32,
+    arm_opcode: &ArmOpcode<'_>,
+) -> Option<JitInstruction> {
+    let data = normalize_for_jit(arm_opcode)?;
+    let execute_cycles = jit_execute_cycles(insn_id, &data)?;
+    let mut instr = JitInstruction::new(insn_id, data, execute_cycles);
+    instr.def = instructions::find_def(insn_id).filter(|def| def.supports(&instr));
+    instr.def?;
+    Some(instr)
+}
+
+fn build_fallback_instruction(
+    insn_id: u32,
+    arm_opcode: &ArmOpcode<'_>,
+) -> JitInstruction {
+    let data = normalize_for_jit(arm_opcode).unwrap_or_else(|| DecodedInstruction::from_arm_opcode(arm_opcode));
+    let execute_cycles = jit_execute_cycles(insn_id, &data).unwrap_or(1);
+    JitInstruction::new(insn_id, data, execute_cycles)
 }
 
 #[cfg(test)]
@@ -450,8 +452,6 @@ mod tests {
     use super::*;
     use capstone::arch;
     use capstone::prelude::*;
-
-    use crate::opcodes::instruction::OpcodeTable;
 
     fn build_thumb_capstone() -> Capstone {
         Capstone::new()
@@ -469,19 +469,13 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
 
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.len(), 2);
         assert!(table.get(0x0800_0000).is_some());
         assert!(table.get(0x0800_0002).is_some());
-        assert!(table.get(0x0800_0000).unwrap().fallback_data.is_none());
         assert_eq!(table.blocks().len(), 1);
         assert_eq!(table.blocks()[0].start_pc, 0x0800_0000);
         assert_eq!(table.blocks()[0].end_pc, 0x0800_0002);
@@ -495,24 +489,16 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let defs = opcode_table
-            .get_table()
-            .get(&(crate::arch::ArmInsn::ARM_INS_NOP as u16))
-            .expect("missing NOP definition");
         let arm_opcode = ArmOpcode::new(&cs, insns.iter().next().expect("missing instruction"))
             .expect("failed to decode arm opcode");
         let decoded = DecodedInstruction::from_arm_opcode(&arm_opcode);
-        let mut op = defs[0].clone();
-        op.insnid = u32::MAX;
 
         let mut builder = JitBlockTableBuilder::new();
-        builder.add_instruction(JitInstruction::new(op, decoded, Some(arm_opcode)));
+        builder.add_instruction(JitInstruction::new(u32::MAX, decoded, 1));
         let table = builder.build();
 
         let instr = table.get(0x0800_0000).expect("missing instruction");
         assert!(instr.def.is_none());
-        assert!(instr.fallback_data.is_some());
     }
 
     #[test]
@@ -521,12 +507,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xE0, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.blocks().len(), 3);
@@ -548,12 +529,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0xFE, 0xE7, 0x00, 0xBF, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.blocks().len(), 2);
@@ -573,12 +549,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x87, 0x46, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.blocks().len(), 2);
@@ -596,12 +567,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x18, 0xBF, 0xFB, 0x1A, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.blocks().len(), 2);
@@ -620,12 +586,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x10, 0xBD, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         assert_eq!(table.blocks().len(), 2);
@@ -638,7 +599,7 @@ mod tests {
     }
 }
 
-fn optimize_entries<'a>(mut entries: FxHashMap<u32, JitInstruction<'a>>) -> JitBlockTable<'a> {
+fn optimize_entries(mut entries: FxHashMap<u32, JitInstruction>) -> JitBlockTable {
     if entries.is_empty() {
         return JitBlockTable {
             entries,

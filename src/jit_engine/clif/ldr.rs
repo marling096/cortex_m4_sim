@@ -39,11 +39,11 @@ impl InsDef for LdrDef {
         "LDR"
     }
 
-    fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, insn: &JitInstruction) -> bool {
         !insn.data.arm_operands.mem_has_index
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         emit_load(lowering, insn, LoadKind::Word)
     }
 }
@@ -59,11 +59,11 @@ impl InsDef for LdrbDef {
         "LDRB"
     }
 
-    fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, insn: &JitInstruction) -> bool {
         !insn.data.arm_operands.mem_has_index
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         emit_load(lowering, insn, LoadKind::Byte)
     }
 }
@@ -79,11 +79,11 @@ impl InsDef for LdrsbDef {
         "LDRSB"
     }
 
-    fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, insn: &JitInstruction) -> bool {
         !insn.data.arm_operands.mem_has_index
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         emit_load(lowering, insn, LoadKind::SignedByte)
     }
 }
@@ -99,11 +99,11 @@ impl InsDef for LdrhDef {
         "LDRH"
     }
 
-    fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, insn: &JitInstruction) -> bool {
         !insn.data.arm_operands.mem_has_index
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         emit_load(lowering, insn, LoadKind::Halfword)
     }
 }
@@ -119,11 +119,11 @@ impl InsDef for LdrshDef {
         "LDRSH"
     }
 
-    fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, insn: &JitInstruction) -> bool {
         !insn.data.arm_operands.mem_has_index
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         emit_load(lowering, insn, LoadKind::SignedHalfword)
     }
 }
@@ -138,7 +138,7 @@ enum LoadKind {
 
 fn emit_load(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     kind: LoadKind,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -178,7 +178,7 @@ fn emit_load_value(lowering: &mut LoweringContext<'_, '_>, addr: Value, kind: Lo
 
 fn ldr_operand_resolve(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
 ) -> (u32, Value) {
     let rd = insn.data.arm_operands.rd;
     let base = emit_read_reg(lowering, insn.data.arm_operands.rn);

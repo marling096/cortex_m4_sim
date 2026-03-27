@@ -26,7 +26,7 @@ macro_rules! define_def {
                 $mnemonic
             }
 
-            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
                 $emit(lowering, insn)
             }
         }
@@ -125,7 +125,7 @@ enum CalcOp {
     Mls,
 }
 
-fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
@@ -150,17 +150,17 @@ fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) 
     })
 }
 
-fn emit_uxtb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_uxtb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_extend_mask(lowering, insn, 0xFF)
 }
 
-fn emit_uxth(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_uxth(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_extend_mask(lowering, insn, 0xFFFF)
 }
 
 fn emit_extend_mask(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     mask: u32,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -174,17 +174,17 @@ fn emit_extend_mask(
     })
 }
 
-fn emit_cmp(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_cmp(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_compare(lowering, insn, CompareOp::Cmp)
 }
 
-fn emit_cmn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_cmn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_compare(lowering, insn, CompareOp::Cmn)
 }
 
 fn emit_compare(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     op: CompareOp,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -223,17 +223,17 @@ fn emit_compare(
     })
 }
 
-fn emit_tst(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_tst(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_test(lowering, insn, TestOp::Tst)
 }
 
-fn emit_teq(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_teq(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_test(lowering, insn, TestOp::Teq)
 }
 
 fn emit_test(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     op: TestOp,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -250,21 +250,21 @@ fn emit_test(
     })
 }
 
-fn emit_mov(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_mov(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_move(lowering, insn, false)
 }
 
-fn emit_movs(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_movs(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_move(lowering, insn, false)
 }
 
-fn emit_mvn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_mvn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_move(lowering, insn, true)
 }
 
 fn emit_move(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     invert: bool,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -285,29 +285,29 @@ fn emit_move(
     })
 }
 
-fn emit_and(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_and(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_logic(lowering, insn, LogicOp::And)
 }
 
-fn emit_orr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_orr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_logic(lowering, insn, LogicOp::Orr)
 }
 
-fn emit_eor(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_eor(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_logic(lowering, insn, LogicOp::Eor)
 }
 
-fn emit_bic(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_bic(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_logic(lowering, insn, LogicOp::Bic)
 }
 
-fn emit_orn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_orn(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_logic(lowering, insn, LogicOp::Orn)
 }
 
 fn emit_logic(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     op: LogicOp,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -337,41 +337,41 @@ fn emit_logic(
     })
 }
 
-fn emit_add(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_add(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Add)
 }
 
-fn emit_adc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_adc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Adc)
 }
 
-fn emit_sub(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_sub(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Sub)
 }
 
-fn emit_sbc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_sbc(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Sbc)
 }
 
-fn emit_rsb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_rsb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Rsb)
 }
 
-fn emit_mul(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_mul(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Mul)
 }
 
-fn emit_udiv(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_udiv(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Udiv)
 }
 
-fn emit_mls(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_mls(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_calculate(lowering, insn, CalcOp::Mls)
 }
 
 fn emit_calculate(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     op: CalcOp,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -479,7 +479,7 @@ fn emit_udiv_or_zero(lowering: &mut LoweringContext<'_, '_>, lhs: Value, rhs: Va
     lowering.call_value(lowering.helpers.udiv_or_zero, &[lhs, rhs])
 }
 
-fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let (result, carry) = emit_compute_shift(lowering);
@@ -540,7 +540,7 @@ fn emit_sub_overflow(
     emit_bool_to_u32(lowering, cond)
 }
 
-fn imm_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
+fn imm_operand(insn: &JitInstruction, index: usize) -> u32 {
     match insn.data.get_operand(index) {
         Some(op) => match op.op_type {
             DecodedOperandKind::Imm(value) => value as u32,
@@ -550,7 +550,7 @@ fn imm_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
     }
 }
 
-fn reg_operand(insn: &JitInstruction<'_>, index: usize) -> u32 {
+fn reg_operand(insn: &JitInstruction, index: usize) -> u32 {
     match insn.data.get_operand(index) {
         Some(op) => match op.op_type {
             DecodedOperandKind::Reg(reg) => reg,

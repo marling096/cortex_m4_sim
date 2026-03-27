@@ -28,7 +28,7 @@ impl InsDef for AdrDef {
 		"ADR"
 	}
 
-	fn supports(&self, insn: &JitInstruction<'_>) -> bool {
+	fn supports(&self, insn: &JitInstruction) -> bool {
 		match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
 			Some(DecodedOperandKind::Imm(_))
 			| Some(DecodedOperandKind::Mem(_))
@@ -37,12 +37,12 @@ impl InsDef for AdrDef {
 		}
 	}
 
-	fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+	fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 		emit_adr(lowering, insn)
 	}
 }
 
-fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 	with_cc(lowering, insn, |lowering| {
 		let rd = insn.data.arm_operands.rd;
 		let target = emit_adr_target(lowering, insn);
@@ -52,7 +52,7 @@ fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
 	})
 }
 
-fn emit_adr_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) -> Value {
+fn emit_adr_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) -> Value {
 	let pc_aligned = lowering.iconst_u32(insn.data.address().wrapping_add(4) & !0x3);
 
 	match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {

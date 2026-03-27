@@ -12,7 +12,6 @@ mod perf_tests;
 use crate::cpu::Cpu;
 use crate::disassembler::disassemble_from_reset_handler;
 use crate::jit_engine::table::JitBlockTableBuilder;
-use crate::opcodes::instruction::OpcodeTable;
 use crate::peripheral::bus::Bus;
 use crate::peripheral::afio::Afio;
 use crate::peripheral::flash::Flash;
@@ -39,7 +38,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         initial_sp, reset_handler_ptr
     );
 
-    let opcode_table = OpcodeTable::new();
     let mut all_insns_storage = Vec::new();
     let jit_instr_table = if use_jit {
         for (addr, bytes) in &code_segments {
@@ -49,7 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let mut builder = JitBlockTableBuilder::new();
         for insns in &all_insns_storage {
-            builder.extend_disassembly(&opcode_table, &cs, insns.iter())?;
+            builder.extend_disassembly(&cs, insns.iter())?;
         }
         Some(builder.build())
     } else {

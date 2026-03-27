@@ -23,7 +23,7 @@ macro_rules! define_def {
                 $mnemonic
             }
 
-            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
                 $emit(lowering, insn)
             }
         }
@@ -51,15 +51,15 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
     }
 }
 
-fn emit_str(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_str(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_store(lowering, insn, StoreKind::Word)
 }
 
-fn emit_strb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_strb(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_store(lowering, insn, StoreKind::Byte)
 }
 
-fn emit_strh(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_strh(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_store(lowering, insn, StoreKind::Halfword)
 }
 
@@ -71,7 +71,7 @@ enum StoreKind {
 
 fn emit_store(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     kind: StoreKind,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -99,7 +99,7 @@ fn emit_store(
     })
 }
 
-fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         if insn.data.transed_operands.is_empty() {
             let pc_update = emit_size_value(lowering, insn);
@@ -133,7 +133,7 @@ fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         if insn.data.transed_operands.is_empty() {
             let pc_update = emit_size_value(lowering, insn);
@@ -159,7 +159,7 @@ fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let count = insn.data.transed_operands.len() as u32;
         let sp = emit_read_reg(lowering, 13);
@@ -179,7 +179,7 @@ fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) 
     })
 }
 
-fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let mut sp = emit_read_reg(lowering, 13);
         let mut popped_pc = None;

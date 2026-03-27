@@ -104,9 +104,9 @@ impl Simulator {
         self.sim_loop_fast(no_throttle, peripheral_tick_batch, report_window)
     }
 
-    pub fn sim_loop_jit<'a>(
+    pub fn sim_loop_jit(
         &mut self,
-        jit_table: JitBlockTable<'a>,
+        jit_table: JitBlockTable,
     ) -> Result<(), JitError> {
         const DEFAULT_REPORT_WINDOW: u32 = 10000;
 
@@ -232,15 +232,14 @@ impl Simulator {
         Ok(())
     }
 
-    fn sim_loop_fast_jit<'a>(
+    fn sim_loop_fast_jit(
         &mut self,
-        jit_table: JitBlockTable<'a>,
+        jit_table: JitBlockTable,
         no_throttle: bool,
         peripheral_tick_batch: u32,
         report_window: u32,
     ) -> Result<(), JitError> {
         let mut engine = JitEngine::new()?;
-        engine.compile_table(&jit_table)?;
         let report_jit_stats = std::env::var("SIM_JIT_STATS")
             .map(|v| v != "0")
             .unwrap_or(false);
@@ -297,18 +296,21 @@ impl Simulator {
             };
 
             let current_pc = self.cpu.next_pc;
-            match jit_table.get(current_pc) {
-                Some(ins) => trace_instruction!(current_pc, ins),
-                None => {
+            if let Some(ins) = jit_table.get(current_pc) {
+                trace_instruction!(current_pc, ins);
+            }
+
+            let elapsed_cycles = match engine.step(&mut self.cpu, &jit_table) {
+                Ok(cycles) => cycles,
+                Err(JitError::MissingInstruction { pc }) => {
                     eprintln!(
                         "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
-                        current_pc
+                        pc
                     );
                     break;
                 }
-            }
-
-            let elapsed_cycles = engine.step(&mut self.cpu, &jit_table)?;
+                Err(err) => return Err(err),
+            };
             self.advance_system_cycles(elapsed_cycles);
 
             pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);

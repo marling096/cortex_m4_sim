@@ -12,9 +12,9 @@ impl JitInstructionCompiler {
         })
     }
 
-    pub fn compile_table<'a>(
+    pub fn compile_table(
         &mut self,
-        table: &JitBlockTable<'a>,
+        table: &JitBlockTable,
     ) -> Result<Vec<(u32, JitBlockFn)>, JitError> {
         self.engine.compile_table(table)
     }
@@ -39,7 +39,6 @@ mod tests {
     use crate::context::CpuContext;
     use crate::cpu::Cpu;
     use crate::jit_engine::table::JitBlockTableBuilder;
-    use crate::opcodes::instruction::OpcodeTable;
     use crate::peripheral::bus::Bus;
     use crate::peripheral::nvic::Nvic;
     use crate::peripheral::scb::Scb;
@@ -70,12 +69,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         let mut compiler = JitInstructionCompiler::new().expect("failed to create jit compiler");
@@ -113,12 +107,7 @@ mod tests {
         let insns = cs
             .disasm_all(&[0x00, 0xA0], 0x0800_0000)
             .expect("failed to disassemble");
-        let opcode_table = OpcodeTable::new();
-        let table = JitBlockTableBuilder::build_from_disassembly(
-            &opcode_table,
-            &cs,
-            insns.iter(),
-        )
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
         .expect("failed to build jit instruction table");
 
         let mut compiler = JitInstructionCompiler::new().expect("failed to create jit compiler");

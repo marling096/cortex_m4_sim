@@ -16,11 +16,11 @@ pub trait InsDef {
 
     fn mnemonic(&self) -> &'static str;
 
-    fn supports(&self, _insn: &JitInstruction<'_>) -> bool {
+    fn supports(&self, _insn: &JitInstruction) -> bool {
         true
     }
 
-    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>);
+    fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction);
 }
 
 pub fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
@@ -34,7 +34,7 @@ pub fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 
 pub fn with_cc<F>(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     emit: F,
 ) where
     F: FnOnce(&mut LoweringContext<'_, '_>),
@@ -79,13 +79,13 @@ pub fn with_cc<F>(
     lowering.set_pc_update(pc_update);
 }
 
-pub fn emit_size_value(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) -> Value {
+pub fn emit_size_value(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) -> Value {
     lowering.iconst_u32(insn.data.size())
 }
 
 pub fn emit_pc_update_for_rd(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     rd: u32,
 ) -> Value {
     if rd == 15 {
@@ -203,7 +203,7 @@ pub fn emit_update_apsr_nzcv(
 
 pub fn emit_resolve_op2(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
 ) -> (Value, Value) {
     if let Some((value, carry)) = emit_static_op2(lowering, insn) {
         return (value, carry);
@@ -222,7 +222,7 @@ pub fn emit_resolve_op2(
 
 fn emit_static_op2(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
 ) -> Option<(Value, Value)> {
     let current_carry = emit_current_carry(lowering);
     let op2 = insn.data.arm_operands.op2.as_ref()?;
@@ -395,28 +395,3 @@ fn emit_check_condition(lowering: &mut LoweringContext<'_, '_>, cc: ArmCC) -> Va
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::opcodes::instruction::OpcodeTable;
-
-    #[test]
-    fn jit_registry_covers_all_opcode_definitions() {
-        let table = OpcodeTable::new();
-        let mut missing = Vec::new();
-
-        for defs in table.get_table().values() {
-            for def in defs {
-                if find_def(def.insnid).is_none() {
-                    missing.push(format!("{} ({})", def.name, def.insnid));
-                }
-            }
-        }
-
-        assert!(
-            missing.is_empty(),
-            "missing jit defs for: {}",
-            missing.join(", ")
-        );
-    }
-}

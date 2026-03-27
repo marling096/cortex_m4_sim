@@ -24,7 +24,7 @@ macro_rules! define_def {
                 $mnemonic
             }
 
-            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
                 $emit(lowering, insn)
             }
         }
@@ -50,7 +50,7 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
     }
 }
 
-fn emit_b(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_b(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         emit_write_reg(lowering, 15, target);
@@ -59,7 +59,7 @@ fn emit_b(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_bl(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_bl(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         let pc = emit_read_reg(lowering, 15);
@@ -72,7 +72,7 @@ fn emit_bl(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         let handled = lowering.call_value(
@@ -115,7 +115,7 @@ fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_blx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_blx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         let pc = emit_read_reg(lowering, 15);
@@ -132,17 +132,17 @@ fn emit_blx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
     })
 }
 
-fn emit_cbz(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_cbz(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_compare_branch(lowering, insn, true)
 }
 
-fn emit_cbnz(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_cbnz(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     emit_compare_branch(lowering, insn, false)
 }
 
 fn emit_compare_branch(
     lowering: &mut LoweringContext<'_, '_>,
-    insn: &JitInstruction<'_>,
+    insn: &JitInstruction,
     branch_on_zero: bool,
 ) {
     with_cc(lowering, insn, |lowering| {
@@ -187,7 +187,7 @@ fn emit_compare_branch(
     })
 }
 
-fn emit_branch_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) -> Value {
+fn emit_branch_target(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) -> Value {
     match insn.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
         Some(DecodedOperandKind::Imm(imm)) => lowering.iconst_u32(*imm as u32),
         Some(DecodedOperandKind::Reg(reg)) => emit_read_reg(lowering, *reg),

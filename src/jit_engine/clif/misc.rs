@@ -19,7 +19,7 @@ macro_rules! define_def {
                 $mnemonic
             }
 
-            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+            fn execute(&self, lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
                 $emit(lowering, insn)
             }
         }
@@ -41,14 +41,14 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
     }
 }
 
-fn emit_noop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction<'_>) {
+fn emit_noop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let pc_update = emit_size_value(lowering, insn);
         lowering.set_pc_update(pc_update);
     })
 }
 
-fn emit_bkpt(lowering: &mut LoweringContext<'_, '_>, _insn: &JitInstruction<'_>) {
+fn emit_bkpt(lowering: &mut LoweringContext<'_, '_>, _insn: &JitInstruction) {
     lowering.flush_dirty_state();
     lowering.call_void(
         lowering.helpers.execute_bkpt,
