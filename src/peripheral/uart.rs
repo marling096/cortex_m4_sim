@@ -72,7 +72,7 @@ impl Uart {
         if !self.tx_enabled() {
             return;
         }
-        println!("[uart] push_tx_byte: 0x{:02X} ('{}')\n", byte, if (0x20..=0x7e).contains(&byte) { byte as char } else { '.' });
+        // println!("[uart] push_tx_byte: 0x{:02X} ('{}')\n", byte, if (0x20..=0x7e).contains(&byte) { byte as char } else { '.' });
         self.tx_bytes.push(byte);
         self.tx_pending.push_back(byte);
         self.dr = byte as u32;
@@ -144,7 +144,7 @@ impl Uart {
                     self.rx_fifo.push_back(byte);
                     self.sr |= SR_RXNE;
                     self.dr = byte as u32;
-                    println!("[usart-rx] byte=0x{byte:02X}");
+                    // println!("[usart-rx] byte=0x{byte:02X}");
                 }
                 self.rx_state = RxState::Idle;
             }

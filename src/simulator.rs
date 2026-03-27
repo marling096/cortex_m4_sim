@@ -249,11 +249,15 @@ impl Simulator {
     ) -> Result<(), JitError> {
         let mut engine = JitEngine::new()?;
         let mut jit_builder = JitBlockTableBuilder::new();
-        let mut jit_table = jit_builder.build_snapshot();
+        let mut jit_table = jit_builder.build_snapshot(None);
         let report_jit_stats = std::env::var("SIM_JIT_STATS")
             .map(|v| v != "0")
             .unwrap_or(false);
-        let mut last_jit_stats = engine.stats_snapshot();
+        let mut last_jit_stats = if report_jit_stats {
+            engine.stats_snapshot()
+        } else {
+            JitStatsSnapshot::default()
+        };
 
         if report_jit_stats {
             Self::print_jit_table_stats(jit_table.block_stats());
@@ -304,8 +308,48 @@ impl Simulator {
                 Some(Instant::now())
             };
 
+            if let Some(elapsed_cycles) = self.cpu.begin_step() {
+                self.advance_system_cycles(elapsed_cycles);
+                pending_peripheral_cycles = pending_peripheral_cycles.saturating_add(elapsed_cycles);
+                self.maybe_drive_peripherals(&mut pending_peripheral_cycles, peripheral_tick_batch);
+
+                fetch_count += 1;
+                if fetch_count >= report_window {
+                    let elapsed_secs = window_start.elapsed().as_secs_f64();
+                    if elapsed_secs > 0.0 {
+                        let actual_freq_hz = report_window_f64 / elapsed_secs;
+                        println!(
+                            "Actual Execution Frequency ({} steps): {:.6} MHz",
+                            report_window,
+                            actual_freq_hz / 1_000_000.0
+                        );
+                    }
+                    if report_jit_stats {
+                        Self::print_jit_table_stats(jit_table.block_stats());
+                        let current_stats = engine.stats_snapshot();
+                        let delta = current_stats.delta_since(last_jit_stats);
+                        Self::print_jit_runtime_stats(delta);
+                        last_jit_stats = current_stats;
+                    }
+                    fetch_count = 0;
+                    window_start = Instant::now();
+                }
+
+                if let Some(loop_start) = loop_start {
+                    let frequency = self.cpu.frequency.load(Ordering::Relaxed);
+                    let nanos_per_tick = 1_000_000_000 / (frequency * machine_cycle);
+                    let tick_duration = Duration::from_nanos(nanos_per_tick as u64);
+                    let elapsed = loop_start.elapsed();
+                    if elapsed < tick_duration {
+                        thread::sleep(tick_duration - elapsed);
+                    }
+                }
+                continue;
+            }
+
             let current_pc = self.cpu.next_pc;
-            if jit_table.get(current_pc).is_none() {
+            let mut resolved_block = jit_table.block_containing(current_pc);
+            if resolved_block.is_none() {
                 let Some(segment_end) = self.code_segment_end_for_pc(current_pc) else {
                     eprintln!(
                         "Error: PC 0x{:X} is outside loaded code segments in JIT mode. Simulation stopped.",
@@ -313,14 +357,12 @@ impl Simulator {
                     );
                     break;
                 };
-                let block = thumb_runtime::scan_block(&self.cpu, current_pc, segment_end, 64)
-                    .map_err(JitError::Backend)?;
                 let added = jit_builder
                     .extend_from_pc(
                         &self.cpu,
                         current_pc,
-                        block.end_pc.wrapping_add(4),
-                        block.instruction_count,
+                        segment_end,
+                        64,
                     )
                     .map_err(|err| JitError::Backend(err.to_string()))?;
                 if added == 0 {
@@ -330,18 +372,35 @@ impl Simulator {
                     );
                     break;
                 }
-                jit_table = jit_builder.build_snapshot();
+                jit_table = jit_builder.build_snapshot(Some(jit_table));
+                resolved_block = jit_table.block_containing(current_pc);
             }
-            if let Some(ins) = jit_table.get(current_pc) {
+
+            let Some(block) = resolved_block else {
+                eprintln!(
+                    "Error: PC 0x{:X} could not be resolved after extending JIT table. Simulation stopped.",
+                    current_pc
+                );
+                break;
+            };
+
+            if trace_insn && !trace_limit_reached {
+                let Some(ins) = jit_table.get(current_pc) else {
+                    eprintln!(
+                        "Error: PC 0x{:X} instruction metadata missing in JIT mode. Simulation stopped.",
+                        current_pc
+                    );
+                    break;
+                };
                 trace_instruction!(current_pc, ins);
             }
 
-            let elapsed_cycles = match engine.step(&mut self.cpu, &jit_table) {
+            let elapsed_cycles = match engine.step_block(&mut self.cpu, &jit_table, current_pc, block) {
                 Ok(cycles) => cycles,
-                Err(JitError::MissingInstruction { pc }) => {
+                Err(JitError::MissingInstruction { .. }) => {
                     eprintln!(
                         "Error: PC 0x{:X} is out of bounds. Simulation stopped.",
-                        pc
+                        current_pc
                     );
                     break;
                 }

@@ -50,7 +50,6 @@ pub fn with_cc<F>(
     let execute_block = lowering.builder.create_block();
     let skip_block = lowering.builder.create_block();
     let join_block = lowering.builder.create_block();
-    lowering.builder.append_block_param(join_block, types::I32);
     lowering
         .builder
         .ins()
@@ -58,25 +57,16 @@ pub fn with_cc<F>(
 
     lowering.builder.switch_to_block(skip_block);
     lowering.builder.seal_block(skip_block);
-    let skipped = lowering.iconst_u32(insn.data.size());
-    lowering
-        .builder
-        .ins()
-        .jump(join_block, &[skipped.into()]);
+    lowering.advance_pc_for_insn(insn);
+    lowering.builder.ins().jump(join_block, &[]);
 
     lowering.builder.switch_to_block(execute_block);
     lowering.builder.seal_block(execute_block);
     emit(lowering);
-    let pc_update = lowering.take_pc_update();
-    lowering
-        .builder
-        .ins()
-        .jump(join_block, &[pc_update.into()]);
+    lowering.builder.ins().jump(join_block, &[]);
 
     lowering.builder.seal_block(join_block);
     lowering.builder.switch_to_block(join_block);
-    let pc_update = lowering.builder.block_params(join_block)[0];
-    lowering.set_pc_update(pc_update);
 }
 
 pub fn emit_size_value(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) -> Value {
@@ -87,12 +77,8 @@ pub fn emit_pc_update_for_rd(
     lowering: &mut LoweringContext<'_, '_>,
     insn: &JitInstruction,
     rd: u32,
-) -> Value {
-    if rd == 15 {
-        lowering.iconst_u32(0)
-    } else {
-        emit_size_value(lowering, insn)
-    }
+) {
+    lowering.advance_pc_for_rd(insn, rd);
 }
 
 pub fn emit_read_reg_value(lowering: &mut LoweringContext<'_, '_>, reg: Value) -> Value {

@@ -87,14 +87,7 @@ mod tests {
         let entry = compiler
             .compiled_entry(0x0800_0000)
             .expect("missing compiled entry");
-        let cycles = unsafe {
-            entry(
-                &mut cpu as *mut Cpu,
-                table
-                    .get(0x0800_0000)
-                    .expect("missing table entry") as *const _ as *const (),
-            )
-        };
+        let cycles = unsafe { entry(&mut cpu as *mut Cpu) };
 
         assert_eq!(cycles, 3);
         assert_eq!(cpu.next_pc, 0x0800_0004);
@@ -119,14 +112,7 @@ mod tests {
         let entry = compiler
             .compiled_entry(0x0800_0000)
             .expect("missing compiled entry");
-        let cycles = unsafe {
-            entry(
-                &mut cpu as *mut Cpu,
-                table
-                    .get(0x0800_0000)
-                    .expect("missing table entry") as *const _ as *const (),
-            )
-        };
+        let cycles = unsafe { entry(&mut cpu as *mut Cpu) };
 
         assert_eq!(cycles, 1);
         assert_eq!(cpu.next_pc, 0x0800_0002);

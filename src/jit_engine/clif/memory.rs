@@ -95,7 +95,7 @@ fn emit_store(
         }
 
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -103,7 +103,7 @@ fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         if insn.data.transed_operands.is_empty() {
             let pc_update = emit_size_value(lowering, insn);
-            lowering.set_pc_update(pc_update);
+            lowering.advance_pc(pc_update);
             return;
         }
 
@@ -124,12 +124,10 @@ fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
             emit_write_reg(lowering, base_reg, addr);
         }
 
-        let pc_update = if loads_pc {
-            lowering.iconst_u32(0)
-        } else {
-            emit_size_value(lowering, insn)
-        };
-        lowering.set_pc_update(pc_update);
+        if !loads_pc {
+            let pc_update = emit_size_value(lowering, insn);
+            lowering.advance_pc(pc_update);
+        }
     })
 }
 
@@ -137,7 +135,7 @@ fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         if insn.data.transed_operands.is_empty() {
             let pc_update = emit_size_value(lowering, insn);
-            lowering.set_pc_update(pc_update);
+            lowering.advance_pc(pc_update);
             return;
         }
 
@@ -155,7 +153,7 @@ fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         }
 
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -175,7 +173,7 @@ fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 
         emit_write_reg(lowering, 13, new_sp);
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -204,7 +202,6 @@ fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
             let handled_block = lowering.builder.create_block();
             let continue_block = lowering.builder.create_block();
             let join_block = lowering.builder.create_block();
-            lowering.builder.append_block_param(join_block, types::I32);
             lowering
                 .builder
                 .ins()
@@ -212,31 +209,21 @@ fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 
             lowering.builder.switch_to_block(handled_block);
             lowering.builder.seal_block(handled_block);
-            let zero = lowering.iconst_u32(0);
-            lowering
-                .builder
-                .ins()
-                .jump(join_block, &[zero.into()]);
+            lowering.builder.ins().jump(join_block, &[]);
 
             lowering.builder.switch_to_block(continue_block);
             lowering.builder.seal_block(continue_block);
             let mask = lowering.iconst_u32(!1u32);
             let aligned_pc = lowering.builder.ins().band(pc_value, mask);
             emit_write_reg(lowering, 15, aligned_pc);
-            let zero = lowering.iconst_u32(0);
-            lowering
-                .builder
-                .ins()
-                .jump(join_block, &[zero.into()]);
+            lowering.builder.ins().jump(join_block, &[]);
 
             lowering.builder.seal_block(join_block);
             lowering.builder.switch_to_block(join_block);
-            let pc_update = lowering.builder.block_params(join_block)[0];
-            lowering.set_pc_update(pc_update);
             return;
         }
 
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }

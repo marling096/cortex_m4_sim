@@ -145,8 +145,7 @@ fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         };
 
         emit_write_reg(lowering, rd, result);
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 
@@ -169,8 +168,7 @@ fn emit_extend_mask(
         let mask = lowering.iconst_u32(mask);
         let result = lowering.builder.ins().band(value, mask);
         emit_write_reg(lowering, rd, result);
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 
@@ -219,7 +217,7 @@ fn emit_compare(
 
         emit_update_apsr_nzcv(lowering, result, carry, overflow);
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -246,7 +244,7 @@ fn emit_test(
 
         emit_update_apsr_nzc(lowering, result, carry);
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -280,8 +278,7 @@ fn emit_move(
         if insn.data.update_flags() {
             emit_update_apsr_nzc(lowering, result, carry);
         }
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 
@@ -332,8 +329,7 @@ fn emit_logic(
         if insn.data.update_flags() {
             emit_update_apsr_nzc(lowering, result, carry);
         }
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 
@@ -470,8 +466,7 @@ fn emit_calculate(
             CalcOp::Udiv | CalcOp::Mls => {}
         }
 
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 
@@ -487,8 +482,7 @@ fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         if insn.data.update_flags() {
             emit_update_apsr_nzc(lowering, result, carry);
         }
-        let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, rd);
     })
 }
 

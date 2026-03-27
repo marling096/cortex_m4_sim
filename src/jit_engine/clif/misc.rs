@@ -44,7 +44,7 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 fn emit_noop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let pc_update = emit_size_value(lowering, insn);
-        lowering.set_pc_update(pc_update);
+        lowering.advance_pc(pc_update);
     })
 }
 
@@ -54,6 +54,4 @@ fn emit_bkpt(lowering: &mut LoweringContext<'_, '_>, _insn: &JitInstruction) {
         lowering.helpers.execute_bkpt,
         &[lowering.cpu_ptr, lowering.instr_ptr],
     );
-    let zero = lowering.iconst_u32(0);
-    lowering.set_pc_update(zero);
 }

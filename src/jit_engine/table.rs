@@ -253,6 +253,7 @@ impl JitBlockBuilder {
 }
 
 pub struct JitBlockTable {
+    entry_count: usize,
     entries: FxHashMap<u32, Arc<JitInstruction>>,
     fast_table: Vec<Option<Arc<JitInstruction>>>,
     fast_base: u32,
@@ -263,7 +264,7 @@ pub struct JitBlockTable {
 
 impl JitBlockTable {
     pub fn len(&self) -> usize {
-        self.entries.len() + self.fast_table.iter().filter(|entry| entry.is_some()).count()
+        self.entry_count
     }
 
     pub fn is_empty(&self) -> bool {
@@ -290,6 +291,13 @@ impl JitBlockTable {
             .and_then(|index| self.blocks.get(*index))
     }
 
+    #[inline(always)]
+    pub fn resolve_execution(&self, pc: u32) -> Option<(&JitInstruction, &JitBlockRange)> {
+        let ins = self.get(pc)?;
+        let block = self.block_containing(pc)?;
+        Some((ins, block))
+    }
+
     pub fn block_stats(&self) -> JitBlockStats {
         let mut stats = JitBlockStats::default();
         for block in &self.blocks {
@@ -310,11 +318,16 @@ impl JitBlockTable {
 
     #[inline(always)]
     pub fn get(&self, pc: u32) -> Option<&JitInstruction> {
+        self.get_arc(pc).map(AsRef::as_ref)
+    }
+
+    #[inline(always)]
+    fn get_arc(&self, pc: u32) -> Option<&Arc<JitInstruction>> {
         let offset = (pc.wrapping_sub(self.fast_base)) >> 1;
         if (offset as usize) < self.fast_table.len() {
             unsafe {
-                if let Some(instr) = self.fast_table.get_unchecked(offset as usize) {
-                    return Some(instr.as_ref());
+                if let Some(instr) = self.fast_table.get_unchecked(offset as usize).as_ref() {
+                    return Some(instr);
                 }
             }
         }
@@ -322,7 +335,7 @@ impl JitBlockTable {
         if self.entries.is_empty() {
             None
         } else {
-            self.entries.get(&pc).map(AsRef::as_ref)
+            self.entries.get(&pc)
         }
     }
 
@@ -338,9 +351,22 @@ impl JitBlockTable {
     }
 }
 
-#[derive(Default)]
 pub struct JitBlockTableBuilder {
     entries: FxHashMap<u32, Arc<JitInstruction>>,
+    pending_added: Vec<(u32, Arc<JitInstruction>)>,
+    pending_first_pc: Option<u32>,
+    needs_full_rebuild: bool,
+}
+
+impl Default for JitBlockTableBuilder {
+    fn default() -> Self {
+        Self {
+            entries: FxHashMap::default(),
+            pending_added: Vec::new(),
+            pending_first_pc: None,
+            needs_full_rebuild: false,
+        }
+    }
 }
 
 impl JitBlockTableBuilder {
@@ -350,7 +376,23 @@ impl JitBlockTableBuilder {
 
     pub fn add_instruction(&mut self, mut instr: JitInstruction) {
         instr.def = instructions::find_def(instr.insn_id).filter(|def| def.supports(&instr));
-        self.entries.insert(instr.data.address(), Arc::new(instr));
+        let pc = instr.data.address();
+        let instr = Arc::new(instr);
+
+        match self.entries.insert(pc, Arc::clone(&instr)) {
+            Some(existing) => {
+                if !Arc::ptr_eq(&existing, &instr) {
+                    self.needs_full_rebuild = true;
+                }
+            }
+            None => {
+                self.pending_added.push((pc, instr));
+                self.pending_first_pc = Some(match self.pending_first_pc {
+                    Some(first_pc) => first_pc.min(pc),
+                    None => pc,
+                });
+            }
+        }
     }
 
     pub fn add_disassembled_instruction(
@@ -431,14 +473,62 @@ impl JitBlockTableBuilder {
         table
     }
 
-    pub fn build_snapshot(&self) -> JitBlockTable {
-        let mut table = optimize_entries(self.entries.clone());
-        rebuild_block_metadata(&mut table);
-        table
+    pub fn build_snapshot(&mut self, previous: Option<JitBlockTable>) -> JitBlockTable {
+        match previous {
+            Some(table) => self.build_snapshot_incremental(table),
+            None => {
+                self.rebuild_snapshot_full()
+            }
+        }
     }
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+
+    fn build_snapshot_incremental(&mut self, mut table: JitBlockTable) -> JitBlockTable {
+        if table.is_empty() {
+            return self.build_snapshot(None);
+        }
+
+        if self.needs_full_rebuild || self.entries.len() < table.entry_count {
+            return self.build_snapshot(None);
+        }
+
+        if self.pending_added.is_empty() {
+            return table;
+        }
+
+        let first_added_pc = self
+            .pending_first_pc
+            .expect("pending_first_pc missing while pending_added is not empty");
+
+        if table
+            .blocks
+            .first()
+            .is_some_and(|block| first_added_pc < block.start_pc)
+        {
+            return self.build_snapshot(None);
+        }
+
+        let mut added = std::mem::take(&mut self.pending_added);
+        added.sort_unstable_by_key(|(pc, _)| *pc);
+        for (pc, instr) in added {
+            insert_snapshot_entry(&mut table, pc, instr);
+        }
+        table.entry_count = self.entries.len();
+        rebuild_block_metadata_incremental(&mut table, first_added_pc);
+        self.pending_first_pc = None;
+        table
+    }
+
+    fn rebuild_snapshot_full(&mut self) -> JitBlockTable {
+        let mut table = optimize_entries(self.entries.clone());
+        rebuild_block_metadata(&mut table);
+        self.pending_added.clear();
+        self.pending_first_pc = None;
+        self.needs_full_rebuild = false;
+        table
     }
 
     pub fn build_from_disassembly<'a, I>(
@@ -1715,6 +1805,163 @@ fn rebuild_block_metadata(table: &mut JitBlockTable) {
     table.block_membership = block_membership;
 }
 
+fn rebuild_block_metadata_incremental(table: &mut JitBlockTable, first_added_pc: u32) {
+    if table.blocks.is_empty() {
+        rebuild_block_metadata(table);
+        return;
+    }
+
+    let rebuild_index = table
+        .blocks
+        .iter()
+        .rposition(|block| block.start_pc <= first_added_pc)
+        .unwrap_or(0);
+    let rebuild_start_pc = table.blocks[rebuild_index].start_pc;
+    let old_suffix: Vec<_> = table.blocks[rebuild_index..].to_vec();
+
+    for block in &old_suffix {
+        table.block_starts.remove(&block.start_pc);
+        remove_block_membership(table, block);
+    }
+
+    table.blocks.truncate(rebuild_index);
+    let rebuilt_suffix = build_blocks_from_start(table, rebuild_start_pc);
+    let suffix_start_index = table.blocks.len();
+    for (offset, block) in rebuilt_suffix.iter().enumerate() {
+        let block_index = suffix_start_index + offset;
+        table.block_starts.insert(block.start_pc, block_index);
+        insert_block_membership(table, block, block_index);
+    }
+    table.blocks.extend(rebuilt_suffix);
+}
+
+fn build_blocks_from_start(table: &JitBlockTable, start_pc: u32) -> Vec<JitBlockRange> {
+    let mut entries: Vec<_> = table
+        .iter_entries()
+        .filter(|(pc, _)| *pc >= start_pc)
+        .collect();
+    entries.sort_unstable_by_key(|(pc, _)| *pc);
+
+    if entries.is_empty() {
+        return Vec::new();
+    }
+
+    let branch_targets: FxHashSet<u32> = table
+        .iter_entries()
+        .filter_map(|(_, ins)| ins.static_branch_target())
+        .filter(|target| *target >= start_pc && table.get(*target).is_some())
+        .collect();
+
+    let mut blocks = Vec::new();
+    let mut block_start = entries[0].0;
+    let mut instruction_count = 0usize;
+    let mut pending_it_following = 0usize;
+    let mut previous_pc = entries[0].0;
+
+    for (index, (pc, ins)) in entries.iter().enumerate() {
+        if instruction_count > 0 && *pc != block_start && branch_targets.contains(pc) {
+            blocks.push(JitBlockRange {
+                start_pc: block_start,
+                end_pc: previous_pc,
+                instruction_count,
+                terminator: JitBlockTerminator::BranchTarget,
+            });
+            block_start = *pc;
+            instruction_count = 0;
+        }
+
+        instruction_count += 1;
+
+        let was_inside_it_block = pending_it_following > 0;
+        if was_inside_it_block {
+            pending_it_following -= 1;
+        }
+
+        if ins.is_it_instruction() {
+            pending_it_following = ins.it_following_count();
+        }
+
+        let it_block_ends_here = was_inside_it_block && pending_it_following == 0;
+        let next_pc = entries.get(index + 1).map(|(next_pc, _)| *next_pc);
+        let expected_next_pc = pc.wrapping_add(ins.data.size());
+
+        let terminator = if ins.has_exception_return_path() {
+            Some(JitBlockTerminator::ExceptionReturn)
+        } else if ins.is_branch_instruction() {
+            Some(JitBlockTerminator::Branch)
+        } else if ins.modifies_pc() {
+            Some(JitBlockTerminator::PcWrite)
+        } else if it_block_ends_here {
+            Some(JitBlockTerminator::ItBlockEnd)
+        } else {
+            match next_pc {
+                Some(next_pc) if next_pc != expected_next_pc => Some(JitBlockTerminator::Gap),
+                Some(_) => None,
+                None => Some(JitBlockTerminator::EndOfTable),
+            }
+        };
+
+        if let Some(terminator) = terminator {
+            blocks.push(JitBlockRange {
+                start_pc: block_start,
+                end_pc: *pc,
+                instruction_count,
+                terminator,
+            });
+
+            if let Some((next_block_start, _)) = entries.get(index + 1) {
+                block_start = *next_block_start;
+            }
+            instruction_count = 0;
+            pending_it_following = 0;
+        }
+
+        previous_pc = *pc;
+    }
+
+    blocks
+}
+
+fn remove_block_membership(table: &mut JitBlockTable, block: &JitBlockRange) {
+    let mut current_pc = block.start_pc;
+    loop {
+        table.block_membership.remove(&current_pc);
+        if current_pc == block.end_pc {
+            break;
+        }
+        let Some(ins) = table.get(current_pc) else {
+            break;
+        };
+        current_pc = current_pc.wrapping_add(ins.data.size());
+    }
+}
+
+fn insert_block_membership(table: &mut JitBlockTable, block: &JitBlockRange, block_index: usize) {
+    let mut current_pc = block.start_pc;
+    loop {
+        table.block_membership.insert(current_pc, block_index);
+        if current_pc == block.end_pc {
+            break;
+        }
+        let Some(ins) = table.get(current_pc) else {
+            break;
+        };
+        current_pc = current_pc.wrapping_add(ins.data.size());
+    }
+}
+
+fn insert_snapshot_entry(table: &mut JitBlockTable, pc: u32, instr: Arc<JitInstruction>) {
+    if !table.fast_table.is_empty() && pc >= table.fast_base {
+        let offset = ((pc - table.fast_base) >> 1) as usize;
+        if offset < table.fast_table.len() {
+            table.fast_table[offset] = Some(instr);
+            return;
+        }
+    }
+
+    table.entries.insert(pc, instr);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1787,7 +2034,7 @@ mod tests {
         let added = builder
             .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0004, 16)
             .expect("failed to extend jit table from runtime pc");
-        let table = builder.build_snapshot();
+        let table = builder.build_snapshot(None);
 
         assert_eq!(added, 2);
         assert!(table.get(0x0800_0000).is_some());
@@ -1803,7 +2050,7 @@ mod tests {
         builder
             .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0004, 16)
             .expect("failed to build initial snapshot");
-        let first = builder.build_snapshot();
+        let first = builder.build_snapshot(None);
         let before = first
             .get(0x0800_0000)
             .expect("missing first instruction") as *const JitInstruction;
@@ -1811,12 +2058,37 @@ mod tests {
         builder
             .extend_from_pc(&cpu, 0x0800_0004, 0x0800_0008, 16)
             .expect("failed to extend snapshot");
-        let second = builder.build_snapshot();
+        let second = builder.build_snapshot(Some(first));
         let after = second
             .get(0x0800_0000)
             .expect("missing first instruction after extend") as *const JitInstruction;
 
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn incremental_snapshot_falls_back_for_prefix_growth() {
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(
+            0x0800_00EC,
+            &[0x00, 0xBF, 0x00, 0xBF, 0x08, 0x68, 0x00, 0xBF],
+        );
+
+        let mut builder = JitBlockTableBuilder::new();
+        builder
+            .extend_from_pc(&cpu, 0x0800_0100 - 0x10, 0x0800_00F4, 16)
+            .expect("failed to build initial suffix snapshot");
+        let first = builder.build_snapshot(None);
+        assert!(first.resolve_execution(0x0800_00F0).is_some());
+        assert!(first.resolve_execution(0x0800_00EC).is_none());
+
+        builder
+            .extend_from_pc(&cpu, 0x0800_00EC, 0x0800_00F4, 16)
+            .expect("failed to extend earlier prefix");
+        let second = builder.build_snapshot(Some(first));
+
+        assert!(second.resolve_execution(0x0800_00EC).is_some());
+        assert!(second.resolve_execution(0x0800_00F0).is_some());
     }
 
     #[test]
@@ -1918,8 +2190,10 @@ mod tests {
 }
 
 fn optimize_entries(mut entries: FxHashMap<u32, Arc<JitInstruction>>) -> JitBlockTable {
+    let entry_count = entries.len();
     if entries.is_empty() {
         return JitBlockTable {
+            entry_count,
             entries,
             fast_table: Vec::new(),
             fast_base: 0,
@@ -1943,6 +2217,7 @@ fn optimize_entries(mut entries: FxHashMap<u32, Arc<JitInstruction>>) -> JitBloc
     let range = max_addr - min_addr;
     if range > 16 * 1024 * 1024 {
         return JitBlockTable {
+            entry_count,
             entries,
             fast_table: Vec::new(),
             fast_base: 0,
@@ -1974,6 +2249,7 @@ fn optimize_entries(mut entries: FxHashMap<u32, Arc<JitInstruction>>) -> JitBloc
     }
 
     JitBlockTable {
+        entry_count,
         entries,
         fast_table,
         fast_base,

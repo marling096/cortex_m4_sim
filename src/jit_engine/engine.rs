@@ -20,7 +20,7 @@ use crate::opcodes::decoded::{
 };
 use crate::opcodes::thumb_runtime;
 
-pub type JitBlockFn = unsafe extern "C" fn(*mut Cpu, *const ()) -> u32;
+pub type JitBlockFn = unsafe extern "C" fn(*mut Cpu) -> u32;
 
 #[derive(Debug)]
 pub enum JitError {
@@ -288,7 +288,6 @@ pub(crate) struct LoweringContext<'a, 'b> {
     pub cpu_ptr: Value,
     pub instr_ptr: Value,
     pub current_pc: Value,
-    pc_update: Option<Value>,
 }
 
 impl<'a, 'b> LoweringContext<'a, 'b> {
@@ -517,14 +516,37 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
         self.call_value(self.helpers.fallback_exec, &[self.cpu_ptr, self.instr_ptr])
     }
 
-    pub(crate) fn set_pc_update(&mut self, value: Value) {
-        self.pc_update = Some(value);
+    pub(crate) fn apply_pc_update(&mut self, pc_update: Value) {
+        let needs_update = self.builder.ins().icmp_imm(IntCC::NotEqual, pc_update, 0);
+        let update_block = self.builder.create_block();
+        let continue_block = self.builder.create_block();
+        self.builder
+            .ins()
+            .brif(needs_update, update_block, &[], continue_block, &[]);
+
+        self.builder.switch_to_block(update_block);
+        self.builder.seal_block(update_block);
+        let next_pc = self.builder.ins().iadd(self.current_pc, pc_update);
+        self.write_cached_reg(15, next_pc);
+        self.builder.ins().jump(continue_block, &[]);
+
+        self.builder.switch_to_block(continue_block);
+        self.builder.seal_block(continue_block);
     }
 
-    pub(crate) fn take_pc_update(&mut self) -> Value {
-        self.pc_update
-            .take()
-            .expect("instruction lowering did not set pc_update")
+    pub(crate) fn advance_pc(&mut self, update: Value) {
+        self.apply_pc_update(update);
+    }
+
+    pub(crate) fn advance_pc_for_insn(&mut self, insn: &JitInstruction) {
+        let update = self.iconst_u32(insn.data.size());
+        self.apply_pc_update(update);
+    }
+
+    pub(crate) fn advance_pc_for_rd(&mut self, insn: &JitInstruction, rd: u32) {
+        if rd != 15 {
+            self.advance_pc_for_insn(insn);
+        }
     }
 }
 
@@ -671,7 +693,32 @@ impl JitEngine {
         }
 
         let current_pc = cpu.next_pc;
-        self.execute_block(cpu, table, current_pc)
+        let block = table
+            .block_containing(current_pc)
+            .ok_or(JitError::MissingInstruction { pc: current_pc })?;
+        self.execute_block(cpu, table, current_pc, block)
+    }
+
+    #[inline(always)]
+    pub fn step_block(
+        &mut self,
+        cpu: &mut Cpu,
+        table: &JitBlockTable,
+        start_pc: u32,
+        block: &JitBlockRange,
+    ) -> Result<u32, JitError> {
+        self.execute_block(cpu, table, start_pc, block)
+    }
+
+    pub fn step_resolved(
+        &mut self,
+        cpu: &mut Cpu,
+        table: &JitBlockTable,
+        start_pc: u32,
+        _start_ins: &JitInstruction,
+        block: &JitBlockRange,
+    ) -> Result<u32, JitError> {
+        self.execute_block(cpu, table, start_pc, block)
     }
 
     pub fn run(&mut self, cpu: &mut Cpu, table: &JitBlockTable) -> Result<(), JitError> {
@@ -804,10 +851,8 @@ impl JitEngine {
         cpu: &mut Cpu,
         table: &JitBlockTable,
         start_pc: u32,
+        block: &JitBlockRange,
     ) -> Result<u32, JitError> {
-        let block = table
-            .block_containing(start_pc)
-            .ok_or(JitError::MissingInstruction { pc: start_pc })?;
         let compiled = self.get_or_compile_block_from_pc(table, block, start_pc)?;
         let entry = compiled.entry;
         let instruction_count = compiled.instruction_count as u64;
@@ -815,10 +860,7 @@ impl JitEngine {
         self.executed_block_instructions = self
             .executed_block_instructions
             .saturating_add(instruction_count);
-        let start_ins = table
-            .get(start_pc)
-            .ok_or(JitError::MissingInstruction { pc: start_pc })?;
-        Ok(unsafe { (entry)(cpu as *mut Cpu, start_ins as *const _ as *const ()) })
+        Ok(unsafe { (entry)(cpu as *mut Cpu) })
     }
 
     fn get_or_compile_block_from_pc<'a>(
@@ -827,7 +869,7 @@ impl JitEngine {
         block: &JitBlockRange,
         start_pc: u32,
     ) -> Result<&CompiledBlock, JitError> {
-        if !self.blocks.contains_key(&start_pc) {
+        if self.blocks.get(&start_pc).is_none() {
             self.cache_misses = self.cache_misses.saturating_add(1);
             let compiled = self.compile_block_from_pc(table, block, start_pc)?;
             self.blocks.insert(start_pc, compiled);
@@ -881,7 +923,6 @@ impl JitEngine {
         let mut ctx = self.module.make_context();
         let mut sig = self.module.make_signature();
         sig.params.push(AbiParam::new(ptr_ty));
-        sig.params.push(AbiParam::new(ptr_ty));
         sig.returns.push(AbiParam::new(types::I32));
         ctx.func.signature = sig.clone();
 
@@ -897,8 +938,6 @@ impl JitEngine {
             let entry_block = builder.create_block();
             let exit_block = builder.create_block();
             builder.append_block_param(exit_block, types::I32);
-            builder.append_block_param(exit_block, types::I32);
-            builder.append_block_param(exit_block, types::I32);
             let instruction_blocks: Vec<_> = (0..entries.len())
                 .map(|_| {
                     let block = builder.create_block();
@@ -911,7 +950,6 @@ impl JitEngine {
             builder.seal_block(entry_block);
 
             let cpu_ptr = builder.block_params(entry_block)[0];
-            let _instr_ptr = builder.block_params(entry_block)[1];
             let zero = builder.ins().iconst(types::I32, 0);
             {
                 let zero_ptr = builder.ins().iconst(ptr_ty, 0);
@@ -924,7 +962,6 @@ impl JitEngine {
                     cpu_ptr,
                     instr_ptr: zero_ptr,
                     current_pc: zero,
-                    pc_update: None,
                 };
                 lowering.initialize_cache_state();
             }
@@ -932,9 +969,7 @@ impl JitEngine {
             if let Some(first_block) = instruction_blocks.first() {
                 builder.ins().jump(*first_block, &[zero.into()]);
             } else {
-                builder
-                    .ins()
-                    .jump(exit_block, &[zero.into(), zero.into(), zero.into()]);
+                builder.ins().jump(exit_block, &[zero.into()]);
             }
 
             for (index, (current_pc, ins)) in entries.iter().enumerate() {
@@ -946,7 +981,7 @@ impl JitEngine {
                     .ins()
                     .iconst(types::I32, i64::from(*current_pc as i32));
 
-                let pc_update = {
+                {
                     let zero_ptr = builder.ins().iconst(ptr_ty, 0);
                     let mut lowering = LoweringContext {
                         builder: &mut builder,
@@ -957,12 +992,10 @@ impl JitEngine {
                         cpu_ptr,
                         instr_ptr: zero_ptr,
                         current_pc: current_pc_value,
-                        pc_update: None,
                     };
                     lowering.instr_ptr = lowering.iconst_ptr(*ins as *const _ as *const ());
                     Self::lower_instruction(&mut lowering, ins);
-                    lowering.take_pc_update()
-                };
+                }
 
                 let execute_cycles = builder
                     .ins()
@@ -970,9 +1003,7 @@ impl JitEngine {
                 let updated_total = builder.ins().iadd(carried_total, execute_cycles);
 
                 if index + 1 == entries.len() {
-                    builder
-                        .ins()
-                        .jump(exit_block, &[updated_total.into(), current_pc_value.into(), pc_update.into()]);
+                    builder.ins().jump(exit_block, &[updated_total.into()]);
                 } else {
                     builder
                         .ins()
@@ -983,8 +1014,6 @@ impl JitEngine {
             builder.switch_to_block(exit_block);
             builder.seal_block(exit_block);
             let total_cycles = builder.block_params(exit_block)[0];
-            let final_current_pc = builder.block_params(exit_block)[1];
-            let final_pc_update = builder.block_params(exit_block)[2];
             let zero_ptr = builder.ins().iconst(ptr_ty, 0);
             let mut lowering = LoweringContext {
                 builder: &mut builder,
@@ -994,18 +1023,12 @@ impl JitEngine {
                 ptr_ty,
                 cpu_ptr,
                 instr_ptr: zero_ptr,
-                current_pc: final_current_pc,
-                pc_update: None,
+                current_pc: zero,
             };
             lowering.flush_dirty_state();
             let committed_cycles = lowering.call_value(
                 lowering.helpers.finish_block_step_cycles,
-                &[
-                    lowering.cpu_ptr,
-                    total_cycles,
-                    final_current_pc,
-                    final_pc_update,
-                ],
+                &[lowering.cpu_ptr, total_cycles],
             );
             lowering.builder.ins().return_(&[committed_cycles]);
 
@@ -1030,7 +1053,7 @@ impl JitEngine {
             Some(def) if def.supports(ins) => def.execute(lowering, ins),
             _ => {
                 let pc_update = lowering.emit_fallback();
-                lowering.set_pc_update(pc_update);
+                lowering.apply_pc_update(pc_update);
             }
         }
     }
@@ -1042,8 +1065,6 @@ impl RuntimeFunctions {
 
         let finish_block_step_cycles = declare_import(module, "jit_finish_block_step_cycles", |sig| {
             sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(types::I32));
-            sig.params.push(AbiParam::new(types::I32));
             sig.params.push(AbiParam::new(types::I32));
             sig.returns.push(AbiParam::new(types::I32));
         })?;
@@ -1182,14 +1203,12 @@ where
 extern "C" fn jit_finish_block_step_cycles(
     cpu: *mut Cpu,
     execute_cycles: u32,
-    current_pc: u32,
-    pc_update: u32,
 ) -> u32 {
     JIT_RUNTIME_COUNTERS
         .finish_block_step_cycles_calls
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
-    cpu.finish_block_step_cycles(execute_cycles, current_pc, pc_update)
+    cpu.finish_block_step_cycles(execute_cycles)
 }
 
 extern "C" fn jit_read_reg(cpu: *mut Cpu, reg: u32) -> u32 {

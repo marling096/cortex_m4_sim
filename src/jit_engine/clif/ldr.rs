@@ -146,9 +146,7 @@ fn emit_load(
         let load_value = emit_load_value(lowering, addr, kind);
 
         emit_write_reg(lowering, rd, load_value);
-
-        let pc_update = emit_pc_update_for_rd(lowering, insn, insn.data.arm_operands.rd);
-        lowering.set_pc_update(pc_update);
+        emit_pc_update_for_rd(lowering, insn, insn.data.arm_operands.rd);
     })
 }
 

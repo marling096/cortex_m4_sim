@@ -54,8 +54,6 @@ fn emit_b(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         emit_write_reg(lowering, 15, target);
-        let zero = lowering.iconst_u32(0);
-        lowering.set_pc_update(zero);
     })
 }
 
@@ -67,8 +65,6 @@ fn emit_bl(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         let lr = lowering.builder.ins().bor(pc, one);
         emit_write_reg(lowering, 14, lr);
         emit_write_reg(lowering, 15, target);
-        let zero = lowering.iconst_u32(0);
-        lowering.set_pc_update(zero);
     })
 }
 
@@ -83,7 +79,6 @@ fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         let handled_block = lowering.builder.create_block();
         let continue_block = lowering.builder.create_block();
         let join_block = lowering.builder.create_block();
-        lowering.builder.append_block_param(join_block, types::I32);
         lowering
             .builder
             .ins()
@@ -91,27 +86,17 @@ fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 
         lowering.builder.switch_to_block(handled_block);
         lowering.builder.seal_block(handled_block);
-        let zero = lowering.iconst_u32(0);
-        lowering
-            .builder
-            .ins()
-            .jump(join_block, &[zero.into()]);
+        lowering.builder.ins().jump(join_block, &[]);
 
         lowering.builder.switch_to_block(continue_block);
         lowering.builder.seal_block(continue_block);
         let mask = lowering.iconst_u32(!1u32);
         let aligned = lowering.builder.ins().band(target, mask);
         emit_write_reg(lowering, 15, aligned);
-        let zero = lowering.iconst_u32(0);
-        lowering
-            .builder
-            .ins()
-            .jump(join_block, &[zero.into()]);
+        lowering.builder.ins().jump(join_block, &[]);
 
         lowering.builder.seal_block(join_block);
         lowering.builder.switch_to_block(join_block);
-        let pc_update = lowering.builder.block_params(join_block)[0];
-        lowering.set_pc_update(pc_update);
     })
 }
 
@@ -127,8 +112,6 @@ fn emit_blx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         let aligned = lowering.builder.ins().band(target, mask);
         emit_write_reg(lowering, 14, lr);
         emit_write_reg(lowering, 15, aligned);
-        let zero = lowering.iconst_u32(0);
-        lowering.set_pc_update(zero);
     })
 }
 
@@ -157,7 +140,6 @@ fn emit_compare_branch(
         let taken_block = lowering.builder.create_block();
         let fallthrough_block = lowering.builder.create_block();
         let join_block = lowering.builder.create_block();
-        lowering.builder.append_block_param(join_block, types::I32);
         lowering
             .builder
             .ins()
@@ -166,24 +148,16 @@ fn emit_compare_branch(
         lowering.builder.switch_to_block(taken_block);
         lowering.builder.seal_block(taken_block);
         emit_write_reg(lowering, 15, target);
-        let zero = lowering.iconst_u32(0);
-        lowering
-            .builder
-            .ins()
-            .jump(join_block, &[zero.into()]);
+        lowering.builder.ins().jump(join_block, &[]);
 
         lowering.builder.switch_to_block(fallthrough_block);
         lowering.builder.seal_block(fallthrough_block);
         let size = emit_size_value(lowering, insn);
-        lowering
-            .builder
-            .ins()
-            .jump(join_block, &[size.into()]);
+        lowering.advance_pc(size);
+        lowering.builder.ins().jump(join_block, &[]);
 
         lowering.builder.seal_block(join_block);
         lowering.builder.switch_to_block(join_block);
-        let pc_update = lowering.builder.block_params(join_block)[0];
-        lowering.set_pc_update(pc_update);
     })
 }
 

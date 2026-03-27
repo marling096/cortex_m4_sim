@@ -935,16 +935,8 @@ impl Cpu {
     }
 
     #[inline(always)]
-    pub fn finish_block_step_cycles(
-        &mut self,
-        execute_cycles: u32,
-        current_pc: u32,
-        pc_update: u32,
-    ) -> u32 {
-        self.update_pc_with_current(current_pc, pc_update);
-        if pc_update != 0 {
-            self.write_pc(self.next_pc);
-        }
+    pub fn finish_block_step_cycles(&mut self, execute_cycles: u32) -> u32 {
+        self.next_pc = self.read_pc();
         self.Cpu_pipeline.remain_cycles = 0;
         execute_cycles.max(1)
     }

@@ -47,8 +47,7 @@ fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 		let rd = insn.data.arm_operands.rd;
 		let target = emit_adr_target(lowering, insn);
 		emit_write_reg(lowering, rd, target);
-		let pc_update = emit_pc_update_for_rd(lowering, insn, rd);
-		lowering.set_pc_update(pc_update);
+		emit_pc_update_for_rd(lowering, insn, rd);
 	})
 }
 
