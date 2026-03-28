@@ -345,6 +345,12 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
             .load(types::I32, MemFlags::new(), self.cpu_ptr, offset)
     }
 
+    fn load_cpu_ptr(&mut self, offset: i32) -> Value {
+        self.builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), self.cpu_ptr, offset)
+    }
+
     fn store_cpu_i32(&mut self, offset: i32, value: Value) {
         self.builder
             .ins()
@@ -371,6 +377,371 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
 
     pub(crate) fn store_cpu_reg(&mut self, reg: u32, value: Value) {
         self.store_cpu_i32(Cpu::jit_reg_offset(reg), value);
+    }
+
+    fn store_buffer_u32(&mut self, base_ptr: Value, byte_offset: Value, value: Value) {
+        let ptr_offset = self.ptr_cast_u32(byte_offset);
+        let addr = self.builder.ins().iadd(base_ptr, ptr_offset);
+        self.builder.ins().store(MemFlags::new(), value, addr, 0);
+    }
+
+    fn load_buffer_u32(&mut self, base_ptr: Value, byte_offset: Value) -> Value {
+        let ptr_offset = self.ptr_cast_u32(byte_offset);
+        let addr = self.builder.ins().iadd(base_ptr, ptr_offset);
+        self.builder
+            .ins()
+            .load(types::I32, MemFlags::new(), addr, 0)
+    }
+
+    fn emit_buffer_masked_write(
+        &mut self,
+        base_ptr: Value,
+        aligned_offset: Value,
+        shift: Value,
+        mask: u32,
+        value: Value,
+    ) {
+        let current = self.load_buffer_u32(base_ptr, aligned_offset);
+        let mask_value = self.iconst_u32(mask);
+        let dynamic_mask = self.builder.ins().ishl(mask_value, shift);
+        let keep_mask = self.builder.ins().bnot(dynamic_mask);
+        let preserved = self.builder.ins().band(current, keep_mask);
+        let masked_value = self.builder.ins().band(value, mask_value);
+        let shifted_value = self.builder.ins().ishl(masked_value, shift);
+        let updated = self.builder.ins().bor(preserved, shifted_value);
+        self.store_buffer_u32(base_ptr, aligned_offset, updated);
+    }
+
+    pub(crate) fn emit_read_u32(&mut self, addr: Value) -> Value {
+        let ram_offset_max = i64::from(Cpu::jit_ram_len().saturating_sub(4));
+        let flash_offset_max = i64::from(Cpu::jit_flash_len().saturating_sub(4));
+
+        let ram_base = self.iconst_u32(Cpu::jit_ram_base());
+        let ram_offset = self.builder.ins().isub(addr, ram_base);
+        let is_ram = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, ram_offset, ram_offset_max);
+
+        let ram_block = self.builder.create_block();
+        let not_ram_block = self.builder.create_block();
+        let flash_block = self.builder.create_block();
+        let not_flash_block = self.builder.create_block();
+        let flash_alias_block = self.builder.create_block();
+        let fallback_block = self.builder.create_block();
+        let join_block = self.builder.create_block();
+        self.builder.append_block_param(join_block, types::I32);
+
+        self.builder
+            .ins()
+            .brif(is_ram, ram_block, &[], not_ram_block, &[]);
+
+        self.builder.switch_to_block(ram_block);
+        self.builder.seal_block(ram_block);
+        let ram_ptr = self.load_cpu_ptr(Cpu::jit_ram_ptr_offset());
+        let ram_value = self.load_buffer_u32(ram_ptr, ram_offset);
+        self.builder.ins().jump(join_block, &[ram_value.into()]);
+
+        self.builder.switch_to_block(not_ram_block);
+        self.builder.seal_block(not_ram_block);
+        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
+        let flash_offset = self.builder.ins().isub(addr, flash_base);
+        let is_flash = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
+        self.builder
+            .ins()
+            .brif(is_flash, flash_block, &[], not_flash_block, &[]);
+
+        self.builder.switch_to_block(flash_block);
+        self.builder.seal_block(flash_block);
+        let flash_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
+        let flash_value = self.load_buffer_u32(flash_ptr, flash_offset);
+        self.builder.ins().jump(join_block, &[flash_value.into()]);
+
+        self.builder.switch_to_block(not_flash_block);
+        self.builder.seal_block(not_flash_block);
+        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
+        let flash_alias_offset = self.builder.ins().isub(addr, flash_alias_base);
+        let is_flash_alias = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            flash_alias_offset,
+            flash_offset_max,
+        );
+        self.builder
+            .ins()
+            .brif(is_flash_alias, flash_alias_block, &[], fallback_block, &[]);
+
+        self.builder.switch_to_block(flash_alias_block);
+        self.builder.seal_block(flash_alias_block);
+        let flash_alias_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
+        let flash_alias_value = self.load_buffer_u32(flash_alias_ptr, flash_alias_offset);
+        self.builder
+            .ins()
+            .jump(join_block, &[flash_alias_value.into()]);
+
+        self.builder.switch_to_block(fallback_block);
+        self.builder.seal_block(fallback_block);
+        let value = self.call_value(self.helpers.read_u32, &[self.cpu_ptr, addr]);
+        self.builder.ins().jump(join_block, &[value.into()]);
+
+        self.builder.seal_block(join_block);
+        self.builder.switch_to_block(join_block);
+        self.builder.block_params(join_block)[0]
+    }
+
+    pub(crate) fn emit_read_u8(&mut self, addr: Value) -> Value {
+        let align_mask = self.iconst_u32(!3u32);
+        let aligned = self.builder.ins().band(addr, align_mask);
+        let word = self.emit_read_u32(aligned);
+        let byte_index = self.builder.ins().band_imm(addr, 3);
+        let shift = self.builder.ins().ishl_imm(byte_index, 3);
+        let shifted = self.builder.ins().ushr(word, shift);
+        let mask = self.iconst_u32(0xFF);
+        self.builder.ins().band(shifted, mask)
+    }
+
+    pub(crate) fn emit_read_u16(&mut self, addr: Value) -> Value {
+        let align_mask = self.iconst_u32(!3u32);
+        let aligned = self.builder.ins().band(addr, align_mask);
+        let word = self.emit_read_u32(aligned);
+        let halfword_index = self.builder.ins().band_imm(addr, 2);
+        let shift = self.builder.ins().ishl_imm(halfword_index, 3);
+        let shifted = self.builder.ins().ushr(word, shift);
+        let mask = self.iconst_u32(0xFFFF);
+        self.builder.ins().band(shifted, mask)
+    }
+
+    pub(crate) fn emit_write_u8(&mut self, addr: Value, value: Value) {
+        let ram_offset_max = i64::from(Cpu::jit_ram_len().saturating_sub(4));
+        let flash_offset_max = i64::from(Cpu::jit_flash_len().saturating_sub(4));
+        let align_mask = self.iconst_u32(!3u32);
+        let aligned_addr = self.builder.ins().band(addr, align_mask);
+
+        let ram_base = self.iconst_u32(Cpu::jit_ram_base());
+        let ram_offset = self.builder.ins().isub(aligned_addr, ram_base);
+        let is_ram = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, ram_offset, ram_offset_max);
+
+        let ram_block = self.builder.create_block();
+        let not_ram_block = self.builder.create_block();
+        let flash_block = self.builder.create_block();
+        let not_flash_block = self.builder.create_block();
+        let flash_alias_block = self.builder.create_block();
+        let fallback_block = self.builder.create_block();
+        let join_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(is_ram, ram_block, &[], not_ram_block, &[]);
+
+        self.builder.switch_to_block(ram_block);
+        self.builder.seal_block(ram_block);
+        let ram_ptr = self.load_cpu_ptr(Cpu::jit_ram_ptr_offset());
+        let byte_index = self.builder.ins().band_imm(addr, 3);
+        let shift = self.builder.ins().ishl_imm(byte_index, 3);
+        self.emit_buffer_masked_write(ram_ptr, ram_offset, shift, 0xFF, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_ram_block);
+        self.builder.seal_block(not_ram_block);
+        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
+        let flash_offset = self.builder.ins().isub(aligned_addr, flash_base);
+        let is_flash = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
+        self.builder
+            .ins()
+            .brif(is_flash, flash_block, &[], not_flash_block, &[]);
+
+        self.builder.switch_to_block(flash_block);
+        self.builder.seal_block(flash_block);
+        let flash_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
+        let byte_index = self.builder.ins().band_imm(addr, 3);
+        let shift = self.builder.ins().ishl_imm(byte_index, 3);
+        self.emit_buffer_masked_write(flash_ptr, flash_offset, shift, 0xFF, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_flash_block);
+        self.builder.seal_block(not_flash_block);
+        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
+        let flash_alias_offset = self.builder.ins().isub(aligned_addr, flash_alias_base);
+        let is_flash_alias = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            flash_alias_offset,
+            flash_offset_max,
+        );
+        self.builder
+            .ins()
+            .brif(is_flash_alias, flash_alias_block, &[], fallback_block, &[]);
+
+        self.builder.switch_to_block(flash_alias_block);
+        self.builder.seal_block(flash_alias_block);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(fallback_block);
+        self.builder.seal_block(fallback_block);
+        self.call_void(self.helpers.write_u8, &[self.cpu_ptr, addr, value]);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.seal_block(join_block);
+        self.builder.switch_to_block(join_block);
+    }
+
+    pub(crate) fn emit_write_u16(&mut self, addr: Value, value: Value) {
+        let ram_offset_max = i64::from(Cpu::jit_ram_len().saturating_sub(4));
+        let flash_offset_max = i64::from(Cpu::jit_flash_len().saturating_sub(4));
+        let align_mask = self.iconst_u32(!3u32);
+        let aligned_addr = self.builder.ins().band(addr, align_mask);
+
+        let ram_base = self.iconst_u32(Cpu::jit_ram_base());
+        let ram_offset = self.builder.ins().isub(aligned_addr, ram_base);
+        let is_ram = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, ram_offset, ram_offset_max);
+
+        let ram_block = self.builder.create_block();
+        let not_ram_block = self.builder.create_block();
+        let flash_block = self.builder.create_block();
+        let not_flash_block = self.builder.create_block();
+        let flash_alias_block = self.builder.create_block();
+        let fallback_block = self.builder.create_block();
+        let join_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(is_ram, ram_block, &[], not_ram_block, &[]);
+
+        self.builder.switch_to_block(ram_block);
+        self.builder.seal_block(ram_block);
+        let ram_ptr = self.load_cpu_ptr(Cpu::jit_ram_ptr_offset());
+        let halfword_index = self.builder.ins().band_imm(addr, 2);
+        let shift = self.builder.ins().ishl_imm(halfword_index, 3);
+        self.emit_buffer_masked_write(ram_ptr, ram_offset, shift, 0xFFFF, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_ram_block);
+        self.builder.seal_block(not_ram_block);
+        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
+        let flash_offset = self.builder.ins().isub(aligned_addr, flash_base);
+        let is_flash = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
+        self.builder
+            .ins()
+            .brif(is_flash, flash_block, &[], not_flash_block, &[]);
+
+        self.builder.switch_to_block(flash_block);
+        self.builder.seal_block(flash_block);
+        let flash_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
+        let halfword_index = self.builder.ins().band_imm(addr, 2);
+        let shift = self.builder.ins().ishl_imm(halfword_index, 3);
+        self.emit_buffer_masked_write(flash_ptr, flash_offset, shift, 0xFFFF, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_flash_block);
+        self.builder.seal_block(not_flash_block);
+        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
+        let flash_alias_offset = self.builder.ins().isub(aligned_addr, flash_alias_base);
+        let is_flash_alias = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            flash_alias_offset,
+            flash_offset_max,
+        );
+        self.builder
+            .ins()
+            .brif(is_flash_alias, flash_alias_block, &[], fallback_block, &[]);
+
+        self.builder.switch_to_block(flash_alias_block);
+        self.builder.seal_block(flash_alias_block);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(fallback_block);
+        self.builder.seal_block(fallback_block);
+        self.call_void(self.helpers.write_u16, &[self.cpu_ptr, addr, value]);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.seal_block(join_block);
+        self.builder.switch_to_block(join_block);
+    }
+
+    pub(crate) fn emit_write_u32(&mut self, addr: Value, value: Value) {
+        let ram_offset_max = i64::from(Cpu::jit_ram_len().saturating_sub(4));
+        let flash_offset_max = i64::from(Cpu::jit_flash_len().saturating_sub(4));
+
+        let ram_base = self.iconst_u32(Cpu::jit_ram_base());
+        let ram_offset = self.builder.ins().isub(addr, ram_base);
+        let is_ram = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, ram_offset, ram_offset_max);
+
+        let ram_block = self.builder.create_block();
+        let not_ram_block = self.builder.create_block();
+        let flash_block = self.builder.create_block();
+        let not_flash_block = self.builder.create_block();
+        let flash_alias_block = self.builder.create_block();
+        let fallback_block = self.builder.create_block();
+        let join_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(is_ram, ram_block, &[], not_ram_block, &[]);
+
+        self.builder.switch_to_block(ram_block);
+        self.builder.seal_block(ram_block);
+        let ram_ptr = self.load_cpu_ptr(Cpu::jit_ram_ptr_offset());
+        self.store_buffer_u32(ram_ptr, ram_offset, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_ram_block);
+        self.builder.seal_block(not_ram_block);
+        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
+        let flash_offset = self.builder.ins().isub(addr, flash_base);
+        let is_flash = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
+        self.builder
+            .ins()
+            .brif(is_flash, flash_block, &[], not_flash_block, &[]);
+
+        self.builder.switch_to_block(flash_block);
+        self.builder.seal_block(flash_block);
+        let flash_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
+        self.store_buffer_u32(flash_ptr, flash_offset, value);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(not_flash_block);
+        self.builder.seal_block(not_flash_block);
+        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
+        let flash_alias_offset = self.builder.ins().isub(addr, flash_alias_base);
+        let is_flash_alias = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            flash_alias_offset,
+            flash_offset_max,
+        );
+        self.builder
+            .ins()
+            .brif(is_flash_alias, flash_alias_block, &[], fallback_block, &[]);
+
+        self.builder.switch_to_block(flash_alias_block);
+        self.builder.seal_block(flash_alias_block);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.switch_to_block(fallback_block);
+        self.builder.seal_block(fallback_block);
+        self.call_void(self.helpers.write_u32, &[self.cpu_ptr, addr, value]);
+        self.builder.ins().jump(join_block, &[]);
+
+        self.builder.seal_block(join_block);
+        self.builder.switch_to_block(join_block);
     }
 
     fn load_i32_slot(&mut self, slot: StackSlot) -> Value {
@@ -1656,6 +2027,7 @@ mod tests {
     use crate::jit_engine::table::JitBlockTableBuilder;
     use crate::peripheral::bus::Bus;
     use crate::peripheral::nvic::Nvic;
+    use crate::peripheral::rcc::Rcc;
     use crate::peripheral::scb::Scb;
     use crate::peripheral::systick::SysTick;
 
@@ -1676,6 +2048,19 @@ mod tests {
         ppb.register_peripheral(Box::new(Scb::new(0xE000_ED00, 0xE000_ED3C)));
 
         Cpu::new(Arc::new(AtomicU32::new(8_000_000)), 1, Bus::new(), ppb)
+    }
+
+    fn build_cpu_with_rcc() -> Cpu {
+        let shared_freq = Arc::new(AtomicU32::new(8_000_000));
+        let mut bus = Bus::new();
+        bus.register_peripheral(Box::new(Rcc::new(0x4002_0000, 0x4002_1024, shared_freq.clone())));
+
+        let mut ppb = Bus::new();
+        ppb.register_peripheral(Box::new(SysTick::new(0xE000_E010, 0xE000_E01F)));
+        ppb.register_peripheral(Box::new(Nvic::new(0xE000_E100, 0xE000_E4EF)));
+        ppb.register_peripheral(Box::new(Scb::new(0xE000_ED00, 0xE000_ED3C)));
+
+        Cpu::new(shared_freq, 1, bus, ppb)
     }
 
 
@@ -1899,6 +2284,358 @@ mod tests {
         assert_eq!(cpu.next_pc, 0x0800_0004);
         assert_eq!(cpu.read_reg(0), 0x1122_3344);
         assert_eq!(cpu.begin_step(), None);
+    }
+
+    #[test]
+    fn jit_word_store_to_ram_uses_lowered_fast_path() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x08, 0x60, 0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.next_pc = 0x0800_0000;
+        cpu.write_reg(0, 0xAABB_CCDD);
+        cpu.write_reg(1, 0x2000_0000);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let before = engine.stats_snapshot();
+        let cycles = engine.step(&mut cpu, &table).expect("jit store step failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cycles, 2);
+        assert_eq!(cpu.read_mem(0x2000_0000), 0xAABB_CCDD);
+        assert_eq!(cpu.next_pc, 0x0800_0004);
+        assert_eq!(delta.mem_write_calls, 0);
+        assert_eq!(delta.resolve_mem_rt_addr_calls, 0);
+    }
+
+    #[test]
+    fn jit_word_store_to_ppb_keeps_helper_fallback() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x08, 0x60, 0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.next_pc = 0x0800_0000;
+        cpu.write_reg(0, 1);
+        cpu.write_reg(1, 0xE000_E100);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let before = engine.stats_snapshot();
+        let cycles = engine.step(&mut cpu, &table).expect("jit store step failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cycles, 2);
+        assert_eq!(cpu.next_pc, 0x0800_0004);
+        assert_eq!(delta.mem_write_calls, 1);
+        assert_eq!(delta.resolve_mem_rt_addr_calls, 0);
+    }
+
+    #[test]
+    fn jit_shift_register_uses_ir_lowering() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x0C, 0xFA, 0x00, 0xF3, 0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.next_pc = 0x0800_0000;
+        cpu.write_reg(12, 3);
+        cpu.write_reg(0, 4);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let before = engine.stats_snapshot();
+        let cycles = engine.step(&mut cpu, &table).expect("jit shift step failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cycles, 2);
+        assert_eq!(cpu.read_reg(3), 48);
+        assert_eq!(delta.compute_shift_calls, 0);
+    }
+
+    #[test]
+    fn jit_udiv_uses_ir_zero_guard() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0xB5, 0xFB, 0xF3, 0xF5, 0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.next_pc = 0x0800_0000;
+        cpu.write_reg(5, 100);
+        cpu.write_reg(3, 4);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let before = engine.stats_snapshot();
+        let cycles = engine.step(&mut cpu, &table).expect("jit udiv step failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cycles, 2);
+        assert_eq!(cpu.read_reg(5), 25);
+        assert_eq!(delta.udiv_calls, 0);
+    }
+
+    #[test]
+    fn jit_startup_poll_loop_exits_after_timeout() {
+        let code = [
+            0x30, 0x48, // ldr r0, [pc, #0xc0]
+            0x00, 0x68, // ldr r0, [r0]
+            0x00, 0xF4, 0x00, 0x30, // and r0, r0, #0x20000
+            0x00, 0x90, // str r0, [sp]
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0x40, 0x1C, // adds r0, r0, #1
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x98, // ldr r0, [sp]
+            0x18, 0xB9, // cbnz r0, #0x0800045e
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0xB0, 0xF5, 0xA0, 0x6F, // cmp.w r0, #0x500
+            0xF1, 0xD1, // bne #0x08000442
+        ];
+
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&code, 0x0800_0442)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(0x0800_0504, &0x2000_0020u32.to_le_bytes());
+        cpu.write_mem(0x2000_0020, 0);
+        cpu.write_sp(0x2000_0100);
+        cpu.write_mem(0x2000_0100, 0);
+        cpu.write_mem(0x2000_0104, 0);
+        cpu.next_pc = 0x0800_0442;
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        for _ in 0..4000 {
+            if cpu.next_pc == 0x0800_045E {
+                break;
+            }
+            engine
+                .step(&mut cpu, &table)
+                .expect("jit poll loop step failed");
+        }
+
+        assert_eq!(cpu.next_pc, 0x0800_045E);
+        assert_eq!(cpu.read_mem(0x2000_0104), 0x500);
+    }
+
+    #[test]
+    fn jit_rcc_enable_write_is_visible_to_following_poll() {
+        let code = [
+            0x33, 0x48, // ldr r0, [pc, #0xcc]
+            0x00, 0x68, // ldr r0, [r0]
+            0x40, 0xF4, 0x80, 0x30, // orr r0, r0, #0x10000
+            0x31, 0x49, // ldr r1, [pc, #0xc4]
+            0x08, 0x60, // str r0, [r1]
+            0x00, 0xBF, // nop
+            0x30, 0x48, // ldr r0, [pc, #0xc0]
+            0x00, 0x68, // ldr r0, [r0]
+            0x00, 0xF4, 0x00, 0x30, // and r0, r0, #0x20000
+            0x00, 0x90, // str r0, [sp]
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0x40, 0x1C, // adds r0, r0, #1
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x98, // ldr r0, [sp]
+            0x18, 0xB9, // cbnz r0, #0x0800045e
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0xB0, 0xF5, 0xA0, 0x6F, // cmp.w r0, #0x500
+            0xF1, 0xD1, // bne #0x08000442
+        ];
+
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&code, 0x0800_0434)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu_with_rcc();
+        cpu.load_code_bytes(0x0800_0504, &0x4002_1000u32.to_le_bytes());
+        cpu.write_sp(0x2000_0100);
+        cpu.write_mem(0x2000_0100, 0);
+        cpu.write_mem(0x2000_0104, 0);
+        cpu.next_pc = 0x0800_0434;
+        cpu.write_mem(0x4002_1000, 0x0000_0083);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        for _ in 0..32 {
+            if cpu.next_pc == 0x0800_045E {
+                break;
+            }
+            engine
+                .step(&mut cpu, &table)
+                .expect("jit rcc poll step failed");
+        }
+
+        assert_eq!(cpu.next_pc, 0x0800_045E);
+        assert_ne!(cpu.read_mem(0x4002_1000) & 0x0002_0000, 0);
+        assert_eq!(cpu.read_mem(0x2000_0104), 1);
+    }
+
+    #[test]
+    fn jit_push_frame_preserves_startup_poll_locals() {
+        let code = [
+            0x0C, 0xB5, // push {r2, r3, lr}
+            0x00, 0x20, // movs r0, #0
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x90, // str r0, [sp]
+            0x33, 0x48, // ldr r0, [pc, #0xcc]
+            0x00, 0x68, // ldr r0, [r0]
+            0x40, 0xF4, 0x80, 0x30, // orr r0, r0, #0x10000
+            0x31, 0x49, // ldr r1, [pc, #0xc4]
+            0x08, 0x60, // str r0, [r1]
+            0x00, 0xBF, // nop
+            0x30, 0x48, // ldr r0, [pc, #0xc0]
+            0x00, 0x68, // ldr r0, [r0]
+            0x00, 0xF4, 0x00, 0x30, // and r0, r0, #0x20000
+            0x00, 0x90, // str r0, [sp]
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0x40, 0x1C, // adds r0, r0, #1
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x98, // ldr r0, [sp]
+            0x18, 0xB9, // cbnz r0, #0x0800045e
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0xB0, 0xF5, 0xA0, 0x6F, // cmp.w r0, #0x500
+            0xF1, 0xD1, // bne #0x08000442
+        ];
+
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&code, 0x0800_042C)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu_with_rcc();
+        cpu.load_code_bytes(0x0800_0504, &0x4002_1000u32.to_le_bytes());
+        cpu.write_sp(0x2000_0110);
+        cpu.write_reg(2, 0x2222_2222);
+        cpu.write_reg(3, 0x3333_3333);
+        cpu.write_reg(14, 0xEEEE_EEEE);
+        cpu.next_pc = 0x0800_042C;
+        cpu.write_mem(0x4002_1000, 0x0000_0083);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        for _ in 0..32 {
+            if cpu.next_pc == 0x0800_045E {
+                break;
+            }
+            engine
+                .step(&mut cpu, &table)
+                .expect("jit push-frame poll step failed");
+        }
+
+        assert_eq!(cpu.next_pc, 0x0800_045E);
+        assert_eq!(cpu.read_sp(), 0x2000_0104);
+        assert_eq!(cpu.read_mem(0x2000_0104), 0x0002_0000);
+        assert_eq!(cpu.read_mem(0x2000_0108), 1);
+        assert_eq!(cpu.read_mem(0x2000_010C), 0xEEEE_EEEE);
+    }
+
+    #[test]
+    fn jit_runtime_builder_rcc_poll_matches_predecoded_path() {
+        let code = [
+            0x0C, 0xB5, // push {r2, r3, lr}
+            0x00, 0x20, // movs r0, #0
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x90, // str r0, [sp]
+            0x33, 0x48, // ldr r0, [pc, #0xcc]
+            0x00, 0x68, // ldr r0, [r0]
+            0x40, 0xF4, 0x80, 0x30, // orr r0, r0, #0x10000
+            0x31, 0x49, // ldr r1, [pc, #0xc4]
+            0x08, 0x60, // str r0, [r1]
+            0x00, 0xBF, // nop
+            0x30, 0x48, // ldr r0, [pc, #0xc0]
+            0x00, 0x68, // ldr r0, [r0]
+            0x00, 0xF4, 0x00, 0x30, // and r0, r0, #0x20000
+            0x00, 0x90, // str r0, [sp]
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0x40, 0x1C, // adds r0, r0, #1
+            0x01, 0x90, // str r0, [sp, #4]
+            0x00, 0x98, // ldr r0, [sp]
+            0x18, 0xB9, // cbnz r0, #0x0800045e
+            0x01, 0x98, // ldr r0, [sp, #4]
+            0xB0, 0xF5, 0xA0, 0x6F, // cmp.w r0, #0x500
+            0xF1, 0xD1, // bne #0x08000442
+        ];
+
+        let mut cpu = build_cpu_with_rcc();
+        cpu.load_code_bytes(0x0800_042C, &code);
+        cpu.load_code_bytes(0x0800_0504, &0x4002_1000u32.to_le_bytes());
+        cpu.write_sp(0x2000_0110);
+        cpu.write_reg(2, 0x2222_2222);
+        cpu.write_reg(3, 0x3333_3333);
+        cpu.write_reg(14, 0xEEEE_EEEE);
+        cpu.next_pc = 0x0800_042C;
+        cpu.write_mem(0x4002_1000, 0x0000_0083);
+
+        let mut builder = JitBlockTableBuilder::new();
+        let added = builder
+            .extend_from_pc(&cpu, 0x0800_042C, 0x0800_0600, 64)
+            .expect("failed to extend jit table");
+        assert!(added > 0);
+
+        let orr = builder.get(0x0800_0438).expect("missing runtime-decoded orr");
+        let and = builder.get(0x0800_0446).expect("missing runtime-decoded and");
+        let ldr_counter = builder.get(0x0800_044C).expect("missing runtime-decoded counter load");
+        let add_counter = builder.get(0x0800_044E).expect("missing runtime-decoded counter increment");
+        let str_counter = builder.get(0x0800_0450).expect("missing runtime-decoded counter store");
+        let ldr_flag = builder.get(0x0800_0452).expect("missing runtime-decoded flag reload");
+        let cbnz = builder.get(0x0800_0454).expect("missing runtime-decoded cbnz");
+
+        assert_eq!(orr.insn_id, crate::arch::ArmInsn::ARM_INS_ORR as u32);
+        assert_eq!(and.insn_id, crate::arch::ArmInsn::ARM_INS_AND as u32);
+        assert_eq!(ldr_counter.insn_id, crate::arch::ArmInsn::ARM_INS_LDR as u32);
+        assert_eq!(add_counter.insn_id, crate::arch::ArmInsn::ARM_INS_ADD as u32);
+        assert_eq!(str_counter.insn_id, crate::arch::ArmInsn::ARM_INS_STR as u32);
+        assert_eq!(ldr_flag.insn_id, crate::arch::ArmInsn::ARM_INS_LDR as u32);
+        assert_eq!(cbnz.insn_id, crate::arch::ArmInsn::ARM_INS_CBNZ as u32);
+
+        match orr.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
+            Some(crate::opcodes::decoded::DecodedOperandKind::Imm(imm)) => assert_eq!(*imm, 0x1_0000),
+            _ => panic!("runtime-decoded orr immediate mismatch"),
+        }
+        match and.data.arm_operands.op2.as_ref().map(|op| &op.op_type) {
+            Some(crate::opcodes::decoded::DecodedOperandKind::Imm(imm)) => assert_eq!(*imm, 0x2_0000),
+            _ => panic!("runtime-decoded and immediate mismatch"),
+        }
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        for _ in 0..32 {
+            if cpu.next_pc == 0x0800_045E {
+                break;
+            }
+            let current_pc = cpu.next_pc;
+            if builder.block_containing(current_pc).is_none() {
+                let added = builder
+                    .extend_from_pc(&cpu, current_pc, 0x0800_0600, 64)
+                    .expect("failed to extend runtime-builder block");
+                assert!(added > 0, "runtime builder added no instructions at 0x{current_pc:08X}");
+            }
+            let block = builder
+                .block_containing(current_pc)
+                .expect("missing block during runtime-builder execution");
+            engine
+                .step_block_builder(&mut cpu, &builder, current_pc, &block)
+                .expect("runtime-builder jit step failed");
+        }
+
+        assert_eq!(cpu.next_pc, 0x0800_045E);
+        assert_eq!(cpu.read_sp(), 0x2000_0104);
+        assert_eq!(cpu.read_mem(0x2000_0104), 0x0002_0000);
+        assert_eq!(cpu.read_mem(0x2000_0108), 1);
     }
 
     #[test]

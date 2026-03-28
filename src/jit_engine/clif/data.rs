@@ -471,13 +471,36 @@ fn emit_calculate(
 }
 
 fn emit_udiv_or_zero(lowering: &mut LoweringContext<'_, '_>, lhs: Value, rhs: Value) -> Value {
-    lowering.call_value(lowering.helpers.udiv_or_zero, &[lhs, rhs])
+    let zero_cond = lowering.builder.ins().icmp_imm(IntCC::Equal, rhs, 0);
+    let zero_block = lowering.builder.create_block();
+    let div_block = lowering.builder.create_block();
+    let join_block = lowering.builder.create_block();
+    lowering.builder.append_block_param(join_block, types::I32);
+
+    lowering
+        .builder
+        .ins()
+        .brif(zero_cond, zero_block, &[], div_block, &[]);
+
+    lowering.builder.switch_to_block(zero_block);
+    lowering.builder.seal_block(zero_block);
+    let zero = lowering.iconst_u32(0);
+    lowering.builder.ins().jump(join_block, &[zero.into()]);
+
+    lowering.builder.switch_to_block(div_block);
+    lowering.builder.seal_block(div_block);
+    let result = lowering.builder.ins().udiv(lhs, rhs);
+    lowering.builder.ins().jump(join_block, &[result.into()]);
+
+    lowering.builder.seal_block(join_block);
+    lowering.builder.switch_to_block(join_block);
+    lowering.builder.block_params(join_block)[0]
 }
 
 fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
     with_cc(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
-        let (result, carry) = emit_compute_shift(lowering);
+        let (result, carry) = emit_compute_shift(lowering, insn);
         emit_write_reg(lowering, rd, result);
         if insn.data.update_flags() {
             emit_update_apsr_nzc(lowering, result, carry);

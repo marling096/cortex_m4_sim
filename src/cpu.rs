@@ -19,6 +19,8 @@ pub struct Cpu {
 
     pub flash: Vec<u8>, // 模拟 Flash (例如 512KB)
     pub ram: Vec<u8>,   // 模拟 SRAM (例如 128KB)
+    jit_flash_ptr: *mut u8,
+    jit_ram_ptr: *mut u8,
     pub registers: Registers,
 
     pub next_pc: u32, // 预取的下一条指令地址
@@ -214,6 +216,8 @@ impl CpuContext for Cpu {
 impl Cpu {
     const JIT_REG_BASE_OFFSET: usize = std::mem::offset_of!(Cpu, registers)
         + std::mem::offset_of!(Registers, reg);
+    const JIT_FLASH_PTR_OFFSET: usize = std::mem::offset_of!(Cpu, jit_flash_ptr);
+    const JIT_RAM_PTR_OFFSET: usize = std::mem::offset_of!(Cpu, jit_ram_ptr);
 
     const FLASH_ALIAS_BASE: u32 = 0x0000_0000;
     const FLASH_ALIAS_LAST: u32 = 0x0007_FFFF;
@@ -240,6 +244,8 @@ impl Cpu {
     const HINT_SRC_NONE: u8 = 0;
     const HINT_SRC_OTHER: u8 = 1;
     const HINT_SRC_PERIPHERAL: u8 = 2;
+    const FLASH_LEN: usize = 512 * 1024;
+    const RAM_LEN: usize = 128 * 1024;
 
     #[inline(always)]
     pub(crate) fn jit_reg_base_offset() -> i32 {
@@ -249,6 +255,41 @@ impl Cpu {
     #[inline(always)]
     pub(crate) fn jit_reg_offset(reg: u32) -> i32 {
         (Self::JIT_REG_BASE_OFFSET + reg as usize * std::mem::size_of::<u32>()) as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_flash_ptr_offset() -> i32 {
+        Self::JIT_FLASH_PTR_OFFSET as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_ram_ptr_offset() -> i32 {
+        Self::JIT_RAM_PTR_OFFSET as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_flash_base() -> u32 {
+        Self::FLASH_BASE
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_flash_alias_base() -> u32 {
+        Self::FLASH_ALIAS_BASE
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_flash_len() -> u32 {
+        Self::FLASH_LEN as u32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_ram_base() -> u32 {
+        Self::RAM_BASE
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_ram_len() -> u32 {
+        Self::RAM_LEN as u32
     }
 
     #[inline(always)]
@@ -304,14 +345,20 @@ impl Cpu {
 
         let ppb_nvic_index = ppb.find_peripheral_index(Self::NVIC_BASE);
         let ppb_systick_index = ppb.find_peripheral_index(Self::SYSTICK_BASE);
+        let mut flash = vec![0; Self::FLASH_LEN];
+        let mut ram = vec![0; Self::RAM_LEN];
+        let jit_flash_ptr = flash.as_mut_ptr();
+        let jit_ram_ptr = ram.as_mut_ptr();
 
         Cpu {
             frequency,
             machine_cycle,
             Cycles: 0,
             Cpu_pipeline: Cpu_pipeline::new(),
-            flash: vec![0; 512 * 1024], // 512KB Flash
-            ram: vec![0; 128 * 1024],   // 128KB RAM
+            flash,
+            ram,
+            jit_flash_ptr,
+            jit_ram_ptr,
             registers: Registers {
                 reg: [0; 16],
                 apsr: 0,

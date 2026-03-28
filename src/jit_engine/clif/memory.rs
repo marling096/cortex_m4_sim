@@ -2,8 +2,7 @@ use crate::arch::ArmInsn;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
-    InsDef, emit_read_reg, emit_read_reg_value, emit_resolve_mem_rt_addr, emit_size_value,
-    emit_write_reg, with_cc,
+    InsDef, emit_read_reg, emit_resolve_mem_rt_addr, emit_size_value, emit_write_reg, with_cc,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -75,23 +74,17 @@ fn emit_store(
     kind: StoreKind,
 ) {
     with_cc(lowering, insn, |lowering| {
-        let (rt, addr) = emit_resolve_mem_rt_addr(lowering);
-        let value = emit_read_reg_value(lowering, rt);
+        let (rt, addr) = emit_resolve_mem_rt_addr(lowering, insn);
+        let value = emit_read_reg(lowering, rt);
 
         match kind {
             StoreKind::Word => {
                 let mask = lowering.iconst_u32(!3u32);
                 let aligned = lowering.builder.ins().band(addr, mask);
-                lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, aligned, value]);
+                lowering.emit_write_u32(aligned, value);
             }
-            StoreKind::Byte => lowering.call_void(
-                lowering.helpers.write_u8,
-                &[lowering.cpu_ptr, addr, value],
-            ),
-            StoreKind::Halfword => lowering.call_void(
-                lowering.helpers.write_u16,
-                &[lowering.cpu_ptr, addr, value],
-            ),
+            StoreKind::Byte => lowering.emit_write_u8(addr, value),
+            StoreKind::Halfword => lowering.emit_write_u16(addr, value),
         }
 
         let pc_update = emit_size_value(lowering, insn);
@@ -112,7 +105,7 @@ fn emit_ldm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         let mut loads_pc = false;
 
         for &reg in &insn.data.transed_operands[1..] {
-            let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, addr]);
+            let value = lowering.emit_read_u32(addr);
             emit_write_reg(lowering, reg, value);
             addr = lowering.builder.ins().iadd_imm(addr, 4);
             if reg == 15 {
@@ -144,7 +137,7 @@ fn emit_stm(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 
         for &reg in &insn.data.transed_operands[1..] {
             let value = emit_read_reg(lowering, reg);
-            lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
+            lowering.emit_write_u32(addr, value);
             addr = lowering.builder.ins().iadd_imm(addr, 4);
         }
 
@@ -167,7 +160,7 @@ fn emit_push(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 
         for &reg in &insn.data.transed_operands {
             let value = emit_read_reg(lowering, reg);
-            lowering.call_void(lowering.helpers.write_u32, &[lowering.cpu_ptr, addr, value]);
+            lowering.emit_write_u32(addr, value);
             addr = lowering.builder.ins().iadd_imm(addr, 4);
         }
 
@@ -183,7 +176,7 @@ fn emit_pop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
         let mut popped_pc = None;
 
         for &reg in &insn.data.transed_operands {
-            let value = lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, sp]);
+            let value = lowering.emit_read_u32(sp);
             sp = lowering.builder.ins().iadd_imm(sp, 4);
             if reg == 15 {
                 popped_pc = Some(value);

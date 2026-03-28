@@ -957,19 +957,6 @@ fn decode_jit_instruction_16(current_pc: u32, hw: u16) -> Result<JitInstruction,
         });
     }
 
-    if (hw & 0xE000) == 0x0000 {
-        let op = (hw >> 11) & 0x3;
-        let imm5 = ((hw >> 6) & 0x1F) as u32;
-        let rm = ((hw >> 3) & 0x7) as u32;
-        let rd = (hw & 0x7) as u32;
-        return Ok(match op {
-            0 => make_shift_imm_instruction(ArmInsn::ARM_INS_LSL, current_pc, 2, rd, rm, imm5, true),
-            1 => make_shift_imm_instruction(ArmInsn::ARM_INS_LSR, current_pc, 2, rd, rm, if imm5 == 0 { 32 } else { imm5 }, true),
-            2 => make_shift_imm_instruction(ArmInsn::ARM_INS_ASR, current_pc, 2, rd, rm, if imm5 == 0 { 32 } else { imm5 }, true),
-            _ => make_unknown_instruction(current_pc, 2),
-        });
-    }
-
     if (hw & 0xFC00) == 0x1C00 {
         let op = (hw >> 9) & 0x1;
         let imm3 = ((hw >> 6) & 0x7) as u32;
@@ -986,6 +973,19 @@ fn decode_jit_instruction_16(current_pc: u32, hw: u16) -> Result<JitInstruction,
             true,
             rd == 15,
         ));
+    }
+
+    if (hw & 0xE000) == 0x0000 {
+        let op = (hw >> 11) & 0x3;
+        let imm5 = ((hw >> 6) & 0x1F) as u32;
+        let rm = ((hw >> 3) & 0x7) as u32;
+        let rd = (hw & 0x7) as u32;
+        return Ok(match op {
+            0 => make_shift_imm_instruction(ArmInsn::ARM_INS_LSL, current_pc, 2, rd, rm, imm5, true),
+            1 => make_shift_imm_instruction(ArmInsn::ARM_INS_LSR, current_pc, 2, rd, rm, if imm5 == 0 { 32 } else { imm5 }, true),
+            2 => make_shift_imm_instruction(ArmInsn::ARM_INS_ASR, current_pc, 2, rd, rm, if imm5 == 0 { 32 } else { imm5 }, true),
+            _ => make_unknown_instruction(current_pc, 2),
+        });
     }
 
     if (hw & 0xF800) == 0x2000 {
@@ -1857,7 +1857,7 @@ fn thumb_expand_imm12(imm12: u16) -> u32 {
         },
         _ => {
             let unrotated = (1u32 << 7) | imm8;
-            let rot = (i << 4) | (imm3 << 1);
+            let rot = (i << 4) | (imm3 << 1) | ((imm12 >> 7) & 0x1) as u32;
             unrotated.rotate_right(rot)
         }
     }

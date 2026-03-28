@@ -155,19 +155,17 @@ fn emit_load_value(lowering: &mut LoweringContext<'_, '_>, addr: Value, kind: Lo
         LoadKind::Word => {
             let align_mask = lowering.iconst_u32(!3u32);
             let aligned = lowering.builder.ins().band(addr, align_mask);
-            lowering.call_value(lowering.helpers.read_u32, &[lowering.cpu_ptr, aligned])
+            lowering.emit_read_u32(aligned)
         }
-        LoadKind::Byte => lowering.call_value(lowering.helpers.read_u8, &[lowering.cpu_ptr, addr]),
+        LoadKind::Byte => lowering.emit_read_u8(addr),
         LoadKind::SignedByte => {
-            let value = lowering.call_value(lowering.helpers.read_u8, &[lowering.cpu_ptr, addr]);
+            let value = lowering.emit_read_u8(addr);
             let value = lowering.builder.ins().ireduce(types::I8, value);
             lowering.builder.ins().sextend(types::I32, value)
         }
-        LoadKind::Halfword => {
-            lowering.call_value(lowering.helpers.read_u16, &[lowering.cpu_ptr, addr])
-        }
+        LoadKind::Halfword => lowering.emit_read_u16(addr),
         LoadKind::SignedHalfword => {
-            let value = lowering.call_value(lowering.helpers.read_u16, &[lowering.cpu_ptr, addr]);
+            let value = lowering.emit_read_u16(addr);
             let value = lowering.builder.ins().ireduce(types::I16, value);
             lowering.builder.ins().sextend(types::I32, value)
         }

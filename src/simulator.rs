@@ -252,6 +252,11 @@ impl Simulator {
         let mut executed_instruction_count = 0u64;
         let report_window_u64 = report_window as u64;
         let mut window_start = Instant::now();
+        let mut window_cycle_start = self.system_cycles;
+        let jit_stats_enabled = std::env::var("SIM_JIT_STATS")
+            .map(|v| v != "0")
+            .unwrap_or(false);
+        let mut stats_window_start = engine.stats_snapshot();
         let mut pending_peripheral_cycles = 0u32;
         self
             .cpu
@@ -313,38 +318,47 @@ impl Simulator {
             }
 
             let current_pc = self.cpu.next_pc;
-            let Some(segment_end) = self.code_segment_end_for_pc(current_pc) else {
-                eprintln!(
-                    "Error: PC 0x{:X} is outside loaded code segments in JIT mode. Simulation stopped.",
-                    current_pc
-                );
-                break;
-            };
-            let added = jit_builder
-                .extend_from_pc(
-                    &self.cpu,
-                    current_pc,
-                    segment_end,
-                    64,
-                )
-                .map_err(|err| JitError::Backend(err.to_string()))?;
-            let _ = added;
-
+            self.cpu.prefetch_next_pc(current_pc);
+            let mut traced_current_pc = false;
             if trace_insn && !trace_limit_reached {
-                let Some(ins) = jit_builder.get(current_pc) else {
-                    eprintln!(
-                        "Error: PC 0x{:X} instruction metadata missing in JIT mode. Simulation stopped.",
-                        current_pc
-                    );
-                    break;
-                };
-                trace_instruction!(current_pc, ins);
+                if let Some(ins) = jit_builder.get(current_pc) {
+                    trace_instruction!(current_pc, ins);
+                    traced_current_pc = true;
+                }
             }
 
             let (elapsed_cycles, executed_instructions) =
                 match engine.try_step_cached_block_builder(&mut self.cpu, &mut jit_builder, current_pc) {
                     Ok(Some((cycles, instruction_count))) => (cycles, instruction_count as u64),
                     Ok(None) => {
+                        let Some(segment_end) = self.code_segment_end_for_pc(current_pc) else {
+                            eprintln!(
+                                "Error: PC 0x{:X} is outside loaded code segments in JIT mode. Simulation stopped.",
+                                current_pc
+                            );
+                            break;
+                        };
+                        let added = jit_builder
+                            .extend_from_pc(
+                                &self.cpu,
+                                current_pc,
+                                segment_end,
+                                64,
+                            )
+                            .map_err(|err| JitError::Backend(err.to_string()))?;
+                        let _ = added;
+
+                        if trace_insn && !trace_limit_reached && !traced_current_pc {
+                            let Some(ins) = jit_builder.get(current_pc) else {
+                                eprintln!(
+                                    "Error: PC 0x{:X} instruction metadata missing in JIT mode. Simulation stopped.",
+                                    current_pc
+                                );
+                                break;
+                            };
+                            trace_instruction!(current_pc, ins);
+                        }
+
                         let Some(block) = jit_builder.block_containing(current_pc) else {
                             eprintln!(
                                 "Error: PC 0x{:X} could not be resolved after extending JIT table. Simulation stopped.",
@@ -378,15 +392,43 @@ impl Simulator {
             if executed_instruction_count >= report_window_u64 {
                 let elapsed_secs = window_start.elapsed().as_secs_f64();
                 if elapsed_secs > 0.0 {
-                    let actual_freq_hz = executed_instruction_count as f64 / elapsed_secs;
+                    let executed_cycles = self.system_cycles.saturating_sub(window_cycle_start);
+                    let cycle_freq_hz = executed_cycles as f64 / elapsed_secs;
+                    let ins_freq_hz = executed_instruction_count as f64 / elapsed_secs;
+                    let configured_freq_hz = self.cpu.frequency.load(Ordering::Relaxed) as f64;
                     println!(
-                        "Actual Execution Frequency ({} ins): {:.6} MHz",
+                        "Actual Cycle Frequency ({} cyc): {:.6} MHz | Configured Clock: {:.6} MHz | Instruction Throughput ({} ins): {:.6} MIPS",
+                        executed_cycles,
+                        cycle_freq_hz / 1_000_000.0,
+                        configured_freq_hz / 1_000_000.0,
                         executed_instruction_count,
-                        actual_freq_hz / 1_000_000.0
+                        ins_freq_hz / 1_000_000.0
                     );
+
+                    if jit_stats_enabled {
+                        let current_stats = engine.stats_snapshot();
+                        let delta = current_stats.delta_since(stats_window_start);
+                        let cache_total = delta.cache_hits.saturating_add(delta.cache_misses);
+                        println!(
+                            "JIT stats: exec_blocks={} compiled={} suffix={} cache={}/{} ({:.2}%) avg_exec_len={:.2} ins avg_compile_len={:.2} ins helper/ins={:.3} fallback={} helpers={}",
+                            delta.executed_blocks,
+                            delta.compiled_blocks,
+                            delta.compiled_suffix_blocks,
+                            delta.cache_hits,
+                            cache_total,
+                            delta.cache_hit_rate() * 100.0,
+                            delta.average_executed_block_len(),
+                            delta.average_compiled_block_len(),
+                            delta.helper_calls_per_guest_instruction(),
+                            delta.fallback_calls,
+                            delta.helper_calls(),
+                        );
+                        stats_window_start = current_stats;
+                    }
                 }
                 executed_instruction_count = 0;
                 window_start = Instant::now();
+                window_cycle_start = self.system_cycles;
             }
 
             if let Some(loop_start) = loop_start {
