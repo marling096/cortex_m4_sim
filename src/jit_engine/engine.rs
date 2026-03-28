@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 use crate::context::CpuContext;
 use crate::cpu::Cpu;
 use crate::jit_engine::clif::instructions as jit_instructions;
-use crate::jit_engine::table::{JitBlockRange, JitInstruction, JitBlockTable};
+use crate::jit_engine::table::{JitBlockRange, JitBlockTable, JitBlockTableBuilder, JitInstruction};
 use crate::opcodes::decoded::{
     DecodedOperandKind, operand_resolver_multi_runtime, resolve_op2_runtime,
     runtime_read_reg,
@@ -48,6 +48,15 @@ impl From<cranelift_module::ModuleError> for JitError {
 }
 
 struct CompiledBlock {
+    entry: JitBlockFn,
+    end_pc: u32,
+    instruction_count: usize,
+}
+
+#[derive(Clone, Copy)]
+struct StepBlockCache {
+    start_pc: u32,
+    end_pc: u32,
     entry: JitBlockFn,
     instruction_count: usize,
 }
@@ -555,6 +564,7 @@ pub struct JitEngine {
     builder_ctx: FunctionBuilderContext,
     helpers: RuntimeFunctions,
     blocks: FxHashMap<u32, CompiledBlock>,
+    step_block_cache: Option<StepBlockCache>,
     next_function_index: u32,
     compiled_blocks: u64,
     compiled_suffix_blocks: u64,
@@ -609,6 +619,7 @@ impl JitEngine {
             builder_ctx: FunctionBuilderContext::new(),
             helpers,
             blocks: FxHashMap::default(),
+            step_block_cache: None,
             next_function_index: 0,
             compiled_blocks: 0,
             compiled_suffix_blocks: 0,
@@ -676,12 +687,23 @@ impl JitEngine {
 
     pub fn compile_table(&mut self, table: &JitBlockTable) -> Result<Vec<(u32, JitBlockFn)>, JitError> {
         for block in table.iter_blocks() {
-            if self.blocks.contains_key(&block.start_pc) {
+            if self
+                .blocks
+                .get(&block.start_pc)
+                .is_some_and(|compiled| compiled.end_pc == block.end_pc)
+            {
                 continue;
             }
 
             let compiled = self.compile_block_from_pc(table, block, block.start_pc)?;
             self.blocks.insert(block.start_pc, compiled);
+            if self
+                .step_block_cache
+                .as_ref()
+                .is_some_and(|cached| cached.start_pc == block.start_pc && cached.end_pc != block.end_pc)
+            {
+                self.step_block_cache = None;
+            }
         }
 
         Ok(self.compiled_entries())
@@ -707,7 +729,95 @@ impl JitEngine {
         start_pc: u32,
         block: &JitBlockRange,
     ) -> Result<u32, JitError> {
+        if let Some(cached) = self
+            .step_block_cache
+            .as_ref()
+            .filter(|cached| cached.start_pc == start_pc && cached.end_pc == block.end_pc)
+            .copied()
+        {
+            self.cache_hits = self.cache_hits.saturating_add(1);
+            self.executed_blocks = self.executed_blocks.saturating_add(1);
+            self.executed_block_instructions = self
+                .executed_block_instructions
+                .saturating_add(cached.instruction_count as u64);
+            return Ok(unsafe { (cached.entry)(cpu as *mut Cpu) });
+        }
+
         self.execute_block(cpu, table, start_pc, block)
+    }
+
+    #[inline(always)]
+    pub fn step_block_builder(
+        &mut self,
+        cpu: &mut Cpu,
+        builder: &JitBlockTableBuilder,
+        start_pc: u32,
+        block: &JitBlockRange,
+    ) -> Result<u32, JitError> {
+        if let Some(cached) = self
+            .step_block_cache
+            .as_ref()
+            .filter(|cached| cached.start_pc == start_pc && cached.end_pc == block.end_pc)
+            .copied()
+        {
+            self.cache_hits = self.cache_hits.saturating_add(1);
+            self.executed_blocks = self.executed_blocks.saturating_add(1);
+            self.executed_block_instructions = self
+                .executed_block_instructions
+                .saturating_add(cached.instruction_count as u64);
+            return Ok(unsafe { (cached.entry)(cpu as *mut Cpu) });
+        }
+
+        self.execute_block_from_builder(cpu, builder, start_pc, block)
+    }
+
+    #[inline(always)]
+    pub fn try_step_cached_block_builder(
+        &mut self,
+        cpu: &mut Cpu,
+        builder: &mut JitBlockTableBuilder,
+        start_pc: u32,
+    ) -> Result<Option<(u32, usize)>, JitError> {
+        let Some(compiled) = self.blocks.get(&start_pc) else {
+            return Ok(None);
+        };
+
+        let Some(block) = builder.block_starting_at(start_pc) else {
+            if self
+                .step_block_cache
+                .as_ref()
+                .is_some_and(|cached| cached.start_pc == start_pc)
+            {
+                self.step_block_cache = None;
+            }
+            return Ok(None);
+        };
+
+        if compiled.end_pc != block.end_pc {
+            if self
+                .step_block_cache
+                .as_ref()
+                .is_some_and(|cached| cached.start_pc == start_pc)
+            {
+                self.step_block_cache = None;
+            }
+            return Ok(None);
+        }
+
+        let cached = StepBlockCache {
+            start_pc,
+            end_pc: compiled.end_pc,
+            entry: compiled.entry,
+            instruction_count: compiled.instruction_count,
+        };
+        self.step_block_cache = Some(cached);
+        self.cache_hits = self.cache_hits.saturating_add(1);
+        self.executed_blocks = self.executed_blocks.saturating_add(1);
+        self.executed_block_instructions = self
+            .executed_block_instructions
+            .saturating_add(cached.instruction_count as u64);
+        let cycles = unsafe { (cached.entry)(cpu as *mut Cpu) };
+        Ok(Some((cycles, block.instruction_count)))
     }
 
     pub fn step_resolved(
@@ -854,13 +964,40 @@ impl JitEngine {
         block: &JitBlockRange,
     ) -> Result<u32, JitError> {
         let compiled = self.get_or_compile_block_from_pc(table, block, start_pc)?;
-        let entry = compiled.entry;
-        let instruction_count = compiled.instruction_count as u64;
+        let cached = StepBlockCache {
+            start_pc,
+            end_pc: compiled.end_pc,
+            entry: compiled.entry,
+            instruction_count: compiled.instruction_count,
+        };
+        self.step_block_cache = Some(cached);
         self.executed_blocks = self.executed_blocks.saturating_add(1);
         self.executed_block_instructions = self
             .executed_block_instructions
-            .saturating_add(instruction_count);
-        Ok(unsafe { (entry)(cpu as *mut Cpu) })
+            .saturating_add(cached.instruction_count as u64);
+        Ok(unsafe { (cached.entry)(cpu as *mut Cpu) })
+    }
+
+    fn execute_block_from_builder(
+        &mut self,
+        cpu: &mut Cpu,
+        builder: &JitBlockTableBuilder,
+        start_pc: u32,
+        block: &JitBlockRange,
+    ) -> Result<u32, JitError> {
+        let compiled = self.get_or_compile_block_from_builder(builder, block, start_pc)?;
+        let cached = StepBlockCache {
+            start_pc,
+            end_pc: compiled.end_pc,
+            entry: compiled.entry,
+            instruction_count: compiled.instruction_count,
+        };
+        self.step_block_cache = Some(cached);
+        self.executed_blocks = self.executed_blocks.saturating_add(1);
+        self.executed_block_instructions = self
+            .executed_block_instructions
+            .saturating_add(cached.instruction_count as u64);
+        Ok(unsafe { (cached.entry)(cpu as *mut Cpu) })
     }
 
     fn get_or_compile_block_from_pc<'a>(
@@ -869,9 +1006,39 @@ impl JitEngine {
         block: &JitBlockRange,
         start_pc: u32,
     ) -> Result<&CompiledBlock, JitError> {
-        if self.blocks.get(&start_pc).is_none() {
+        let is_cache_hit = self
+            .blocks
+            .get(&start_pc)
+            .is_some_and(|compiled| compiled.end_pc == block.end_pc);
+
+        if !is_cache_hit {
             self.cache_misses = self.cache_misses.saturating_add(1);
             let compiled = self.compile_block_from_pc(table, block, start_pc)?;
+            self.blocks.insert(start_pc, compiled);
+        } else {
+            self.cache_hits = self.cache_hits.saturating_add(1);
+        }
+
+        Ok(self
+            .blocks
+            .get(&start_pc)
+            .expect("compiled block missing after insert"))
+    }
+
+    fn get_or_compile_block_from_builder(
+        &mut self,
+        builder: &JitBlockTableBuilder,
+        block: &JitBlockRange,
+        start_pc: u32,
+    ) -> Result<&CompiledBlock, JitError> {
+        let is_cache_hit = self
+            .blocks
+            .get(&start_pc)
+            .is_some_and(|compiled| compiled.end_pc == block.end_pc);
+
+        if !is_cache_hit {
+            self.cache_misses = self.cache_misses.saturating_add(1);
+            let compiled = self.compile_block_from_builder(builder, block, start_pc)?;
             self.blocks.insert(start_pc, compiled);
         } else {
             self.cache_hits = self.cache_hits.saturating_add(1);
@@ -914,11 +1081,33 @@ impl JitEngine {
         self.compile_sequence(start_pc, entries)
     }
 
+    fn compile_block_from_builder(
+        &mut self,
+        builder: &JitBlockTableBuilder,
+        block: &JitBlockRange,
+        start_pc: u32,
+    ) -> Result<CompiledBlock, JitError> {
+        let entries = builder
+            .block_entries(start_pc, block)
+            .ok_or(JitError::MissingInstruction { pc: start_pc })?;
+
+        self.compiled_blocks = self.compiled_blocks.saturating_add(1);
+        if start_pc != block.start_pc {
+            self.compiled_suffix_blocks = self.compiled_suffix_blocks.saturating_add(1);
+        }
+        self.compiled_block_instructions = self
+            .compiled_block_instructions
+            .saturating_add(entries.len() as u64);
+
+        self.compile_sequence(start_pc, entries)
+    }
+
     fn compile_sequence<'a>(
         &mut self,
         pc: u32,
         entries: Vec<(u32, &JitInstruction)>,
     ) -> Result<CompiledBlock, JitError> {
+        let end_pc = entries.last().map(|(current_pc, _)| *current_pc).unwrap_or(pc);
         let ptr_ty = self.module.target_config().pointer_type();
         let mut ctx = self.module.make_context();
         let mut sig = self.module.make_signature();
@@ -1044,6 +1233,7 @@ impl JitEngine {
 
         Ok(CompiledBlock {
             entry,
+            end_pc,
             instruction_count: entries.len(),
         })
     }
@@ -1730,6 +1920,83 @@ mod tests {
         assert!(engine.compiled_entry(0x0800_0002).is_none());
         assert!(engine.blocks.get(&0x0800_0000).is_some());
         assert!(engine.blocks.get(&0x0800_0002).is_none());
+    }
+
+    #[test]
+    fn jit_step_block_recompiles_when_block_end_changes() {
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(0x0800_0000, &[0x00, 0xBF, 0x00, 0xBF]);
+        cpu.next_pc = 0x0800_0000;
+
+        let mut builder = JitBlockTableBuilder::new();
+        builder
+            .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0002, 16)
+            .expect("failed to build initial block");
+        let first = builder.build_snapshot();
+        let first_block = first
+            .block_containing(0x0800_0000)
+            .expect("missing initial block")
+            .clone();
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let first_cycles = engine
+            .step_block(&mut cpu, &first, 0x0800_0000, &first_block)
+            .expect("initial step_block failed");
+
+        assert_eq!(first_cycles, 1);
+        assert_eq!(engine.blocks.get(&0x0800_0000).map(|block| block.end_pc), Some(0x0800_0000));
+
+        cpu.next_pc = 0x0800_0000;
+        builder
+            .extend_from_pc(&cpu, 0x0800_0002, 0x0800_0004, 16)
+            .expect("failed to extend block tail");
+        let second = builder.build_snapshot();
+        let second_block = second
+            .block_containing(0x0800_0000)
+            .expect("missing extended block")
+            .clone();
+
+        let second_cycles = engine
+            .step_block(&mut cpu, &second, 0x0800_0000, &second_block)
+            .expect("extended step_block failed");
+
+        assert_eq!(second_cycles, 2);
+        assert_eq!(cpu.next_pc, 0x0800_0004);
+        assert_eq!(engine.compiled_block_count(), 1);
+        assert_eq!(engine.blocks.get(&0x0800_0000).map(|block| block.end_pc), Some(0x0800_0002));
+    }
+
+    #[test]
+    fn jit_try_step_cached_block_builder_hits_compiled_block_cache() {
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(0x0800_0000, &[0x00, 0xBF, 0x00, 0xBF]);
+        cpu.next_pc = 0x0800_0000;
+
+        let mut builder = JitBlockTableBuilder::new();
+        builder
+            .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0004, 16)
+            .expect("failed to build block");
+        let block = builder
+            .block_containing(0x0800_0000)
+            .expect("missing block");
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let first_cycles = engine
+            .step_block_builder(&mut cpu, &builder, 0x0800_0000, &block)
+            .expect("initial step_block_builder failed");
+        assert_eq!(first_cycles, 2);
+
+        cpu.next_pc = 0x0800_0000;
+        let before = engine.stats_snapshot();
+        let cached = engine
+            .try_step_cached_block_builder(&mut cpu, &mut builder, 0x0800_0000)
+            .expect("cached block lookup failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cached, Some((2, 2)));
+        assert_eq!(cpu.next_pc, 0x0800_0004);
+        assert_eq!(delta.cache_hits, 1);
+        assert_eq!(delta.cache_misses, 0);
     }
 
     #[test]

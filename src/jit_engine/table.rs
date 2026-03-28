@@ -171,6 +171,18 @@ impl JitBlockBuilder {
         let mut entries: Vec<_> = table.iter_entries().collect();
         entries.sort_unstable_by_key(|(pc, _)| *pc);
 
+        build_blocks_from_sorted_entries(&entries, |target| table.get(target).is_some())
+    }
+}
+
+fn build_blocks_from_sorted_entries<F>(
+    entries: &[(u32, &JitInstruction)],
+    contains_pc: F,
+) -> Vec<JitBlockRange>
+where
+    F: Fn(u32) -> bool,
+{
+
         if entries.is_empty() {
             return Vec::new();
         }
@@ -178,7 +190,7 @@ impl JitBlockBuilder {
         let branch_targets: FxHashSet<u32> = entries
             .iter()
             .filter_map(|(_, ins)| ins.static_branch_target())
-            .filter(|target| table.get(*target).is_some())
+            .filter(|target| contains_pc(*target))
             .collect();
 
         let mut blocks = Vec::new();
@@ -247,9 +259,7 @@ impl JitBlockBuilder {
 
             previous_pc = *pc;
         }
-
-        blocks
-    }
+    blocks
 }
 
 pub struct JitBlockTable {
@@ -353,18 +363,22 @@ impl JitBlockTable {
 
 pub struct JitBlockTableBuilder {
     entries: FxHashMap<u32, Arc<JitInstruction>>,
-    pending_added: Vec<(u32, Arc<JitInstruction>)>,
-    pending_first_pc: Option<u32>,
-    needs_full_rebuild: bool,
+    blocks: Vec<JitBlockRange>,
+    block_starts: FxHashMap<u32, usize>,
+    block_membership: FxHashMap<u32, usize>,
+    blocks_dirty: bool,
+    first_dirty_pc: Option<u32>,
 }
 
 impl Default for JitBlockTableBuilder {
     fn default() -> Self {
         Self {
             entries: FxHashMap::default(),
-            pending_added: Vec::new(),
-            pending_first_pc: None,
-            needs_full_rebuild: false,
+            blocks: Vec::new(),
+            block_starts: FxHashMap::default(),
+            block_membership: FxHashMap::default(),
+            blocks_dirty: false,
+            first_dirty_pc: None,
         }
     }
 }
@@ -377,22 +391,12 @@ impl JitBlockTableBuilder {
     pub fn add_instruction(&mut self, mut instr: JitInstruction) {
         instr.def = instructions::find_def(instr.insn_id).filter(|def| def.supports(&instr));
         let pc = instr.data.address();
-        let instr = Arc::new(instr);
-
-        match self.entries.insert(pc, Arc::clone(&instr)) {
-            Some(existing) => {
-                if !Arc::ptr_eq(&existing, &instr) {
-                    self.needs_full_rebuild = true;
-                }
-            }
-            None => {
-                self.pending_added.push((pc, instr));
-                self.pending_first_pc = Some(match self.pending_first_pc {
-                    Some(first_pc) => first_pc.min(pc),
-                    None => pc,
-                });
-            }
-        }
+        self.entries.insert(pc, Arc::new(instr));
+        self.blocks_dirty = true;
+        self.first_dirty_pc = Some(match self.first_dirty_pc {
+            Some(first_dirty_pc) => first_dirty_pc.min(pc),
+            None => pc,
+        });
     }
 
     pub fn add_disassembled_instruction(
@@ -453,6 +457,122 @@ impl JitBlockTableBuilder {
         Ok(added)
     }
 
+    #[inline(always)]
+    pub fn get(&self, pc: u32) -> Option<&JitInstruction> {
+        self.entries.get(&pc).map(AsRef::as_ref)
+    }
+
+    pub fn block_starting_at(&mut self, pc: u32) -> Option<JitBlockRange> {
+        self.rebuild_block_cache_if_needed();
+        self.block_starts
+            .get(&pc)
+            .and_then(|index| self.blocks.get(*index))
+            .cloned()
+    }
+
+    pub fn block_containing(&mut self, pc: u32) -> Option<JitBlockRange> {
+        self.rebuild_block_cache_if_needed();
+        self.block_membership
+            .get(&pc)
+            .and_then(|index| self.blocks.get(*index))
+            .cloned()
+    }
+
+    pub fn block_entries(
+        &self,
+        start_pc: u32,
+        block: &JitBlockRange,
+    ) -> Option<Vec<(u32, &JitInstruction)>> {
+        let mut entries = Vec::with_capacity(block.instruction_count);
+        let mut current_pc = start_pc;
+
+        loop {
+            let ins = self.get(current_pc)?;
+            entries.push((current_pc, ins));
+            if current_pc == block.end_pc {
+                break;
+            }
+            current_pc = current_pc.wrapping_add(ins.data.size());
+        }
+
+        Some(entries)
+    }
+
+    fn rebuild_block_cache_if_needed(&mut self) {
+        if !self.blocks_dirty {
+            return;
+        }
+
+        let Some(first_dirty_pc) = self.first_dirty_pc else {
+            self.blocks_dirty = false;
+            return;
+        };
+
+        if self.blocks.is_empty() {
+            self.rebuild_all_builder_blocks();
+        } else if self
+            .blocks
+            .first()
+            .is_some_and(|block| first_dirty_pc < block.start_pc)
+        {
+            self.rebuild_all_builder_blocks();
+        } else {
+            let rebuild_index = self
+                .blocks
+                .iter()
+                .rposition(|block| block.start_pc <= first_dirty_pc)
+                .unwrap_or(0);
+            let rebuild_start_pc = self.blocks[rebuild_index].start_pc;
+            let old_suffix: Vec<_> = self.blocks[rebuild_index..].to_vec();
+
+            for block in &old_suffix {
+                self.block_starts.remove(&block.start_pc);
+                remove_builder_block_membership(&mut self.block_membership, &self.entries, block);
+            }
+
+            self.blocks.truncate(rebuild_index);
+            let rebuilt_suffix = build_builder_blocks_from_start(self, rebuild_start_pc);
+            let suffix_start_index = self.blocks.len();
+            for (offset, block) in rebuilt_suffix.iter().enumerate() {
+                let block_index = suffix_start_index + offset;
+                self.block_starts.insert(block.start_pc, block_index);
+                insert_builder_block_membership(
+                    &mut self.block_membership,
+                    &self.entries,
+                    block,
+                    block_index,
+                );
+            }
+            self.blocks.extend(rebuilt_suffix);
+        }
+
+        self.blocks_dirty = false;
+        self.first_dirty_pc = None;
+    }
+
+    fn rebuild_all_builder_blocks(&mut self) {
+        let mut entries: Vec<_> = self
+            .entries
+            .iter()
+            .map(|(entry_pc, instr)| (*entry_pc, instr.as_ref()))
+            .collect();
+        entries.sort_unstable_by_key(|(entry_pc, _)| *entry_pc);
+
+        self.blocks = build_blocks_from_sorted_entries(&entries, |target| self.entries.contains_key(&target));
+        self.block_starts.clear();
+        self.block_membership.clear();
+
+        for (index, block) in self.blocks.iter().enumerate() {
+            self.block_starts.insert(block.start_pc, index);
+            insert_builder_block_membership(
+                &mut self.block_membership,
+                &self.entries,
+                block,
+                index,
+            );
+        }
+    }
+
     pub fn extend_disassembly<'a, I>(
         &mut self,
         cs: &Capstone,
@@ -473,62 +593,26 @@ impl JitBlockTableBuilder {
         table
     }
 
-    pub fn build_snapshot(&mut self, previous: Option<JitBlockTable>) -> JitBlockTable {
-        match previous {
-            Some(table) => self.build_snapshot_incremental(table),
-            None => {
-                self.rebuild_snapshot_full()
-            }
+    pub fn build_snapshot(&self) -> JitBlockTable {
+        let mut table = optimize_entries(self.entries.clone());
+        rebuild_block_metadata(&mut table);
+        table
+    }
+
+    pub fn build_table() -> JitBlockTable {
+        JitBlockTable {
+            entry_count: 0,
+            entries: FxHashMap::default(),
+            fast_table: Vec::new(),
+            fast_base: 0,
+            blocks: Vec::new(),
+            block_starts: FxHashMap::default(),
+            block_membership: FxHashMap::default(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
-    }
-
-    fn build_snapshot_incremental(&mut self, mut table: JitBlockTable) -> JitBlockTable {
-        if table.is_empty() {
-            return self.build_snapshot(None);
-        }
-
-        if self.needs_full_rebuild || self.entries.len() < table.entry_count {
-            return self.build_snapshot(None);
-        }
-
-        if self.pending_added.is_empty() {
-            return table;
-        }
-
-        let first_added_pc = self
-            .pending_first_pc
-            .expect("pending_first_pc missing while pending_added is not empty");
-
-        if table
-            .blocks
-            .first()
-            .is_some_and(|block| first_added_pc < block.start_pc)
-        {
-            return self.build_snapshot(None);
-        }
-
-        let mut added = std::mem::take(&mut self.pending_added);
-        added.sort_unstable_by_key(|(pc, _)| *pc);
-        for (pc, instr) in added {
-            insert_snapshot_entry(&mut table, pc, instr);
-        }
-        table.entry_count = self.entries.len();
-        rebuild_block_metadata_incremental(&mut table, first_added_pc);
-        self.pending_first_pc = None;
-        table
-    }
-
-    fn rebuild_snapshot_full(&mut self) -> JitBlockTable {
-        let mut table = optimize_entries(self.entries.clone());
-        rebuild_block_metadata(&mut table);
-        self.pending_added.clear();
-        self.pending_first_pc = None;
-        self.needs_full_rebuild = false;
-        table
     }
 
     pub fn build_from_disassembly<'a, I>(
@@ -1950,16 +2034,145 @@ fn insert_block_membership(table: &mut JitBlockTable, block: &JitBlockRange, blo
     }
 }
 
-fn insert_snapshot_entry(table: &mut JitBlockTable, pc: u32, instr: Arc<JitInstruction>) {
-    if !table.fast_table.is_empty() && pc >= table.fast_base {
-        let offset = ((pc - table.fast_base) >> 1) as usize;
-        if offset < table.fast_table.len() {
-            table.fast_table[offset] = Some(instr);
-            return;
-        }
+fn build_builder_blocks_from_start(
+    builder: &JitBlockTableBuilder,
+    start_pc: u32,
+) -> Vec<JitBlockRange> {
+    let mut entries: Vec<_> = builder
+        .entries
+        .iter()
+        .filter(|(pc, _)| **pc >= start_pc)
+        .map(|(pc, instr)| (*pc, instr.as_ref()))
+        .collect();
+    entries.sort_unstable_by_key(|(pc, _)| *pc);
+
+    if entries.is_empty() {
+        return Vec::new();
     }
 
-    table.entries.insert(pc, instr);
+    let branch_targets: FxHashSet<u32> = builder
+        .entries
+        .values()
+        .filter_map(|ins| ins.static_branch_target())
+        .filter(|target| *target >= start_pc && builder.entries.contains_key(target))
+        .collect();
+
+    build_blocks_from_entries_with_branch_targets(&entries, &branch_targets)
+}
+
+fn build_blocks_from_entries_with_branch_targets(
+    entries: &[(u32, &JitInstruction)],
+    branch_targets: &FxHashSet<u32>,
+) -> Vec<JitBlockRange> {
+    if entries.is_empty() {
+        return Vec::new();
+    }
+
+    let mut blocks = Vec::new();
+    let mut block_start = entries[0].0;
+    let mut instruction_count = 0usize;
+    let mut pending_it_following = 0usize;
+    let mut previous_pc = entries[0].0;
+
+    for (index, (pc, ins)) in entries.iter().enumerate() {
+        if instruction_count > 0 && *pc != block_start && branch_targets.contains(pc) {
+            blocks.push(JitBlockRange {
+                start_pc: block_start,
+                end_pc: previous_pc,
+                instruction_count,
+                terminator: JitBlockTerminator::BranchTarget,
+            });
+            block_start = *pc;
+            instruction_count = 0;
+        }
+
+        instruction_count += 1;
+
+        let was_inside_it_block = pending_it_following > 0;
+        if was_inside_it_block {
+            pending_it_following -= 1;
+        }
+
+        if ins.is_it_instruction() {
+            pending_it_following = ins.it_following_count();
+        }
+
+        let it_block_ends_here = was_inside_it_block && pending_it_following == 0;
+        let next_pc = entries.get(index + 1).map(|(next_pc, _)| *next_pc);
+        let expected_next_pc = pc.wrapping_add(ins.data.size());
+
+        let terminator = if ins.has_exception_return_path() {
+            Some(JitBlockTerminator::ExceptionReturn)
+        } else if ins.is_branch_instruction() {
+            Some(JitBlockTerminator::Branch)
+        } else if ins.modifies_pc() {
+            Some(JitBlockTerminator::PcWrite)
+        } else if it_block_ends_here {
+            Some(JitBlockTerminator::ItBlockEnd)
+        } else {
+            match next_pc {
+                Some(next_pc) if next_pc != expected_next_pc => Some(JitBlockTerminator::Gap),
+                Some(_) => None,
+                None => Some(JitBlockTerminator::EndOfTable),
+            }
+        };
+
+        if let Some(terminator) = terminator {
+            blocks.push(JitBlockRange {
+                start_pc: block_start,
+                end_pc: *pc,
+                instruction_count,
+                terminator,
+            });
+
+            if let Some((next_block_start, _)) = entries.get(index + 1) {
+                block_start = *next_block_start;
+            }
+            instruction_count = 0;
+            pending_it_following = 0;
+        }
+
+        previous_pc = *pc;
+    }
+
+    blocks
+}
+
+fn remove_builder_block_membership(
+    block_membership: &mut FxHashMap<u32, usize>,
+    entries: &FxHashMap<u32, Arc<JitInstruction>>,
+    block: &JitBlockRange,
+) {
+    let mut current_pc = block.start_pc;
+    loop {
+        block_membership.remove(&current_pc);
+        if current_pc == block.end_pc {
+            break;
+        }
+        let Some(ins) = entries.get(&current_pc).map(AsRef::as_ref) else {
+            break;
+        };
+        current_pc = current_pc.wrapping_add(ins.data.size());
+    }
+}
+
+fn insert_builder_block_membership(
+    block_membership: &mut FxHashMap<u32, usize>,
+    entries: &FxHashMap<u32, Arc<JitInstruction>>,
+    block: &JitBlockRange,
+    block_index: usize,
+) {
+    let mut current_pc = block.start_pc;
+    loop {
+        block_membership.insert(current_pc, block_index);
+        if current_pc == block.end_pc {
+            break;
+        }
+        let Some(ins) = entries.get(&current_pc).map(AsRef::as_ref) else {
+            break;
+        };
+        current_pc = current_pc.wrapping_add(ins.data.size());
+    }
 }
 
 #[cfg(test)]
@@ -2034,7 +2247,7 @@ mod tests {
         let added = builder
             .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0004, 16)
             .expect("failed to extend jit table from runtime pc");
-        let table = builder.build_snapshot(None);
+        let table = builder.build_snapshot();
 
         assert_eq!(added, 2);
         assert!(table.get(0x0800_0000).is_some());
@@ -2050,7 +2263,7 @@ mod tests {
         builder
             .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0004, 16)
             .expect("failed to build initial snapshot");
-        let first = builder.build_snapshot(None);
+        let first = builder.build_snapshot();
         let before = first
             .get(0x0800_0000)
             .expect("missing first instruction") as *const JitInstruction;
@@ -2058,7 +2271,7 @@ mod tests {
         builder
             .extend_from_pc(&cpu, 0x0800_0004, 0x0800_0008, 16)
             .expect("failed to extend snapshot");
-        let second = builder.build_snapshot(Some(first));
+        let second = builder.build_snapshot();
         let after = second
             .get(0x0800_0000)
             .expect("missing first instruction after extend") as *const JitInstruction;
@@ -2078,17 +2291,84 @@ mod tests {
         builder
             .extend_from_pc(&cpu, 0x0800_0100 - 0x10, 0x0800_00F4, 16)
             .expect("failed to build initial suffix snapshot");
-        let first = builder.build_snapshot(None);
+        let first = builder.build_snapshot();
         assert!(first.resolve_execution(0x0800_00F0).is_some());
         assert!(first.resolve_execution(0x0800_00EC).is_none());
 
         builder
             .extend_from_pc(&cpu, 0x0800_00EC, 0x0800_00F4, 16)
             .expect("failed to extend earlier prefix");
-        let second = builder.build_snapshot(Some(first));
+        let second = builder.build_snapshot();
 
         assert!(second.resolve_execution(0x0800_00EC).is_some());
         assert!(second.resolve_execution(0x0800_00F0).is_some());
+    }
+
+    #[test]
+    fn builder_block_metadata_updates_incrementally_after_extend() {
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(0x0800_0000, &[0x00, 0xBF, 0x00, 0xBF]);
+
+        let mut builder = JitBlockTableBuilder::new();
+        builder
+            .extend_from_pc(&cpu, 0x0800_0000, 0x0800_0002, 16)
+            .expect("failed to build initial block metadata");
+
+        let first_block = builder
+            .block_containing(0x0800_0000)
+            .expect("missing initial block");
+        assert_eq!(first_block.start_pc, 0x0800_0000);
+        assert_eq!(first_block.end_pc, 0x0800_0000);
+        assert_eq!(first_block.instruction_count, 1);
+
+        builder
+            .extend_from_pc(&cpu, 0x0800_0002, 0x0800_0004, 16)
+            .expect("failed to extend builder metadata");
+
+        let second_block = builder
+            .block_containing(0x0800_0000)
+            .expect("missing extended block");
+        assert_eq!(second_block.start_pc, 0x0800_0000);
+        assert_eq!(second_block.end_pc, 0x0800_0002);
+        assert_eq!(second_block.instruction_count, 2);
+        assert_eq!(builder.block_starting_at(0x0800_0000), Some(second_block));
+    }
+
+    #[test]
+    fn builder_block_metadata_handles_prefix_growth() {
+        let mut cpu = build_cpu();
+        cpu.load_code_bytes(
+            0x0800_00EC,
+            &[0x00, 0xBF, 0x00, 0xBF, 0x08, 0x68, 0x00, 0xBF],
+        );
+
+        let mut builder = JitBlockTableBuilder::new();
+        builder
+            .extend_from_pc(&cpu, 0x0800_00F0, 0x0800_00F4, 16)
+            .expect("failed to build initial suffix metadata");
+
+        let suffix_block = builder
+            .block_containing(0x0800_00F0)
+            .expect("missing suffix block");
+        assert_eq!(suffix_block.start_pc, 0x0800_00F0);
+        assert!(builder.block_containing(0x0800_00EC).is_none());
+
+        builder
+            .extend_from_pc(&cpu, 0x0800_00EC, 0x0800_00F4, 16)
+            .expect("failed to extend earlier prefix metadata");
+
+        let prefix_block = builder
+            .block_containing(0x0800_00EC)
+            .expect("missing prefix block after growth");
+        let updated_suffix_block = builder
+            .block_containing(0x0800_00F0)
+            .expect("missing suffix block after growth");
+
+        assert_eq!(prefix_block.start_pc, 0x0800_00EC);
+        assert_eq!(prefix_block.end_pc, 0x0800_00F2);
+        assert_eq!(updated_suffix_block.start_pc, 0x0800_00EC);
+        assert_eq!(updated_suffix_block.end_pc, 0x0800_00F2);
+        assert_eq!(builder.block_starting_at(0x0800_00EC), Some(prefix_block));
     }
 
     #[test]
