@@ -24,14 +24,15 @@ use crate::peripheral::uart::Uart;
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let input_path: &str = "uart_loop.axf";
+    let input_path = std::env::var("SIM_INPUT_PATH")
+        .unwrap_or_else(|_| "uart_loop.axf".to_string());
     let output_path = "disassembly_detail.asm";
     let use_jit = std::env::var("SIM_USE_BLOCK")
         .map(|v| v != "0")
         .unwrap_or(false);
 
     let (_result, _cs, code_segments, dcw_data, initial_sp, reset_handler_ptr, _reset_handler_addr) =
-        disassemble_from_reset_handler(input_path, output_path)?;
+        disassemble_from_reset_handler(&input_path, output_path)?;
     println!(
         "Initial SP: 0x{:08X}, Reset_Handler Ptr: 0x{:08X}",
         initial_sp, reset_handler_ptr

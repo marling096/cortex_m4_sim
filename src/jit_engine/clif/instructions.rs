@@ -191,35 +191,25 @@ pub fn emit_resolve_op2(
     lowering: &mut LoweringContext<'_, '_>,
     insn: &JitInstruction,
 ) -> (Value, Value) {
-    if let Some((value, carry)) = emit_static_op2(lowering, insn) {
-        return (value, carry);
-    }
-
-    lowering.flush_dirty_state();
-    let packed = lowering.call_value(
-        lowering.helpers.resolve_op2_packed,
-        &[lowering.cpu_ptr, lowering.instr_ptr],
-    );
-    let value = lowering.builder.ins().ireduce(types::I32, packed);
-    let carry64 = lowering.builder.ins().ushr_imm(packed, 32);
-    let carry = lowering.builder.ins().ireduce(types::I32, carry64);
-    (value, carry)
+    emit_static_op2(lowering, insn)
 }
 
 fn emit_static_op2(
     lowering: &mut LoweringContext<'_, '_>,
     insn: &JitInstruction,
-) -> Option<(Value, Value)> {
+) -> (Value, Value) {
     let current_carry = emit_current_carry(lowering);
-    let op2 = insn.data.arm_operands.op2.as_ref()?;
+    let Some(op2) = insn.data.arm_operands.op2.as_ref() else {
+        return (lowering.iconst_u32(0), current_carry);
+    };
 
     match op2.op_type {
-        DecodedOperandKind::Imm(imm) => Some((lowering.iconst_u32(imm as u32), current_carry)),
+        DecodedOperandKind::Imm(imm) => (lowering.iconst_u32(imm as u32), current_carry),
         DecodedOperandKind::Reg(reg) => {
             let value = emit_read_reg(lowering, reg);
             emit_static_shifted_reg_op2(lowering, value, current_carry, op2.shift)
         }
-        _ => None,
+        _ => (lowering.iconst_u32(0), current_carry),
     }
 }
 
@@ -228,8 +218,8 @@ fn emit_static_shifted_reg_op2(
     value: Value,
     current_carry: Value,
     shift: DecodedShift,
-) -> Option<(Value, Value)> {
-    Some(emit_shift_by_kind(lowering, value, current_carry, shift))
+) -> (Value, Value) {
+    emit_shift_by_kind(lowering, value, current_carry, shift)
 }
 
 fn emit_shift_by_kind(

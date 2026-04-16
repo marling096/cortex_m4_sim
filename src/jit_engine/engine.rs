@@ -15,8 +15,7 @@ use crate::cpu::Cpu;
 use crate::jit_engine::clif::instructions as jit_instructions;
 use crate::jit_engine::table::{JitBlockRange, JitBlockTable, JitBlockTableBuilder, JitInstruction};
 use crate::opcodes::decoded::{
-    DecodedOperandKind, operand_resolver_multi_runtime, resolve_op2_runtime,
-    runtime_read_reg,
+    DecodedOperandKind, operand_resolver_multi_runtime, runtime_read_reg,
 };
 use crate::opcodes::thumb_runtime;
 
@@ -280,7 +279,6 @@ pub(crate) struct RuntimeFunctions {
     pub(crate) write_u16: FuncId,
     pub(crate) write_u32: FuncId,
     pub(crate) try_exception_return: FuncId,
-    pub(crate) resolve_op2_packed: FuncId,
     pub(crate) resolve_mem_rt_addr: FuncId,
     pub(crate) compute_shift_packed: FuncId,
     pub(crate) execute_bkpt: FuncId,
@@ -969,7 +967,6 @@ impl JitEngine {
             "jit_try_exception_return",
             jit_try_exception_return as *const u8,
         );
-        builder.symbol("jit_resolve_op2_packed", jit_resolve_op2_packed as *const u8);
         builder.symbol(
             "jit_resolve_mem_rt_addr",
             jit_resolve_mem_rt_addr as *const u8,
@@ -1694,12 +1691,6 @@ impl RuntimeFunctions {
             sig.returns.push(AbiParam::new(types::I32));
         })?;
 
-        let resolve_op2_packed = declare_import(module, "jit_resolve_op2_packed", |sig| {
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.params.push(AbiParam::new(ptr_ty));
-            sig.returns.push(AbiParam::new(types::I64));
-        })?;
-
         let resolve_mem_rt_addr = declare_import(module, "jit_resolve_mem_rt_addr", |sig| {
             sig.params.push(AbiParam::new(ptr_ty));
             sig.params.push(AbiParam::new(ptr_ty));
@@ -1742,7 +1733,6 @@ impl RuntimeFunctions {
             write_u16,
             write_u32,
             try_exception_return,
-            resolve_op2_packed,
             resolve_mem_rt_addr,
             compute_shift_packed,
             execute_bkpt,
@@ -1872,16 +1862,6 @@ extern "C" fn jit_try_exception_return(cpu: *mut Cpu, value: u32) -> u32 {
         .fetch_add(1, Ordering::Relaxed);
     let cpu = unsafe { &mut *cpu };
     u32::from(cpu.try_exception_return(value))
-}
-
-extern "C" fn jit_resolve_op2_packed(cpu: *mut Cpu, instr: *const ()) -> u64 {
-    JIT_RUNTIME_COUNTERS
-        .resolve_op2_calls
-        .fetch_add(1, Ordering::Relaxed);
-    let cpu = unsafe { &mut *cpu };
-    let instr = unsafe { &*(instr as *const JitInstruction) };
-    let (value, carry) = resolve_op2_runtime(cpu, &instr.data);
-    ((carry as u64) << 32) | u64::from(value)
 }
 
 extern "C" fn jit_resolve_mem_rt_addr(cpu: *mut Cpu, instr: *const ()) -> u64 {
