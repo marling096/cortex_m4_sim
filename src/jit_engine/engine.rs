@@ -410,6 +410,34 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
         self.store_buffer_u32(base_ptr, aligned_offset, updated);
     }
 
+    fn classify_flash_or_alias(
+        &mut self,
+        addr: Value,
+        flash_offset_max: i64,
+    ) -> (Value, Value, Value) {
+        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
+        let flash_offset = self.builder.ins().isub(addr, flash_base);
+        let is_flash = self
+            .builder
+            .ins()
+            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
+
+        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
+        let flash_alias_offset = self.builder.ins().isub(addr, flash_alias_base);
+        let is_flash_alias = self.builder.ins().icmp_imm(
+            IntCC::UnsignedLessThanOrEqual,
+            flash_alias_offset,
+            flash_offset_max,
+        );
+
+        let is_flash_or_alias = self.builder.ins().bor(is_flash, is_flash_alias);
+        let selected_offset = self
+            .builder
+            .ins()
+            .select(is_flash, flash_offset, flash_alias_offset);
+        (is_flash, is_flash_or_alias, selected_offset)
+    }
+
     pub(crate) fn emit_read_u32(&mut self, addr: Value) -> Value {
         let ram_offset_max = i64::from(Cpu::jit_ram_len().saturating_sub(4));
         let flash_offset_max = i64::from(Cpu::jit_flash_len().saturating_sub(4));
@@ -421,11 +449,12 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
             .ins()
             .icmp_imm(IntCC::UnsignedLessThanOrEqual, ram_offset, ram_offset_max);
 
+        let (_is_flash, is_flash_or_alias, flash_or_alias_offset) =
+            self.classify_flash_or_alias(addr, flash_offset_max);
+
         let ram_block = self.builder.create_block();
         let not_ram_block = self.builder.create_block();
-        let flash_block = self.builder.create_block();
-        let not_flash_block = self.builder.create_block();
-        let flash_alias_block = self.builder.create_block();
+        let flash_or_alias_block = self.builder.create_block();
         let fallback_block = self.builder.create_block();
         let join_block = self.builder.create_block();
         self.builder.append_block_param(join_block, types::I32);
@@ -442,39 +471,14 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
 
         self.builder.switch_to_block(not_ram_block);
         self.builder.seal_block(not_ram_block);
-        let flash_base = self.iconst_u32(Cpu::jit_flash_base());
-        let flash_offset = self.builder.ins().isub(addr, flash_base);
-        let is_flash = self
-            .builder
-            .ins()
-            .icmp_imm(IntCC::UnsignedLessThanOrEqual, flash_offset, flash_offset_max);
         self.builder
             .ins()
-            .brif(is_flash, flash_block, &[], not_flash_block, &[]);
+            .brif(is_flash_or_alias, flash_or_alias_block, &[], fallback_block, &[]);
 
-        self.builder.switch_to_block(flash_block);
-        self.builder.seal_block(flash_block);
+        self.builder.switch_to_block(flash_or_alias_block);
+        self.builder.seal_block(flash_or_alias_block);
         let flash_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
-        let flash_value = self.load_buffer_u32(flash_ptr, flash_offset);
-        self.builder.ins().jump(join_block, &[flash_value.into()]);
-
-        self.builder.switch_to_block(not_flash_block);
-        self.builder.seal_block(not_flash_block);
-        let flash_alias_base = self.iconst_u32(Cpu::jit_flash_alias_base());
-        let flash_alias_offset = self.builder.ins().isub(addr, flash_alias_base);
-        let is_flash_alias = self.builder.ins().icmp_imm(
-            IntCC::UnsignedLessThanOrEqual,
-            flash_alias_offset,
-            flash_offset_max,
-        );
-        self.builder
-            .ins()
-            .brif(is_flash_alias, flash_alias_block, &[], fallback_block, &[]);
-
-        self.builder.switch_to_block(flash_alias_block);
-        self.builder.seal_block(flash_alias_block);
-        let flash_alias_ptr = self.load_cpu_ptr(Cpu::jit_flash_ptr_offset());
-        let flash_alias_value = self.load_buffer_u32(flash_alias_ptr, flash_alias_offset);
+        let flash_alias_value = self.load_buffer_u32(flash_ptr, flash_or_alias_offset);
         self.builder
             .ins()
             .jump(join_block, &[flash_alias_value.into()]);
@@ -2289,6 +2293,32 @@ mod tests {
         assert_eq!(cpu.read_mem(0x2000_0000), 0xAABB_CCDD);
         assert_eq!(cpu.next_pc, 0x0800_0004);
         assert_eq!(delta.mem_write_calls, 0);
+        assert_eq!(delta.resolve_mem_rt_addr_calls, 0);
+    }
+
+    #[test]
+    fn jit_word_load_from_ram_uses_lowered_fast_path() {
+        let cs = build_thumb_capstone();
+        let insns = cs
+            .disasm_all(&[0x08, 0x68, 0x00, 0xBF], 0x0800_0000)
+            .expect("failed to disassemble");
+        let table = JitBlockTableBuilder::build_from_disassembly(&cs, insns.iter())
+            .expect("failed to build jit table");
+
+        let mut cpu = build_cpu();
+        cpu.next_pc = 0x0800_0000;
+        cpu.write_reg(1, 0x2000_0000);
+        cpu.write_mem(0x2000_0000, 0x1122_3344);
+
+        let mut engine = JitEngine::new().expect("failed to create jit engine");
+        let before = engine.stats_snapshot();
+        let cycles = engine.step(&mut cpu, &table).expect("jit load step failed");
+        let delta = engine.stats_snapshot().delta_since(before);
+
+        assert_eq!(cycles, 3);
+        assert_eq!(cpu.next_pc, 0x0800_0004);
+        assert_eq!(cpu.read_reg(0), 0x1122_3344);
+        assert_eq!(delta.mem_read_calls, 0);
         assert_eq!(delta.resolve_mem_rt_addr_calls, 0);
     }
 
