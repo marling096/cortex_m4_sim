@@ -216,6 +216,8 @@ impl CpuContext for Cpu {
 impl Cpu {
     const JIT_REG_BASE_OFFSET: usize = std::mem::offset_of!(Cpu, registers)
         + std::mem::offset_of!(Registers, reg);
+    const JIT_APSR_OFFSET: usize = std::mem::offset_of!(Cpu, registers)
+        + std::mem::offset_of!(Registers, apsr);
     const JIT_FLASH_PTR_OFFSET: usize = std::mem::offset_of!(Cpu, jit_flash_ptr);
     const JIT_RAM_PTR_OFFSET: usize = std::mem::offset_of!(Cpu, jit_ram_ptr);
 
@@ -255,6 +257,11 @@ impl Cpu {
     #[inline(always)]
     pub(crate) fn jit_reg_offset(reg: u32) -> i32 {
         (Self::JIT_REG_BASE_OFFSET + reg as usize * std::mem::size_of::<u32>()) as i32
+    }
+
+    #[inline(always)]
+    pub(crate) fn jit_apsr_offset() -> i32 {
+        Self::JIT_APSR_OFFSET as i32
     }
 
     #[inline(always)]

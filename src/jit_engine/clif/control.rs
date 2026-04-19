@@ -3,7 +3,7 @@ use cranelift::codegen::ir::condcodes::IntCC;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
-    InsDef, emit_read_reg, emit_size_value, emit_write_reg, with_cc,
+    InsDef, emit_read_reg, emit_size_value, emit_write_reg, with_cc, with_cc_pure,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -51,14 +51,14 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 }
 
 fn emit_b(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         emit_write_reg(lowering, 15, target);
     })
 }
 
 fn emit_bl(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         let pc = emit_read_reg(lowering, 15);
         let one = lowering.iconst_u32(1);
@@ -101,7 +101,7 @@ fn emit_bx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
 }
 
 fn emit_blx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let target = emit_branch_target(lowering, insn);
         let pc = emit_read_reg(lowering, 15);
         let delta = lowering.iconst_i32(insn.data.size() as i32 - 4);
@@ -128,7 +128,7 @@ fn emit_compare_branch(
     insn: &JitInstruction,
     branch_on_zero: bool,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let value = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let target = emit_branch_target(lowering, insn);
         let cond = if branch_on_zero {

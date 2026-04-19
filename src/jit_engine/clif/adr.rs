@@ -2,7 +2,7 @@ use crate::arch::ArmInsn;
 use cranelift::prelude::*;
 
 use crate::jit_engine::clif::instructions::{
-	InsDef, emit_pc_update_for_rd, emit_read_reg, emit_write_reg, with_cc,
+	InsDef, emit_pc_update_for_rd, emit_read_reg, emit_write_reg, with_cc_pure,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -43,7 +43,7 @@ impl InsDef for AdrDef {
 }
 
 fn emit_adr(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-	with_cc(lowering, insn, |lowering| {
+	with_cc_pure(lowering, insn, |lowering| {
 		let rd = insn.data.arm_operands.rd;
 		let target = emit_adr_target(lowering, insn);
 		emit_write_reg(lowering, rd, target);

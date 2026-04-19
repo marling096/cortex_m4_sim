@@ -5,7 +5,7 @@ use cranelift::prelude::*;
 use crate::jit_engine::clif::instructions::{
     InsDef, emit_bool_to_u32, emit_compute_shift, emit_current_carry, emit_pc_update_for_rd,
     emit_read_reg, emit_resolve_op2, emit_size_value, emit_update_apsr_nz,
-    emit_update_apsr_nzc, emit_update_apsr_nzcv, emit_write_reg, with_cc,
+    emit_update_apsr_nzc, emit_update_apsr_nzcv, emit_write_reg, with_cc_pure,
 };
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
@@ -126,7 +126,7 @@ enum CalcOp {
 }
 
 fn emit_ubfx(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let lsb = imm_operand(insn, 2);
@@ -162,7 +162,7 @@ fn emit_extend_mask(
     insn: &JitInstruction,
     mask: u32,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let (value, _) = emit_resolve_op2(lowering, insn);
         let mask = lowering.iconst_u32(mask);
@@ -185,7 +185,7 @@ fn emit_compare(
     insn: &JitInstruction,
     op: CompareOp,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let (op2, _) = emit_resolve_op2(lowering, insn);
         let sign_mask = lowering.iconst_u32(0x8000_0000);
@@ -234,7 +234,7 @@ fn emit_test(
     insn: &JitInstruction,
     op: TestOp,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let (op2, carry) = emit_resolve_op2(lowering, insn);
         let result = match op {
@@ -265,7 +265,7 @@ fn emit_move(
     insn: &JitInstruction,
     invert: bool,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let (value, carry) = emit_resolve_op2(lowering, insn);
         let result = if invert {
@@ -307,7 +307,7 @@ fn emit_logic(
     insn: &JitInstruction,
     op: LogicOp,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let (op2, carry) = emit_resolve_op2(lowering, insn);
@@ -370,7 +370,7 @@ fn emit_calculate(
     insn: &JitInstruction,
     op: CalcOp,
 ) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let rn = emit_read_reg(lowering, insn.data.arm_operands.rn);
         let (op2, _) = emit_resolve_op2(lowering, insn);
@@ -498,7 +498,7 @@ fn emit_udiv_or_zero(lowering: &mut LoweringContext<'_, '_>, lhs: Value, rhs: Va
 }
 
 fn emit_shift(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let rd = insn.data.arm_operands.rd;
         let (result, carry) = emit_compute_shift(lowering, insn);
         emit_write_reg(lowering, rd, result);

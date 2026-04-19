@@ -69,6 +69,28 @@ pub fn with_cc<F>(
     lowering.builder.switch_to_block(join_block);
 }
 
+pub fn with_cc_pure<F>(
+    lowering: &mut LoweringContext<'_, '_>,
+    insn: &JitInstruction,
+    emit: F,
+) where
+    F: FnOnce(&mut LoweringContext<'_, '_>),
+{
+    let cc = insn.data.arm_operands.condition;
+    if cc == ArmCC::ARM_CC_AL {
+        emit(lowering);
+        return;
+    }
+
+    let cond = emit_check_condition(lowering, cc);
+    lowering.with_exec_predicate(cond, |lowering| emit(lowering));
+
+    let skip_cond = lowering.builder.ins().icmp_imm(IntCC::Equal, cond, 0);
+    lowering.with_exec_predicate(skip_cond, |lowering| {
+        lowering.advance_pc_for_insn(insn);
+    });
+}
+
 pub fn emit_size_value(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) -> Value {
     lowering.iconst_u32(insn.data.size())
 }

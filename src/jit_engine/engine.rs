@@ -64,11 +64,7 @@ const CACHED_REG_COUNT: usize = 16;
 
 struct BlockStateCache {
     reg_values: [StackSlot; CACHED_REG_COUNT],
-    reg_valid: [StackSlot; CACHED_REG_COUNT],
-    reg_dirty: [StackSlot; CACHED_REG_COUNT],
     apsr_value: StackSlot,
-    apsr_valid: StackSlot,
-    apsr_dirty: StackSlot,
 }
 
 impl BlockStateCache {
@@ -83,11 +79,7 @@ impl BlockStateCache {
     fn new(builder: &mut FunctionBuilder<'_>) -> Self {
         Self {
             reg_values: std::array::from_fn(|_| Self::create_slot(builder)),
-            reg_valid: std::array::from_fn(|_| Self::create_slot(builder)),
-            reg_dirty: std::array::from_fn(|_| Self::create_slot(builder)),
             apsr_value: Self::create_slot(builder),
-            apsr_valid: Self::create_slot(builder),
-            apsr_dirty: Self::create_slot(builder),
         }
     }
 }
@@ -291,6 +283,9 @@ pub(crate) struct LoweringContext<'a, 'b> {
     pub module: &'a mut JITModule,
     pub helpers: &'a RuntimeFunctions,
     cache: &'a BlockStateCache,
+    reg_dirty: [bool; CACHED_REG_COUNT],
+    apsr_dirty: bool,
+    exec_predicate: Option<Value>,
     pub ptr_ty: Type,
     pub cpu_ptr: Value,
     pub instr_ptr: Value,
@@ -312,6 +307,20 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
         self.builder
             .ins()
             .iconst(self.ptr_ty, value as usize as i64)
+    }
+
+    pub(crate) fn with_exec_predicate<F>(&mut self, predicate: Value, emit: F)
+    where
+        F: FnOnce(&mut LoweringContext<'_, '_>),
+    {
+        let previous = self.exec_predicate;
+        let combined = match previous {
+            Some(previous) => self.builder.ins().band(previous, predicate),
+            None => predicate,
+        };
+        self.exec_predicate = Some(combined);
+        emit(self);
+        self.exec_predicate = previous;
     }
 
     pub(crate) fn import_func(&mut self, func_id: FuncId) -> FuncRef {
@@ -754,18 +763,19 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
         self.builder.ins().stack_store(value, slot, 0);
     }
 
-    fn set_slot_flag(&mut self, slot: StackSlot, flag: bool) {
-        let value = self.iconst_u32(u32::from(flag));
-        self.store_i32_slot(slot, value);
-    }
-
     pub(crate) fn initialize_cache_state(&mut self) {
         for index in 0..CACHED_REG_COUNT {
-            self.set_slot_flag(self.cache.reg_valid[index], false);
-            self.set_slot_flag(self.cache.reg_dirty[index], false);
+            let value = self.load_cpu_reg(index as u32);
+            self.store_i32_slot(self.cache.reg_values[index], value);
+            self.reg_dirty[index] = false;
         }
-        self.set_slot_flag(self.cache.apsr_valid, false);
-        self.set_slot_flag(self.cache.apsr_dirty, false);
+        let apsr = self.load_cpu_i32(Cpu::jit_apsr_offset());
+        self.store_i32_slot(self.cache.apsr_value, apsr);
+        self.apsr_dirty = false;
+    }
+
+    pub(crate) fn reload_cache_state(&mut self) {
+        self.initialize_cache_state();
     }
 
     pub(crate) fn current_pc_plus_4(&mut self) -> Value {
@@ -778,124 +788,60 @@ impl<'a, 'b> LoweringContext<'a, 'b> {
             return self.current_pc_plus_4();
         }
 
-        let valid_slot = self.cache.reg_valid[reg as usize];
-        let value_slot = self.cache.reg_values[reg as usize];
-        let valid = self.load_i32_slot(valid_slot);
-        let is_valid = self.builder.ins().icmp_imm(IntCC::NotEqual, valid, 0);
-        let hit_block = self.builder.create_block();
-        let miss_block = self.builder.create_block();
-        let join_block = self.builder.create_block();
-        self.builder.append_block_param(join_block, types::I32);
-        self.builder
-            .ins()
-            .brif(is_valid, hit_block, &[], miss_block, &[]);
-
-        self.builder.switch_to_block(hit_block);
-        self.builder.seal_block(hit_block);
-        let cached = self.load_i32_slot(value_slot);
-        self.builder.ins().jump(join_block, &[cached.into()]);
-
-        self.builder.switch_to_block(miss_block);
-        self.builder.seal_block(miss_block);
-        let loaded = self.load_cpu_reg(reg);
-        self.store_i32_slot(value_slot, loaded);
-        self.set_slot_flag(valid_slot, true);
-        self.builder.ins().jump(join_block, &[loaded.into()]);
-
-        self.builder.seal_block(join_block);
-        self.builder.switch_to_block(join_block);
-        self.builder.block_params(join_block)[0]
+        self.load_i32_slot(self.cache.reg_values[reg as usize])
     }
 
     pub(crate) fn write_cached_reg(&mut self, reg: u32, value: Value) {
-        let value_slot = self.cache.reg_values[reg as usize];
-        let valid_slot = self.cache.reg_valid[reg as usize];
-        let dirty_slot = self.cache.reg_dirty[reg as usize];
-        self.store_i32_slot(value_slot, value);
-        self.set_slot_flag(valid_slot, true);
-        self.set_slot_flag(dirty_slot, true);
+        let value = match self.exec_predicate {
+            Some(predicate) => {
+                let old = self.load_i32_slot(self.cache.reg_values[reg as usize]);
+                self.builder.ins().select(predicate, value, old)
+            }
+            None => value,
+        };
+        self.store_i32_slot(self.cache.reg_values[reg as usize], value);
+        self.reg_dirty[reg as usize] = true;
     }
 
     pub(crate) fn read_cached_apsr(&mut self) -> Value {
-        let valid = self.load_i32_slot(self.cache.apsr_valid);
-        let is_valid = self.builder.ins().icmp_imm(IntCC::NotEqual, valid, 0);
-        let hit_block = self.builder.create_block();
-        let miss_block = self.builder.create_block();
-        let join_block = self.builder.create_block();
-        self.builder.append_block_param(join_block, types::I32);
-        self.builder
-            .ins()
-            .brif(is_valid, hit_block, &[], miss_block, &[]);
-
-        self.builder.switch_to_block(hit_block);
-        self.builder.seal_block(hit_block);
-        let cached = self.load_i32_slot(self.cache.apsr_value);
-        self.builder.ins().jump(join_block, &[cached.into()]);
-
-        self.builder.switch_to_block(miss_block);
-        self.builder.seal_block(miss_block);
-        let loaded = self.call_value(self.helpers.read_apsr, &[self.cpu_ptr]);
-        self.store_i32_slot(self.cache.apsr_value, loaded);
-        self.set_slot_flag(self.cache.apsr_valid, true);
-        self.builder.ins().jump(join_block, &[loaded.into()]);
-
-        self.builder.seal_block(join_block);
-        self.builder.switch_to_block(join_block);
-        self.builder.block_params(join_block)[0]
+        self.load_i32_slot(self.cache.apsr_value)
     }
 
     pub(crate) fn write_cached_apsr(&mut self, value: Value) {
+        let value = match self.exec_predicate {
+            Some(predicate) => {
+                let old = self.load_i32_slot(self.cache.apsr_value);
+                self.builder.ins().select(predicate, value, old)
+            }
+            None => value,
+        };
         self.store_i32_slot(self.cache.apsr_value, value);
-        self.set_slot_flag(self.cache.apsr_valid, true);
-        self.set_slot_flag(self.cache.apsr_dirty, true);
+        self.apsr_dirty = true;
     }
 
     pub(crate) fn flush_dirty_state(&mut self) {
         for reg in 0..CACHED_REG_COUNT as u32 {
-            let dirty_slot = self.cache.reg_dirty[reg as usize];
-            let dirty = self.load_i32_slot(dirty_slot);
-            let is_dirty = self.builder.ins().icmp_imm(IntCC::NotEqual, dirty, 0);
-            let flush_block = self.builder.create_block();
-            let continue_block = self.builder.create_block();
-            self.builder
-                .ins()
-                .brif(is_dirty, flush_block, &[], continue_block, &[]);
-
-            self.builder.switch_to_block(flush_block);
-            self.builder.seal_block(flush_block);
-            let value = self.load_i32_slot(self.cache.reg_values[reg as usize]);
-            self.store_cpu_reg(reg, value);
-            self.set_slot_flag(dirty_slot, false);
-            self.builder.ins().jump(continue_block, &[]);
-
-            self.builder.switch_to_block(continue_block);
-            self.builder.seal_block(continue_block);
+            if self.reg_dirty[reg as usize] {
+                let value = self.load_i32_slot(self.cache.reg_values[reg as usize]);
+                self.store_cpu_reg(reg, value);
+                self.reg_dirty[reg as usize] = false;
+            }
         }
 
-        let apsr_dirty = self.load_i32_slot(self.cache.apsr_dirty);
-        let apsr_is_dirty = self.builder.ins().icmp_imm(IntCC::NotEqual, apsr_dirty, 0);
-        let flush_block = self.builder.create_block();
-        let continue_block = self.builder.create_block();
-        self.builder
-            .ins()
-            .brif(apsr_is_dirty, flush_block, &[], continue_block, &[]);
-
-        self.builder.switch_to_block(flush_block);
-        self.builder.seal_block(flush_block);
-        let apsr = self.load_i32_slot(self.cache.apsr_value);
-        self.call_void(self.helpers.write_apsr, &[self.cpu_ptr, apsr]);
-        self.set_slot_flag(self.cache.apsr_dirty, false);
-        self.builder.ins().jump(continue_block, &[]);
-
-        self.builder.switch_to_block(continue_block);
-        self.builder.seal_block(continue_block);
+        if self.apsr_dirty {
+            let apsr = self.load_i32_slot(self.cache.apsr_value);
+            self.store_cpu_i32(Cpu::jit_apsr_offset(), apsr);
+            self.apsr_dirty = false;
+        }
     }
 
     pub(crate) fn emit_fallback(&mut self) -> Value {
         self.flush_dirty_state();
         let visible_pc = self.current_pc_plus_4();
         self.store_cpu_reg(15, visible_pc);
-        self.call_value(self.helpers.fallback_exec, &[self.cpu_ptr, self.instr_ptr])
+        let pc_update = self.call_value(self.helpers.fallback_exec, &[self.cpu_ptr, self.instr_ptr]);
+        self.reload_cache_state();
+        pc_update
     }
 
     pub(crate) fn apply_pc_update(&mut self, pc_update: Value) {
@@ -1497,95 +1443,45 @@ impl JitEngine {
             let mut builder = FunctionBuilder::new(&mut ctx.func, &mut self.builder_ctx);
             let cache = BlockStateCache::new(&mut builder);
             let entry_block = builder.create_block();
-            let exit_block = builder.create_block();
-            builder.append_block_param(exit_block, types::I32);
-            let instruction_blocks: Vec<_> = (0..entries.len())
-                .map(|_| {
-                    let block = builder.create_block();
-                    builder.append_block_param(block, types::I32);
-                    block
-                })
-                .collect();
             builder.append_block_params_for_function_params(entry_block);
             builder.switch_to_block(entry_block);
             builder.seal_block(entry_block);
 
             let cpu_ptr = builder.block_params(entry_block)[0];
             let zero = builder.ins().iconst(types::I32, 0);
-            {
-                let zero_ptr = builder.ins().iconst(ptr_ty, 0);
-                let mut lowering = LoweringContext {
-                    builder: &mut builder,
-                    module: &mut self.module,
-                    helpers: &self.helpers,
-                    cache: &cache,
-                    ptr_ty,
-                    cpu_ptr,
-                    instr_ptr: zero_ptr,
-                    current_pc: zero,
-                };
-                lowering.initialize_cache_state();
-            }
-
-            if let Some(first_block) = instruction_blocks.first() {
-                builder.ins().jump(*first_block, &[zero.into()]);
-            } else {
-                builder.ins().jump(exit_block, &[zero.into()]);
-            }
-
-            for (index, (current_pc, ins)) in entries.iter().enumerate() {
-                let current_block = instruction_blocks[index];
-                builder.switch_to_block(current_block);
-                builder.seal_block(current_block);
-                let carried_total = builder.block_params(current_block)[0];
-                let current_pc_value = builder
-                    .ins()
-                    .iconst(types::I32, i64::from(*current_pc as i32));
-
-                {
-                    let zero_ptr = builder.ins().iconst(ptr_ty, 0);
-                    let mut lowering = LoweringContext {
-                        builder: &mut builder,
-                        module: &mut self.module,
-                        helpers: &self.helpers,
-                        cache: &cache,
-                        ptr_ty,
-                        cpu_ptr,
-                        instr_ptr: zero_ptr,
-                        current_pc: current_pc_value,
-                    };
-                    lowering.instr_ptr = lowering.iconst_ptr(*ins as *const _ as *const ());
-                    Self::lower_instruction(&mut lowering, ins);
-                }
-
-                let execute_cycles = builder
-                    .ins()
-                    .iconst(types::I32, i64::from(ins.execute_cycles as i32));
-                let updated_total = builder.ins().iadd(carried_total, execute_cycles);
-
-                if index + 1 == entries.len() {
-                    builder.ins().jump(exit_block, &[updated_total.into()]);
-                } else {
-                    builder
-                        .ins()
-                        .jump(instruction_blocks[index + 1], &[updated_total.into()]);
-                }
-            }
-
-            builder.switch_to_block(exit_block);
-            builder.seal_block(exit_block);
-            let total_cycles = builder.block_params(exit_block)[0];
             let zero_ptr = builder.ins().iconst(ptr_ty, 0);
             let mut lowering = LoweringContext {
                 builder: &mut builder,
                 module: &mut self.module,
                 helpers: &self.helpers,
                 cache: &cache,
+                reg_dirty: [false; CACHED_REG_COUNT],
+                apsr_dirty: false,
+                exec_predicate: None,
                 ptr_ty,
                 cpu_ptr,
                 instr_ptr: zero_ptr,
                 current_pc: zero,
             };
+            lowering.initialize_cache_state();
+
+            let mut total_cycles = zero;
+
+            for (current_pc, ins) in entries.iter() {
+                lowering.current_pc = lowering
+                    .builder
+                    .ins()
+                    .iconst(types::I32, i64::from(*current_pc as i32));
+                lowering.instr_ptr = lowering.iconst_ptr(*ins as *const _ as *const ());
+                Self::lower_instruction(&mut lowering, ins);
+
+                let execute_cycles = lowering
+                    .builder
+                    .ins()
+                    .iconst(types::I32, i64::from(ins.execute_cycles as i32));
+                total_cycles = lowering.builder.ins().iadd(total_cycles, execute_cycles);
+            }
+
             lowering.flush_dirty_state();
             let committed_cycles = lowering.call_value(
                 lowering.helpers.finish_block_step_cycles,

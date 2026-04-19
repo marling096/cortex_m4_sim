@@ -1,6 +1,6 @@
 use crate::arch::ArmInsn;
 
-use crate::jit_engine::clif::instructions::{InsDef, emit_size_value, with_cc};
+use crate::jit_engine::clif::instructions::{InsDef, emit_size_value, with_cc_pure};
 use crate::jit_engine::engine::LoweringContext;
 use crate::jit_engine::table::JitInstruction;
 
@@ -42,7 +42,7 @@ pub(crate) fn find_def(insn_id: u32) -> Option<&'static dyn InsDef> {
 }
 
 fn emit_noop(lowering: &mut LoweringContext<'_, '_>, insn: &JitInstruction) {
-    with_cc(lowering, insn, |lowering| {
+    with_cc_pure(lowering, insn, |lowering| {
         let pc_update = emit_size_value(lowering, insn);
         lowering.advance_pc(pc_update);
     })
